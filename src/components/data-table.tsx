@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, SearchX } from "lucide-react";
 import { cn } from "cn";
+import { compareText } from "@/lib/collation";
 import { EmptyState } from "./empty-state";
 import { Skeleton } from "./loading";
 import { Pagination } from "./pagination";
@@ -11,8 +12,14 @@ export type Column<Row> = {
   key: string;
   header: string;
   cell: (row: Row) => ReactNode;
-  /** Value used to sort; the column is sortable when it is set. */
-  sortValue?: (row: Row) => string | number;
+  /**
+   * Value used to sort; the column is sortable when it is set.
+   * null stays at the end in both directions (never counted as 0).
+   * Strings compare case- and accent-insensitively.
+   */
+  sortValue?: (row: Row) => string | number | null;
+  /** Custom comparison of two non-null values, e.g. last name then first name. */
+  compare?: (a: Row, b: Row) => number;
   className?: string;
 };
 
@@ -50,6 +57,13 @@ export function DataTable<Row>({
   const [sort, setSort] = useState<Sort | undefined>(initialSort);
   const [requestedPage, setPage] = useState(1);
 
+  // New rows (a filter changed): back to the first page.
+  const [previousRows, setPreviousRows] = useState(rows);
+  if (rows !== previousRows) {
+    setPreviousRows(rows);
+    setPage(1);
+  }
+
   const sorted = useMemo(() => {
     const column = columns.find((c) => c.key === sort?.key);
     if (!sort || !column?.sortValue) return rows;
@@ -58,13 +72,17 @@ export function DataTable<Row>({
     return [...rows].sort((a, b) => {
       const va = value(a);
       const vb = value(b);
-      return (typeof va === "number" && typeof vb === "number"
-        ? va - vb
-        : String(va).localeCompare(String(vb))) * factor;
+      if (va === null || vb === null) return va === vb ? 0 : va === null ? 1 : -1;
+      const order = column.compare
+        ? column.compare(a, b)
+        : typeof va === "number" && typeof vb === "number"
+          ? va - vb
+          : compareText(String(va), String(vb));
+      return order * factor;
     });
   }, [rows, columns, sort]);
 
-  // When filters shrink the list, stay on the last existing page.
+  // Safety net: never point past the last page.
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const page = Math.min(requestedPage, pageCount);
   const visible = sorted.slice((page - 1) * pageSize, page * pageSize);

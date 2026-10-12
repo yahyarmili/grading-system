@@ -16,7 +16,7 @@ export const mockTeacherClasses = [
 ];
 
 export const mockTeacherAssignments = [
-  { id: "a1", title: "My last holiday", className: "Grade 10 — A", due: "Oct 20" },
+  { id: "a1", title: "My last holiday", className: "Grade 10 — A, Grade 10 — B", due: "Oct 20" },
   { id: "a2", title: "A letter to a friend", className: "Grade 10 — B", due: "Oct 27" },
 ];
 

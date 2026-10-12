@@ -45,7 +45,7 @@ const columns: Column<MockSubmission>[] = [
       ) : (
         <span className="text-fg-muted">—</span>
       ),
-    sortValue: (s) => s.submittedAt ?? "",
+    sortValue: (s) => s.submittedAt,
   },
   {
     key: "status",
