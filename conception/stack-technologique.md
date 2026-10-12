@@ -23,6 +23,7 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 | Email | Gmail SMTP (mot de passe d'application) pour la démonstration | Proposé, validé | AUTH-01, 03, 05 |
 | Images | Dans PostgreSQL, table séparée | [D] 2026-10-12 | SEC-01, DON-01 |
 | Sauvegarde | Export périodique de la base, à concevoir | [P] | FIA-02 (documentée seulement) |
+| Développement local | Docker Desktop et Docker Compose : Node 24 en conteneur, aucun Node installé sur le poste | [D] 2026-10-12 | — |
 
 ## 3. Ce que ces choix impliquent
 
@@ -32,6 +33,7 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 - **Vercel Hobby.** Gratuit, fonctions de 300 s. Usage réservé au non commercial ([règles](https://vercel.com/docs/limits/fair-use-guidelines)), compatible avec un projet académique. Un projet payant ou commercial exigerait le plan Pro.
 - **Neon.** Compute suspendu après 5 minutes d'inactivité, donc démarrage à froid à prévoir. Historique de restauration de 6 h seulement : d'où l'export périodique.
 - **Gmail SMTP.** Environ 500 destinataires par jour selon des blogs ([source secondaire](https://serversmtp.com/limits-of-gmail-smtp-server/)), validation en deux étapes requise. Suffisant pour la démonstration, pas pour un usage réel. Resend exige un domaine à vous ([doc](https://resend.com/docs/dashboard/domains/introduction)).
+- **Docker.** Sert seulement au développement (`docker compose up`, puis `http://localhost:3000`) ; les commandes npm se lancent dans le conteneur. La production reste sur Vercel, sans image Docker déployée.
 - **Hors du Maroc.** Vercel, Neon et Mistral sont hors du Maroc. Sans objet pour des données fictives. Pour un usage réel, le transfert demande l'autorisation de la CNDP, à confirmer par la CNDP ou un juriste.
 
 ## 4. Règles d'architecture qui en découlent [P]
