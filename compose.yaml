@@ -9,9 +9,11 @@ services:
       - "3000:3000"
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      # Hot reload: the Windows bind mount sends no file events, so Turbopack
-      # polls (see next.config.ts). Lower = faster reload, more CPU.
+      # Hot reload: the Windows bind mount sends no file events, so both
+      # watchers poll. Turbopack (file contents, see next.config.ts; lower =
+      # faster reload, more CPU) and Watchpack (new or removed routes).
       NEXT_WATCH_POLL_MS: "1000"
+      WATCHPACK_POLLING: "true"
     volumes:
       - .:/app
       - node_modules:/app/node_modules
