@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Grading System
 
-## Getting Started
+Application web de notation de productions écrites d'élèves, en anglais et en français. L'élève remet un texte ou des images de sa copie ; une IA (Mistral) propose des niveaux sur une rubrique fixe ; le professeur relit, modifie, valide puis publie. Projet académique de démonstration, données fictives. La spécification est dans [`conception/`](conception/).
 
-First, run the development server:
+## Démo en ligne
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+**https://grading-system-git-preview-yahya-rmili.vercel.app/sign-in**
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Preview Vercel publique (protection désactivée pour la démonstration), reliée à la base Neon **dev** : un compte créé en ligne existe aussi en local. Les emails partent réellement (Gmail SMTP).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Avancement
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Étape | Contenu | État |
+|---|---|---|
+| E1 | Comptes, rôles, accès (AUTH-01 à AUTH-05) | Livrée |
+| E2 | Classes et invitation (CLS-01 à CLS-04) | Prochaine |
 
-## Learn More
+Suivi prompt par prompt : [`conception/prompts-implementation.md`](conception/prompts-implementation.md).
 
-To learn more about Next.js, take a look at the following resources:
+## Pile
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Next.js 16 (App Router, `cacheComponents`), Better Auth, Drizzle ORM et PostgreSQL (Neon), Zod, Nodemailer (Gmail SMTP), Vitest, Playwright. Hébergement : Vercel (Hobby).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Démarrer en local
 
-## Deploy on Vercel
+Node ne tourne que dans Docker.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Créer `.env.local` (jamais commité) avec :
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   | Variable | Rôle |
+   |---|---|
+   | `DATABASE_URL` | Base Neon dev |
+   | `DATABASE_URL_TEST` | Base de test, distincte : vidée à chaque exécution des tests |
+   | `BETTER_AUTH_SECRET` | Secret de session (32 caractères ou plus) |
+   | `BETTER_AUTH_URL` | `http://localhost:3000` (base des liens envoyés par email) |
+   | `SMTP_USER`, `SMTP_PASSWORD` | Facultatif : Gmail et mot de passe d'application. Sans eux, les emails sont écrits dans `.mail-capture/` |
+
+2. Lancer :
+
+   ```bash
+   docker compose up -d
+   docker compose exec web npm run db:migrate
+   ```
+
+3. Ouvrir http://localhost:3000.
+
+## Commandes
+
+| Commande | Effet |
+|---|---|
+| `docker compose exec web npm test` | Tests unitaires et d'intégration (base de test) |
+| `docker compose run --rm e2e` | Parcours Playwright, sur leur propre serveur et la base de test ; jamais en même temps que `npm test` |
+| `docker compose exec web npm run lint` | ESLint |
+| `docker compose exec web npm run db:generate -- --name=<verbe_objet>` | Nouvelle migration (relire le SQL, puis commiter) |
+| `docker compose exec web npm run admin:create -- --email <email> --first-name <prénom> --last-name <nom>` | Premier administrateur : reçoit un lien pour choisir son mot de passe |
+
+## Déploiement (Vercel)
+
+- La branche **`preview`** produit la preview ; `main` n'est pas déployée (`vercel.json`). Mettre la preview à jour : intégrer `main` dans `preview`, puis pousser `preview`.
+- Variables, saisies dans Vercel pour l'environnement **Preview** seulement : `DATABASE_URL` (chaîne poolée de la branche Neon dev), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (le domaine de branche ci-dessus), `SMTP_USER`, `SMTP_PASSWORD`.
+- Fonctions en `cle1` (Cleveland), à côté de Neon `us-east-2` (Ohio). Neon suspend sa base après 5 min d'inactivité : la première requête qui suit prend quelques secondes.
+
+## Organisation du code
+
+| Dossier | Contenu |
+|---|---|
+| `src/app/` | Écrans et Server Actions : `(auth)`, espaces `student`, `teacher`, `admin` |
+| `src/server/access/` | Matrice d'accès en données, contrôle unique `authorize()`, inventaire |
+| `src/server/data/` | Seul code qui accède à la base ; applique la matrice |
+| `src/server/auth/`, `src/server/email/` | Parcours d'authentification, interface email unique |
+| `src/config/provisional.ts` | Valeurs non décidées, marquées provisoires |
+| `drizzle/`, `scripts/` | Migrations SQL, script du premier administrateur |
+| `tests/`, `e2e/` | Vitest (unitaires, intégration), Playwright |

@@ -15,11 +15,26 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 - `conception/besoins-non-fonctionnels.md` (`NFR-…`, statut en démonstration §2.8), `acteurs.md`, `stack-technologique.md`.
 - **Suivi** : `conception/prompts-implementation.md`. L'utilisateur lance les prompts un par un et valide chacun avant le suivant ; une étape E commence par un `/plan`. Ne prends pas d'avance sur le prompt suivant.
 
+## État (2026-10-12)
+
+- **E1 livrée** (E1.0 à E1.8, T1 fait) ; preview en ligne : https://grading-system-git-preview-yahya-rmili.vercel.app. **Prochain prompt : E2.0** (plan des classes, `prompts-implementation.md`).
+- **T5 de fin d'E1 non fait** ; à consigner dans `conception/` quand l'utilisateur le demande :
+  - les valeurs de `src/config/provisional.ts` ;
+  - Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D] ;
+  - la ligne de matrice `teacherInvitation` [P] ;
+  - la preview publique [D] ;
+  - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
+- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs.
+
 ## Environnement
 
 - Node tourne uniquement dans Docker : `docker compose up` (http://localhost:3000). Les commandes npm passent par le conteneur : `docker compose exec web npm …`.
 - Next.js 16 diffère de versions plus anciennes (`proxy.ts` au lieu de `middleware.ts`, `cacheComponents` activé) : consulte `node_modules/next/dist/docs/` avant d'utiliser une API (voir `AGENTS.md`).
 - Secrets : l'utilisateur crée comptes et secrets ; le code lit `process.env`. Ne lis jamais `.env*`.
+- **Shell** : PowerShell 5.1 casse les guillemets de `sh -c`. Passe par l'outil Bash avec `docker compose exec -T web …`, et ajoute `MSYS_NO_PATHCONV=1` pour un chemin du conteneur (`/tmp/…`).
+- **E2E** : `docker compose run --rm e2e` (image Playwright). Ce service lance son propre serveur Next (port 3100) sur `DATABASE_URL_TEST`, avec `EMAIL_TRANSPORT=capture`.
+- **Build** : ne lance pas `next build` dans `web` ; fais-le dans le conteneur `e2e`, qui a son propre `.next`. Le build réécrit ensuite `next-env.d.ts` : redémarre `web` après (`docker compose restart web`).
+- **Premier administrateur** : `npm run admin:create -- --email … --first-name … --last-name …`.
 
 ## Règles d'architecture (`stack-technologique.md` §4)
 
@@ -31,14 +46,41 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 Ces règles sont des propositions validées avec la pile ; leur emplacement exact dans le code se décide au `/plan` de l'étape concernée.
 
+**Règle 1 en place (E1.6)** :
+- La matrice est déclarée en données dans `src/server/access/matrix.ts`.
+- `authorize(actor, "<ressource>", "<action>")` (`policy.ts`) est le seul contrôle.
+- `ownedBy(grant, …)` (`src/server/data/access.ts`) filtre la propriété dans la requête.
+- Toute nouvelle table, Server Action, route ou export de `src/server/data/` s'inscrit dans `src/server/access/inventory.ts`. Sinon `tests/access-inventory.test.ts` échoue.
+- Une nouvelle ressource reçoit d'abord sa ligne dans la matrice. Ses fonctions réelles s'ajoutent à `REAL` dans `tests/access-matrix.int.test.ts`, qui rejoue chaque cellule.
+- Ressource d'autrui : `null`, comme une ressource absente. Rôle sans droit : `AccessDeniedError`. Les pages répondent 404 dans les deux cas.
+
+**Règle 3, email (E1)** : `src/server/email/`.
+- Capture en test.
+- Gmail SMTP en dev dès que `SMTP_USER` et `SMTP_PASSWORD` existent : de vrais emails partent.
+- `EMAIL_TRANSPORT=capture` force la capture.
+
+**Authentification (E1)** :
+- Better Auth sans gestionnaire HTTP : Server Actions, puis `src/server/auth/`, puis `src/server/data/auth/`.
+- Session lue en base : `getActor()` et `requireRole()`, plus `src/proxy.ts` sur les espaces.
+- Liens à usage unique dans `auth_tokens`, stockés sous forme d'empreinte, consommés par un POST, jamais par un GET.
+- La déconnexion recharge la page entière : Next garde les pages visitées dans le document.
+
 ## Base de données
 
 - PostgreSQL (Neon) via Drizzle et `pg`. Client unique : `src/server/db/client.ts` ; schéma : un fichier par domaine dans `src/server/db/schema/`, réexporté par `index.ts`.
-- **Seul `src/server/data/**` importe `@/server/db`** (règle ESLint). Chaque fonction reçoit l'`Actor` (`src/server/access/actor.ts`) en premier argument, filtre la propriété dans la requête, lève `AccessDeniedError` sinon (refus par défaut) et renvoie un DTO minimal.
+- **Seul `src/server/data/**` importe `@/server/db`** (règle ESLint). Chaque fonction reçoit l'`Actor` (`src/server/access/actor.ts`) en premier argument, appelle d'abord `authorize()`, filtre la propriété dans la requête (`ownedBy`) et renvoie un DTO minimal. Une exception sans `Actor` (lien à usage unique, outil interne) est listée avec sa raison dans `inventory.ts`.
 - Nommage : camelCase en TypeScript, snake_case en SQL (`casing: "snake_case"`, jamais de nom de colonne écrit à la main) ; tables au pluriel ; `id uuid default gen_random_uuid()` ; `<entité>_id` ; `created_at`/`updated_at` en `timestamptz` ; états et rôles en `pgEnum`.
 - Migrations : `npm run db:generate -- --name=<verbe_objet>`, relire le SQL de `drizzle/`, le commiter ; `npm run db:migrate` sur dev. Jamais `drizzle-kit push` ; une migration commitée ne se modifie plus.
 - Tests : `npm test` (projets `unit` et `integration`). Les `*.int.test.ts` tournent en séquence sur `DATABASE_URL_TEST`, remise à zéro puis migrée à chaque exécution, tables vidées avant chaque test (`truncateAll`).
+- Intégration et E2E partagent `DATABASE_URL_TEST` : ne les lance jamais en même temps. Neon est en `us-east-2` : environ 175 ms par requête depuis le poste, d'où des tests lents.
 - Les variables arrivent dans le conteneur par `env_file` (`compose.yaml`) : après modification de `.env.local`, `docker compose up -d`.
+
+## Déploiement (Vercel Hobby)
+
+- La branche `preview` produit la preview. `main` n'est pas déployée (`vercel.json`) : la Production n'a aucune variable et son build échoue, c'est voulu.
+- Mise à jour de la preview : intégrer `main` dans `preview`, puis pousser. Pousser seulement à la demande de l'utilisateur.
+- Variables dans Vercel, environnement **Preview** seulement : `DATABASE_URL` (chaîne poolée de la branche Neon dev), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (le domaine de branche), `SMTP_USER`, `SMTP_PASSWORD`. Toute nouvelle variable y est ajoutée par l'utilisateur.
+- Fonctions en `cle1`, à côté de Neon. Preview publique [D], sur la base dev. Neon suspend sa base après 5 min : la première requête qui suit prend 4 à 5 s de plus (mesuré depuis le poste).
 
 ## Invariants (`fonctionnalites.md` §5.3)
 
@@ -55,7 +97,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 
 ## Valeurs provisoires
 
-`fonctionnalites.md` n'a pas été validé explicitement : les recommandations de Q1 à Q10 ne sont pas des décisions (par exemple Q1 note sur 20, Q3 remplacement d'une remise, Q4 correction de la transcription, Q6 rubrique française). Toute valeur non décidée (format de la note, durée d'un lien, nombre d'essais…) est codée comme valeur provisoire, marquée comme telle, dans un fichier de configuration unique. Signale-la ; ne la présente pas comme décidée et n'invente aucun chiffre.
+`fonctionnalites.md` n'a pas été validé explicitement : les recommandations de Q1 à Q10 ne sont pas des décisions (par exemple Q1 note sur 20, Q3 remplacement d'une remise, Q4 correction de la transcription, Q6 rubrique française). Toute valeur non décidée (format de la note, durée d'un lien, nombre d'essais…) est codée comme valeur provisoire, marquée comme telle, dans un fichier de configuration unique (`src/config/provisional.ts`). Signale-la ; ne la présente pas comme décidée et n'invente aucun chiffre.
 
 ## Langue
 
