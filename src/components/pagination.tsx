@@ -41,6 +41,14 @@ export function Pagination({
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);
 
+  // Everything fits on one page: the count is enough, page controls would be noise.
+  if (pageCount <= 1)
+    return (
+      <p className={cn("text-fg-muted", className)} aria-live="polite">
+        {total} {total === 1 ? entityName.replace(/s$/, "") : entityName}
+      </p>
+    );
+
   return (
     <nav
       aria-label="Pagination"

@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ChevronLeft, UserMinus } from "lucide-react";
-import { Alert } from "@/components/alert";
+import { CalendarClock, CircleDashed, FileText, Image as ImageIcon, Mail, TriangleAlert, Users, UserMinus } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { LoadingState } from "@/components/loading";
-import { PlaceholderNote } from "@/components/shell/shell-parts";
+import { BackLink, PlaceholderNote } from "@/components/shell/shell-parts";
 import { LateTag, StatusTag } from "@/components/status-tag";
 import { Tag } from "@/components/tag";
 import { statusLabels } from "@/lib/submission-status";
 import {
   copyOf,
+  findAssignment,
   findSubmission,
-  mockAssignment,
-  mockAssignmentSubmissions,
+  mockAssignments,
+  submissionsFor,
   type SubmissionRow,
 } from "@/mock/assignment-submissions";
 import { CopyPanel } from "./copy-panel";
@@ -25,7 +25,9 @@ import { EvaluationForm } from "./evaluation-form";
 type Props = PageProps<"/teacher/assignments/[assignmentId]/students/[studentId]">;
 
 export function generateStaticParams() {
-  return mockAssignmentSubmissions.map((r) => ({ assignmentId: mockAssignment.id, studentId: r.id }));
+  return mockAssignments.flatMap((a) =>
+    submissionsFor(a.id).map((r) => ({ assignmentId: a.id, studentId: r.id })),
+  );
 }
 
 export const metadata: Metadata = { title: "Submission" };
@@ -35,19 +37,12 @@ const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric
 export default function Page({ params }: Props) {
   return (
     <>
-      <Link
-        href={`/teacher/assignments/${mockAssignment.id}`}
-        className="mb-3 inline-flex items-center gap-1 rounded-sm text-fg-muted hover:text-fg"
-      >
-        <ChevronLeft aria-hidden="true" className="size-4" />
-        Submissions
-      </Link>
       <Suspense fallback={<LoadingState label="Loading submission…" />}>
         <CopyScreen params={params} />
       </Suspense>
       <PlaceholderNote>
-        Mockup with fictitious data. Grade format and conversion are provisional (Q1 open).
-        Validation and publication arrive in E8.
+        Fictitious data. Grade format and conversion are provisional (Q1 open). Validation and
+        publication arrive in E8.
       </PlaceholderNote>
     </>
   );
@@ -55,35 +50,46 @@ export default function Page({ params }: Props) {
 
 async function CopyScreen({ params }: Pick<Props, "params">) {
   const { assignmentId, studentId } = await params;
-  const row = findSubmission(studentId);
-  if (assignmentId !== mockAssignment.id || !row) notFound();
+  const assignment = findAssignment(assignmentId);
+  const row = findSubmission(assignmentId, studentId);
+  if (!assignment || !row) notFound();
   const copy = copyOf(row);
 
   return (
     <>
+      <BackLink href={`/teacher/assignments/${assignment.id}`}>{assignment.title}</BackLink>
       <Identity row={row} />
       {row.status === "to_submit" || !copy || !row.mode ? (
-        // REV-02 R4: a student who has not submitted opens a status page without a form.
-        <Alert tone="info" title={statusLabels[row.status]}>
-          {row.status === "to_submit"
-            ? "This student has not submitted yet. There is nothing to evaluate."
-            : row.cause
-              ? `${row.cause}. No text to show. Manual evaluation arrives in a later step (REV-06).`
-              : "No text to show yet."}
-        </Alert>
+        // REV-02 R4: no text yet, a status page without a form.
+        <div className="card">
+          <EmptyState
+            icon={row.status === "to_submit" ? CircleDashed : TriangleAlert}
+            title={row.status === "to_submit" ? "Not submitted yet" : statusLabels[row.status]}
+            description={
+              row.status === "to_submit"
+                ? `Nothing to evaluate. The deadline is ${dateFormat.format(new Date(assignment.due))}.`
+                : row.cause
+                  ? `${row.cause}. Manual evaluation arrives in a later step (REV-06).`
+                  : "There is no text to show yet."
+            }
+          />
+        </div>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
           <div className="flex flex-col xl:sticky xl:top-[calc(var(--spacing-header)+1rem)] xl:max-h-[calc(100dvh-var(--spacing-header)-2rem)]">
-            <CopyPanel text={copy.text} mode={row.mode} instructions={mockAssignment.instructions} />
+            <CopyPanel text={copy.text} mode={row.mode} instructions={assignment.instructions} />
           </div>
           <div className="flex flex-col gap-4">
             {row.hasProposal ? (
               <EvaluationForm proposal={copy.proposal} initialGrade={row.teacherGrade} />
             ) : (
-              <Alert tone="info" title={`No AI proposal: ${statusLabels[row.status]}`}>
-                The evaluation form appears once a proposal exists. Manual evaluation arrives in a
-                later step (REV-06).
-              </Alert>
+              <div className="card">
+                <EmptyState
+                  icon={CircleDashed}
+                  title={`No AI proposal yet: ${statusLabels[row.status]}`}
+                  description="The evaluation form appears once a proposal exists. Manual evaluation arrives in a later step (REV-06)."
+                />
+              </div>
             )}
           </div>
         </div>
@@ -92,37 +98,47 @@ async function CopyScreen({ params }: Pick<Props, "params">) {
   );
 }
 
+/** Who and what: identity (REV-02 R1), status, late flag, mode. Labels stay for screen readers. */
 function Identity({ row }: { row: SubmissionRow }) {
+  const ModeIcon = row.mode === "image" ? ImageIcon : FileText;
   return (
-    <header className="mb-6 flex flex-col gap-3">
-      <h1 className="text-lg">
-        {row.firstName} {row.lastName}
-      </h1>
-      <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-[auto_1fr] lg:flex lg:flex-wrap">
-        <div className="flex gap-2">
-          <dt className="text-fg-muted">Email</dt>
+    <header className="mb-5 flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h1 className="text-lg">
+          {row.firstName} {row.lastName}
+        </h1>
+        <StatusTag status={row.status} />
+        {row.late && <LateTag />}
+      </div>
+      <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-fg-muted">
+        <div className="inline-flex items-center gap-1.5">
+          <dt className="sr-only">Email</dt>
+          <Mail aria-hidden="true" className="size-4" />
           <dd>{row.email}</dd>
         </div>
-        <div className="flex gap-2">
-          <dt className="text-fg-muted">{row.classes.length > 1 ? "Classes" : "Class"}</dt>
+        <div className="inline-flex items-center gap-1.5">
+          <dt className="sr-only">{row.classes.length > 1 ? "Classes" : "Class"}</dt>
+          <Users aria-hidden="true" className="size-4" />
           <dd className="flex flex-wrap items-center gap-2">
             {row.classes.join(", ")}
             {row.removedFromClass && <Tag icon={UserMinus}>Removed from class</Tag>}
           </dd>
         </div>
-        <div className="flex gap-2">
-          <dt className="text-fg-muted">Status</dt>
-          <dd className="flex flex-wrap gap-1">
-            <StatusTag status={row.status} />
-            {row.late && <LateTag />}
-          </dd>
-        </div>
         {row.submittedAt && row.mode && (
-          <div className="flex gap-2">
-            <dt className="text-fg-muted">Submitted</dt>
+          <div className="inline-flex items-center gap-1.5">
+            <dt className="sr-only">Submitted</dt>
+            <ModeIcon aria-hidden="true" className="size-4" />
             <dd>
-              {dateFormat.format(new Date(row.submittedAt))} · {row.mode === "text" ? "Text" : "Image"}
+              {row.mode === "text" ? "Text" : "Image"}, submitted{" "}
+              {dateFormat.format(new Date(row.submittedAt))}
             </dd>
+          </div>
+        )}
+        {!row.submittedAt && (
+          <div className="inline-flex items-center gap-1.5">
+            <dt className="sr-only">Submitted</dt>
+            <CalendarClock aria-hidden="true" className="size-4" />
+            <dd>Not submitted</dd>
           </div>
         )}
       </dl>

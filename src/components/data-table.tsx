@@ -176,7 +176,7 @@ export function DataTable<Row>({
                     {columns.map((column) => (
                       <td
                         key={column.key}
-                        className={cn("px-4 py-3 align-top md:first:pl-6", column.className)}
+                        className={cn("px-4 py-3 align-middle md:first:pl-6", column.className)}
                       >
                         {column.cell(row)}
                       </td>

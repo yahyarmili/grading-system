@@ -6,7 +6,12 @@ const factor = 10 ** GRADE_DECIMALS;
 
 /** "13.5 / 20" (scale is provisional, Q1). */
 export function formatGrade(value: number): string {
-  return `${format.format(value)} / ${GRADE_SCALE}`;
+  return `${formatGradeValue(value)} / ${GRADE_SCALE}`;
+}
+
+/** "13.5", for tables whose column header carries the scale. */
+export function formatGradeValue(value: number): string {
+  return format.format(value);
 }
 
 /**

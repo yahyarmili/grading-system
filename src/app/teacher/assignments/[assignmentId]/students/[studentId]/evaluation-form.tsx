@@ -27,9 +27,9 @@ function SideBySide({ ai, teacher }: { ai: ReactNode; teacher: ReactNode }) {
   return (
     <div className="grid gap-4 @xl:grid-cols-2 @xl:gap-6">
       <div className="flex flex-col gap-2 rounded-lg bg-surface-muted p-4">
-        <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-fg-muted uppercase">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
           <Bot aria-hidden="true" className="size-4" />
-          AI proposal · read-only
+          AI proposal
         </p>
         {ai}
       </div>
@@ -103,6 +103,11 @@ export function EvaluationForm({
         if (!gradeError) setSaved(true);
       }}
     >
+      <p className="text-fg-muted">
+        Five criteria, {rubric[0].weight} % each. The AI proposal is read-only and never shown to the
+        student; your evaluation starts from it.
+      </p>
+
       {proposal.alerts.map((alert) => (
         <Alert key={alert.kind} tone="warning" title="AI alert">
           {alert.message} Only you see this alert.
@@ -117,8 +122,8 @@ export function EvaluationForm({
           <section key={criterion.id} aria-labelledby={`${criterion.id}-title`} className="card @container">
             <header className="card-header flex-wrap">
               <h2 id={`${criterion.id}-title`} className="text-base font-semibold">
-                {i + 1}. {criterion.name}{" "}
-                <span className="font-normal text-fg-muted">· {criterion.weight} %</span>
+                <span className="mr-1.5 text-fg-muted tabular-nums">{i + 1}</span>
+                {criterion.name}
               </h2>
               {(levelChanged || remarkChanged) && <Tag icon={PenLine}>Modified</Tag>}
             </header>
@@ -163,7 +168,7 @@ export function EvaluationForm({
                       </div>
                       <textarea
                         id={`remark-${criterion.id}`}
-                        className="input"
+                        className="input field-sizing-content"
                         rows={3}
                         value={remarks[i]}
                         onChange={(e) => changeRemark(i, e.target.value)}
@@ -199,7 +204,7 @@ export function EvaluationForm({
                 </label>
                 <textarea
                   id="comment"
-                  className="input"
+                  className="input field-sizing-content"
                   rows={3}
                   value={comment}
                   onChange={(e) => {
@@ -219,7 +224,7 @@ export function EvaluationForm({
                 </label>
                 <textarea
                   id="suggestions"
-                  className="input"
+                  className="input field-sizing-content"
                   rows={3}
                   value={suggestions}
                   onChange={(e) => {

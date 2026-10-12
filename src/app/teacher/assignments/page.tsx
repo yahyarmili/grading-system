@@ -1,33 +1,38 @@
 import type { Metadata } from "next";
+import { ClipboardCheck, ClipboardList } from "lucide-react";
 import { PageHeader, PlaceholderNote } from "@/components/shell/shell-parts";
-import Link from "next/link";
-import { mockAssignment } from "@/mock/assignment-submissions";
-import { mockTeacherAssignments } from "@/mock/data";
+import { mockAssignments, submissionsFor } from "@/mock/assignment-submissions";
+import { AssignmentsTable, type AssignmentRow } from "./assignments-table";
 
 export const metadata: Metadata = { title: "Assignments" };
 
 export default function Page() {
+  const rows: AssignmentRow[] = mockAssignments.map((a) => {
+    const submissions = submissionsFor(a.id);
+    return {
+      id: a.id,
+      title: a.title,
+      classes: a.classes,
+      language: a.language,
+      due: a.due,
+      students: submissions.length,
+      submitted: submissions.filter((s) => s.status !== "to_submit").length,
+      toReview: submissions.filter((s) => s.status === "to_review").length,
+    };
+  });
+  const toReview = rows.reduce((sum, a) => sum + a.toReview, 0);
+
   return (
     <>
-      <PageHeader title="Assignments" description="Writing tasks you set for your classes." />
-      <ul className="card divide-y divide-border-subtle">
-        {mockTeacherAssignments.map((a) => (
-          <li key={a.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-6 py-4">
-            {/* Only the first assignment has a submissions mockup (step 1.4). */}
-            {a.id === mockAssignment.id ? (
-              <Link className="link font-medium" href={`/teacher/assignments/${a.id}`}>
-                {a.title}
-              </Link>
-            ) : (
-              <p className="font-medium">{a.title}</p>
-            )}
-            <p className="text-fg-muted">
-              {a.className} · Due {a.due}
-            </p>
-          </li>
-        ))}
-      </ul>
-      <PlaceholderNote>Mock data. Assignments arrive in E3.</PlaceholderNote>
+      <PageHeader
+        title="Assignments"
+        meta={[
+          { icon: ClipboardList, label: `${rows.length} assignments` },
+          { icon: ClipboardCheck, label: `${toReview} submissions to review` },
+        ]}
+      />
+      <AssignmentsTable rows={rows} />
+      <PlaceholderNote>Fictitious data. Creating and editing assignments arrives in E3.</PlaceholderNote>
     </>
   );
 }

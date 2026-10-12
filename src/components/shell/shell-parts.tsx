@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { GraduationCap } from "lucide-react";
+import { ChevronLeft, FlaskConical, GraduationCap, type LucideIcon } from "lucide-react";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import type { MockUser } from "@/mock/data";
 
@@ -45,31 +46,63 @@ export function UserBadge({ user, roleLabel }: { user: MockUser; roleLabel: stri
   );
 }
 
+export type MetaItem = { icon: LucideIcon; label: ReactNode };
+
+/** Facts about the page subject (classes, due date, counts), on one wrapping line. */
+export function MetaList({ items, className }: { items: MetaItem[]; className?: string }) {
+  return (
+    <ul className={cn("flex flex-wrap items-center gap-x-4 gap-y-1 text-fg-muted", className)}>
+      {items.map(({ icon: Icon, label }, i) => (
+        <li key={i} className="inline-flex items-center gap-1.5">
+          <Icon aria-hidden="true" className="size-4 shrink-0" />
+          <span>{label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function PageHeader({
   title,
-  description,
+  meta,
   actions,
 }: {
   title: string;
-  description?: string;
+  meta?: MetaItem[];
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div className="flex flex-col gap-1">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-1.5">
         <h1 className="text-lg">{title}</h1>
-        {description && <p className="text-fg-muted">{description}</p>}
+        {meta && meta.length > 0 && <MetaList items={meta} />}
       </div>
       {actions}
     </div>
   );
 }
 
-/** Marks a page whose real content comes in a later step. */
+/** Link back to the parent list, above the page title. */
+export function BackLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="mb-2 inline-flex items-center gap-1 rounded-sm text-fg-muted hover:text-fg"
+    >
+      <ChevronLeft aria-hidden="true" className="size-4" />
+      {children}
+    </Link>
+  );
+}
+
+/** Marks mock content; deliberately quiet so it does not read as product UI. */
 export function PlaceholderNote({ children }: { children: ReactNode }) {
   return (
-    <p className="mt-6 rounded-lg border border-dashed border-border px-4 py-3 text-xs text-fg-muted">
-      <span className="font-semibold">Placeholder.</span> {children}
+    <p className="mt-8 flex items-start gap-1.5 text-xs text-fg-muted">
+      <FlaskConical aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+      <span>
+        <span className="font-semibold">Mockup.</span> {children}
+      </span>
     </p>
   );
 }

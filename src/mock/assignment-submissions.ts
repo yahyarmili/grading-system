@@ -35,17 +35,30 @@ export type SubmissionRow = {
   cause?: string; // not assessable
 };
 
+const A = "Grade 10 — A";
+const B = "Grade 10 — B";
+
 export const mockAssignment: MockAssignment = {
   id: "a1",
   title: "My last holiday",
   language: "English",
-  classes: ["Grade 10 — A", "Grade 10 — B"],
+  classes: [A, B],
   due: "2026-10-20",
   instructions: "Write 150 to 200 words about your last holiday. Say where you went, what you did and why it mattered to you.",
 };
 
-const A = "Grade 10 — A";
-const B = "Grade 10 — B";
+/** Sent to one class, deadline not reached: every student is still "to submit". */
+const letterAssignment: MockAssignment = {
+  id: "a2",
+  title: "A letter to a friend",
+  language: "English",
+  classes: [B],
+  due: "2026-10-27",
+  instructions: "Write a letter of 120 to 150 words to a friend who lives abroad. Tell them about your new school year.",
+};
+
+/** Teacher's assignments, latest deadline first (ASG-02 R2). */
+export const mockAssignments: MockAssignment[] = [letterAssignment, mockAssignment];
 
 // [last name, first name, classes, status, mode, submitted day of Oct, teacher grade, copy template]
 type Seed = [string, string, string[], SubmissionStatus, "t" | "i" | null, number | null, number | null, number | null];
@@ -132,10 +145,52 @@ export const mockAssignmentSubmissions: SubmissionRow[] = seeds.map(
   },
 );
 
-export function findSubmission(id: string): SubmissionRow | undefined {
-  return mockAssignmentSubmissions.find((r) => r.id === id);
+// Row ids identify the student, so the same student keeps one id across assignments.
+const roster = mockAssignmentSubmissions;
+
+const letterSubmissions: SubmissionRow[] = roster
+  .filter((s) => s.classes.includes(B) && !s.removedFromClass)
+  .map((s) => ({
+    ...s,
+    classes: s.classes.filter((c) => letterAssignment.classes.includes(c)),
+    status: "to_submit",
+    late: false,
+    mode: null,
+    submittedAt: null,
+    teacherGrade: null,
+    proposedGrade: null,
+    copy: null,
+    hasProposal: false,
+    cause: undefined,
+  }));
+
+const submissionsByAssignment: Record<string, SubmissionRow[]> = {
+  [mockAssignment.id]: mockAssignmentSubmissions,
+  [letterAssignment.id]: letterSubmissions,
+};
+
+export function findAssignment(id: string): MockAssignment | undefined {
+  return mockAssignments.find((a) => a.id === id);
+}
+
+export function submissionsFor(assignmentId: string): SubmissionRow[] {
+  return submissionsByAssignment[assignmentId] ?? [];
+}
+
+export function findSubmission(assignmentId: string, studentId: string): SubmissionRow | undefined {
+  return submissionsFor(assignmentId).find((r) => r.id === studentId);
+}
+
+/** Active members of a class (removed students are no longer members). */
+export function classSize(className: string): number {
+  return roster.filter((s) => s.classes.includes(className) && !s.removedFromClass).length;
 }
 
 export function copyOf(row: SubmissionRow): CopyTemplate | null {
   return row.copy === null ? null : copyTemplates[row.copy];
+}
+
+/** Distinct active students across classes (a student in two classes counts once). */
+export function distinctStudents(classNames: string[]): number {
+  return roster.filter((s) => !s.removedFromClass && s.classes.some((c) => classNames.includes(c))).length;
 }
