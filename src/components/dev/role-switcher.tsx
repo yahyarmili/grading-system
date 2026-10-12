@@ -44,8 +44,8 @@ export function RoleSwitcher() {
           );
         })}
       </ul>
-      <Link href="/" className="ml-auto underline underline-offset-2">
-        Design foundations
+      <Link href="/dev/design" className="ml-auto underline underline-offset-2">
+        Design system
       </Link>
     </nav>
   );
