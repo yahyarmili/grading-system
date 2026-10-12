@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { mockUsers } from "@/mock/data";
 import { roleHome } from "./navigation";
-import { Brand, UserBadge } from "./shell-parts";
+import { Account } from "./account";
+import { Brand } from "./shell-parts";
 
 /** Admin space: a single screen (Teachers), so a header without navigation. */
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -11,7 +11,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-header max-w-5xl items-center gap-3 px-4 md:px-6">
           <Brand href={roleHome.admin} />
           <div className="ml-auto">
-            <UserBadge user={mockUsers.admin} roleLabel="Administrator" />
+            <Account role="admin" roleLabel="Administrator" />
           </div>
         </div>
       </header>

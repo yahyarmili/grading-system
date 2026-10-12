@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ChevronLeft, FlaskConical, GraduationCap, type LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import type { ReactNode } from "react";
-import type { MockUser } from "@/mock/data";
 
 export function Brand({ href }: { href: string }) {
   return (
@@ -26,7 +25,7 @@ function initials(name: string) {
 }
 
 /** Current user: initials always, name from sm (the name stays available to screen readers). */
-export function UserBadge({ user, roleLabel }: { user: MockUser; roleLabel: string }) {
+export function UserBadge({ user, roleLabel }: { user: { name: string }; roleLabel: string }) {
   return (
     <div className="flex items-center gap-3">
       <div className="hidden text-right sm:block">

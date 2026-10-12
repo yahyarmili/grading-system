@@ -3,14 +3,6 @@
 
 import type { StudentStatus } from "@/lib/submission-status";
 
-export type MockUser = { name: string; email: string };
-
-export const mockUsers = {
-  teacher: { name: "Sarah Bennett", email: "s.bennett@example.test" },
-  student: { name: "Adam Rami", email: "adam.rami@example.test" },
-  admin: { name: "Site Admin", email: "admin@example.test" },
-} satisfies Record<string, MockUser>;
-
 /** Students counts of Grade 10 classes come from the roster (assignment-submissions.ts). */
 export const mockTeacherClasses: { id: string; name: string; students?: number }[] = [
   { id: "c1", name: "Grade 10 — A" },

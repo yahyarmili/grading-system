@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Card } from "@/components/card";
 import { SignUpForm } from "./sign-up-form";
 
@@ -6,7 +7,7 @@ export const metadata: Metadata = { title: "Sign up" };
 
 export default function Page() {
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <h1 className="sr-only">Sign up</h1>
       <Card
         title="Create your student account"
@@ -14,6 +15,12 @@ export default function Page() {
       >
         <SignUpForm />
       </Card>
-    </>
+      <p className="text-center text-sm">
+        Already have an account?{" "}
+        <Link className="link" href="/sign-in">
+          Sign in
+        </Link>
+      </p>
+    </div>
   );
 }

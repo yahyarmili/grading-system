@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { mockUsers } from "@/mock/data";
 import { roleHome } from "./navigation";
 import { PrimaryNav } from "./primary-nav";
-import { Brand, UserBadge } from "./shell-parts";
+import { Account } from "./account";
+import { Brand } from "./shell-parts";
 
 /**
  * Student space, phone first (portrait): a bottom tab bar within thumb reach,
@@ -21,7 +21,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
             className="hidden self-stretch md:flex"
           />
           <div className="ml-auto">
-            <UserBadge user={mockUsers.student} roleLabel="Student" />
+            <Account role="student" roleLabel="Student" />
           </div>
         </div>
       </header>

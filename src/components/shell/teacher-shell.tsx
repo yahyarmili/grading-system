@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { mockUsers } from "@/mock/data";
 import { MobileDrawer } from "./mobile-drawer";
 import { roleHome } from "./navigation";
 import { PrimaryNav } from "./primary-nav";
-import { Brand, UserBadge } from "./shell-parts";
+import { Account } from "./account";
+import { Brand } from "./shell-parts";
 
 /**
  * Teacher space, desktop first: fixed 200 px sidebar from lg,
@@ -26,7 +26,7 @@ export function TeacherShell({ children }: { children: ReactNode }) {
             <Brand href={roleHome.teacher} />
           </div>
           <div className="ml-auto">
-            <UserBadge user={mockUsers.teacher} roleLabel="Teacher" />
+            <Account role="teacher" roleLabel="Teacher" />
           </div>
         </header>
         <main className="page-container flex-1">{children}</main>

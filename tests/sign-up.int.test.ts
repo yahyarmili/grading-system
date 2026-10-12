@@ -196,6 +196,7 @@ describe("CA4: expired, used or forged links leave the account unconfirmed", () 
 });
 
 describe("attempt limit per network (NFR-SEC-02)", () => {
+  // Eleven sign-ups, each with a scrypt hash and Neon round trips: above the default timeout.
   it(`refuses sign-ups beyond ${SIGN_UP_MAX_PER_IP} from one IP`, async () => {
     for (let i = 0; i < SIGN_UP_MAX_PER_IP; i++) {
       expect(await signUp({ ...form, email: `s${i}@example.test` }, { ip: "192.0.2.1" })).toEqual({
@@ -205,5 +206,5 @@ describe("attempt limit per network (NFR-SEC-02)", () => {
     const refused = await signUp({ ...form, email: "late@example.test" }, { ip: "192.0.2.1" });
     expect(refused).toEqual({ status: "error", message: SIGN_UP_MESSAGES.tooMany });
     expect(await userByEmail("late@example.test")).toBeUndefined();
-  });
+  }, 60_000);
 });
