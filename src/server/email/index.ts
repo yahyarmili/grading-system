@@ -7,11 +7,19 @@ import type { EmailSender } from "./types";
 export type { EmailKind, EmailMessage, EmailSender } from "./types";
 export { CaptureEmailSender, type CapturedEmail } from "./capture";
 
-type EmailEnv = { NODE_ENV?: string; SMTP_USER?: string; SMTP_PASSWORD?: string };
+type EmailEnv = {
+  NODE_ENV?: string;
+  SMTP_USER?: string;
+  SMTP_PASSWORD?: string;
+  /** "capture" forces the capture transport (E2E server), even with SMTP variables. */
+  EMAIL_TRANSPORT?: string;
+  /** Where captured messages are written; default .mail-capture/ in development. */
+  MAIL_CAPTURE_DIR?: string;
+};
 
-/** Tests always capture; otherwise SMTP as soon as both SMTP variables exist. */
+/** Tests and the E2E server always capture; otherwise SMTP as soon as both SMTP variables exist. */
 export function selectTransport(env: EmailEnv): "capture" | "smtp" {
-  if (env.NODE_ENV === "test") return "capture";
+  if (env.NODE_ENV === "test" || env.EMAIL_TRANSPORT === "capture") return "capture";
   return env.SMTP_USER && env.SMTP_PASSWORD ? "smtp" : "capture";
 }
 
@@ -20,7 +28,8 @@ function createSender(env: EmailEnv): EmailSender {
     return new SmtpEmailSender(env.SMTP_USER!, env.SMTP_PASSWORD!);
   }
   const directory =
-    env.NODE_ENV === "development" ? path.join(process.cwd(), ".mail-capture") : undefined;
+    env.MAIL_CAPTURE_DIR ??
+    (env.NODE_ENV === "development" ? path.join(process.cwd(), ".mail-capture") : undefined);
   return new CaptureEmailSender(directory);
 }
 

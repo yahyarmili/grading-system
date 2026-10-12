@@ -42,3 +42,7 @@ next-env.d.ts
 
 # captured emails (development transport)
 /.mail-capture/
+
+# Playwright reports (E2E)
+/playwright-report/
+/test-results/

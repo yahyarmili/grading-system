@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:int": "vitest run --project integration",
+    "test:e2e": "playwright test",
     "admin:create": "tsx --conditions=react-server scripts/create-admin.ts"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.19.2",
     "@types/nodemailer": "^8.0.2",

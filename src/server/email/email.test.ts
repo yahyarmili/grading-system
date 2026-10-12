@@ -20,6 +20,9 @@ describe("selectTransport", () => {
     expect(selectTransport({ NODE_ENV: "development", SMTP_USER: "u", SMTP_PASSWORD: "p" })).toBe("smtp");
     expect(selectTransport({ NODE_ENV: "development", SMTP_USER: "u" })).toBe("capture");
     expect(selectTransport({ NODE_ENV: "production" })).toBe("capture");
+    expect(selectTransport({ NODE_ENV: "development", SMTP_USER: "u", SMTP_PASSWORD: "p", EMAIL_TRANSPORT: "capture" })).toBe(
+      "capture",
+    );
   });
 });
 

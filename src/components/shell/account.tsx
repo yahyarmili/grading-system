@@ -1,10 +1,9 @@
 import { Suspense } from "react";
-import { LogOut } from "lucide-react";
-import { signOutAction } from "@/app/(auth)/actions";
 import { Skeleton } from "@/components/loading";
 import type { Role } from "@/lib/roles";
 import { requireRole } from "@/server/auth/session";
 import { UserBadge } from "./shell-parts";
+import { SignOutButton } from "./sign-out-button";
 
 /**
  * Signed-in user and sign-out, in the shell header. Reads the session, so it
@@ -23,13 +22,7 @@ async function AccountContent({ role, roleLabel }: { role: Role; roleLabel: stri
   return (
     <div className="flex items-center gap-2">
       <UserBadge user={user} roleLabel={roleLabel} />
-      <form action={signOutAction}>
-        <button type="submit" className="btn btn-ghost btn-sm">
-          <LogOut aria-hidden="true" className="size-4" />
-          {/* Icon only on phones; the name stays available to screen readers. */}
-          <span className="sr-only sm:not-sr-only">Sign out</span>
-        </button>
-      </form>
+      <SignOutButton />
     </div>
   );
 }

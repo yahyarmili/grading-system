@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, isNull, sql, TransactionRollbackError } from "d
 import { alias } from "drizzle-orm/pg-core";
 import { TEACHER_INVITATION_TTL } from "@/config/provisional";
 import type { Actor } from "@/server/access/actor";
-import { AccessDeniedError } from "@/server/access/errors";
+import { authorize } from "@/server/access/policy";
 import { hashToken } from "@/server/auth/tokens";
 import { db } from "@/server/db/client";
 import { accounts, authTokens, securityEvents, teacherInvitations, users } from "@/server/db/schema";
@@ -12,13 +12,9 @@ import { recordSecurityEvent } from "./security-events";
 import { consumeToken, issueToken } from "./tokens";
 
 // AUTH-03: teacher accounts, created by the administrator through an invitation.
-// Every function but the link-based ones takes the Actor and refuses anyone
-// but the administrator (deny by default), whatever the screen shows.
-
-function requireAdmin(actor: Actor): string {
-  if (actor.kind !== "user" || actor.role !== "admin") throw new AccessDeniedError();
-  return actor.userId;
-}
+// Every function but the link-based ones takes the Actor and goes through
+// authorize() (row teacherInvitation of the matrix): only the administrator
+// passes, whatever the screen shows.
 
 export type InvitationState = "pending" | "expired" | "accepted" | "cancelled";
 
@@ -39,7 +35,7 @@ export type InvitationRow = {
 
 /** Invitations, newest first, with their state and who did what when (R4). */
 export async function listTeacherInvitations(actor: Actor): Promise<InvitationRow[]> {
-  requireAdmin(actor);
+  authorize(actor, "teacherInvitation", "read");
   const creator = alias(users, "creator");
   const canceller = alias(users, "canceller");
 
@@ -136,7 +132,7 @@ export async function createTeacherInvitation(
   actor: Actor,
   input: { firstName: string; lastName: string; email: string },
 ): Promise<CreateInvitationResult> {
-  const adminId = requireAdmin(actor);
+  const { userId: adminId } = authorize(actor, "teacherInvitation", "write");
   return db.transaction(async (tx) => {
     const [taken] = await tx.select({ id: users.id }).from(users).where(eq(users.email, input.email));
     if (taken) return { ok: false, reason: "email_taken" };
@@ -175,7 +171,7 @@ async function findOpenInvitation(tx: Parameters<Parameters<typeof db.transactio
 
 /** CA3: a new link for an open invitation; the previous link stops working. Null if not open. */
 export async function reissueTeacherInvitation(actor: Actor, invitationId: string): Promise<InvitationToSend | null> {
-  const adminId = requireAdmin(actor);
+  const { userId: adminId } = authorize(actor, "teacherInvitation", "write");
   return db.transaction(async (tx) => {
     const invitation = await findOpenInvitation(tx, invitationId);
     if (!invitation) return null;
@@ -187,7 +183,7 @@ export async function reissueTeacherInvitation(actor: Actor, invitationId: strin
 
 /** Cancels an open invitation: its link stops working at once. False if not open. */
 export async function cancelTeacherInvitation(actor: Actor, invitationId: string): Promise<boolean> {
-  const adminId = requireAdmin(actor);
+  const { userId: adminId } = authorize(actor, "teacherInvitation", "write");
   return db.transaction(async (tx) => {
     const invitation = await findOpenInvitation(tx, invitationId);
     if (!invitation) return false;

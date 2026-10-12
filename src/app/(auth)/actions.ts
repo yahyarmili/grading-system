@@ -55,13 +55,13 @@ export async function signInAction(_previous: SignInState, form: FormData): Prom
   return state;
 }
 
+/** The caller then loads /sign-in in full (SignOutButton): no page of the session stays in memory. */
 export async function signOutAction(): Promise<void> {
   const actor = await getActor();
   await signOutUser({
     headers: await headers(),
     userId: actor.kind === "user" ? actor.userId : null,
   });
-  redirect("/sign-in");
 }
 
 export async function forgotPasswordAction(
