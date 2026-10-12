@@ -26,7 +26,10 @@ export class CaptureEmailSender implements EmailSender {
     if (this.directory) {
       await mkdir(this.directory, { recursive: true });
       const file = `${captured.sentAt.getTime()}-${message.kind}.json`;
-      await writeFile(path.join(this.directory, file), JSON.stringify(captured, null, 2));
+      // In JSON the text is one line with "\n": copying a link from it drags
+      // the next words along. The links are listed alone, ready to copy.
+      const links = message.text.match(/https?:\/\/\S+/g) ?? [];
+      await writeFile(path.join(this.directory, file), JSON.stringify({ links, ...captured }, null, 2));
     }
   }
 

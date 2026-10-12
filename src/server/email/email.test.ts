@@ -50,6 +50,7 @@ describe("CaptureEmailSender", () => {
       expect(files).toHaveLength(1);
       const saved = JSON.parse(await readFile(path.join(directory, files[0]), "utf8"));
       expect(saved.text).toContain("verify-email?token=abc");
+      expect(saved.links).toEqual(["http://localhost:3000/verify-email?token=abc"]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
