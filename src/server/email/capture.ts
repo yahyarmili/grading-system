@@ -7,7 +7,7 @@ export type CapturedEmail = EmailMessage & { sentAt: Date };
 /**
  * Transport for development and tests: nothing leaves the machine.
  * Keeps messages in memory; with a directory, also writes each one as JSON
- * (development mailbox, git-ignored). failNext() injects a failure (NFR-EXP-04).
+ * (development, git-ignored; the links listed first). failNext() injects a failure (NFR-EXP-04).
  */
 export class CaptureEmailSender implements EmailSender {
   private messages: CapturedEmail[] = [];
