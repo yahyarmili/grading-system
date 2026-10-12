@@ -34,8 +34,8 @@ export default function Page({ params }: PageProps<"/teacher/assignments/[assign
         <AssignmentSubmissions params={params} />
       </Suspense>
       <PlaceholderNote>
-        Mockup with fictitious data. Grades out of 20 are provisional (Q1 open). Opening a
-        submission arrives in step 1.5.
+        Mockup with fictitious data. Grades out of 20 are provisional (Q1 open). Click a last name to open the
+        submission.
       </PlaceholderNote>
     </>
   );
@@ -52,7 +52,7 @@ async function AssignmentSubmissions({ params }: Pick<PageProps<"/teacher/assign
         title={a.title}
         description={`${a.classes.join(", ")} · ${a.language} · Due ${dateFormat.format(new Date(a.due))}`}
       />
-      <SubmissionsList rows={mockAssignmentSubmissions} classes={a.classes} />
+      <SubmissionsList assignmentId={a.id} rows={mockAssignmentSubmissions} classes={a.classes} />
     </>
   );
 }

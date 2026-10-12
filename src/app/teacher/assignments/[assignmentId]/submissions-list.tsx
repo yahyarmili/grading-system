@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Ban, ClipboardCheck, FileText, Image as ImageIcon, RotateCw, TriangleAlert, UserMinus } from "lucide-react";
 import { cn } from "cn";
@@ -42,9 +43,11 @@ function sortGrade(row: SubmissionRow) {
 const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
 
 export function SubmissionsList({
+  assignmentId,
   rows,
   classes,
 }: {
+  assignmentId: string;
   rows: SubmissionRow[];
   classes: string[];
 }) {
@@ -73,7 +76,17 @@ export function SubmissionsList({
     {
       key: "lastName",
       header: "Last name",
-      cell: (r) => <span className="font-medium whitespace-nowrap">{r.lastName}</span>,
+      // REV-02: a click on the name opens the copy. The first name is in the
+      // accessible name so homonyms ("Martin") stay distinct.
+      cell: (r) => (
+        <Link
+          href={`/teacher/assignments/${assignmentId}/students/${r.id}`}
+          className="link font-medium whitespace-nowrap"
+        >
+          {r.lastName}
+          <span className="sr-only"> {r.firstName}</span>
+        </Link>
+      ),
       sortValue: (r) => r.lastName,
       // Alphabetical: last name, then first name; case- and accent-insensitive.
       compare: (a, b) => compareText(a.lastName, b.lastName) || compareText(a.firstName, b.firstName),
