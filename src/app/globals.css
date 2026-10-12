@@ -1,26 +1,468 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Design system — foundations.
+ * Visual reference: refine app-crm-minimal (Ant Design look), rebuilt in Tailwind.
+ * Rules:
+ * - Use semantic tokens (bg-surface, text-fg-muted, border-border…), never raw palette colors.
+ * - Colors meet WCAG AA: text 4.5:1, form-control borders and focus ring 3:1.
+ * - Color never carries information alone: a status also has an icon and a text,
+ *   an error has a message, a link in running text is underlined.
+ * - Every interactive element shows the focus ring on keyboard focus (:focus-visible).
+ * - Motion: CSS transitions ≤ 150 ms on color/shadow only; GSAP only for
+ *   micro-interactions via src/lib/motion.ts; all motion off under prefers-reduced-motion.
+ * - Density: body text 14/22 px (text-sm), spacing on the 4 px grid
+ *   (4, 8, 12, 16, 24, 32); cards and controls rounded-lg (8 px), tags rounded-sm (4 px).
+ * - Dark mode follows the OS setting (prefers-color-scheme); no toggle.
+ * - Accessible primitives (dialog, menu, select, tabs) come from shadcn/ui on Radix,
+ *   in src/components/ui. Their vocabulary (background, popover, accent, ring…)
+ *   is mapped onto the tokens below; do not add separate shadcn colors.
+ */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  color-scheme: light;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Surfaces */
+  --bg: #f5f5f5; /* page background behind cards */
+  --surface: #ffffff; /* cards, header, sidebar, inputs */
+  --surface-muted: #fafafa; /* table header, row hover */
+  --surface-elevated: #ffffff; /* dialogs, menus */
+
+  /* Text */
+  --fg: #1f1f1f;
+  --fg-muted: #595959; /* secondary text, labels of metadata */
+  --fg-subtle: #737373; /* placeholders, hints — only on surface */
+  --fg-on-primary: #ffffff;
+
+  /* Borders */
+  --border: #d9d9d9; /* cards, separators (decorative) */
+  --border-subtle: #f0f0f0; /* table rows */
+  --border-control: #8c8c8c; /* inputs: 3:1 against surface */
+
+  /* Brand / actions */
+  --primary: #1668dc;
+  --primary-hover: #0958d9;
+  --primary-active: #003eb3;
+  --primary-soft: #e6f4ff;
+  --link: #1668dc;
+  --focus: #0958d9;
+
+  /* Status: fg = text and icon, bg = tinted fill, border = outline */
+  --success-fg: #237804;
+  --success-bg: #f6ffed;
+  --success-border: #b7eb8f;
+  --warning-fg: #ad4e00;
+  --warning-bg: #fff7e6;
+  --warning-border: #ffd591;
+  --danger: #cf1322; /* destructive button fill */
+  --danger-hover: #a8071a;
+  --danger-fg: #cf1322;
+  --danger-bg: #fff1f0;
+  --danger-border: #ffa39e;
+  --info-fg: #0958d9;
+  --info-bg: #e6f4ff;
+  --info-border: #91caff;
+  --neutral-fg: #595959;
+  --neutral-bg: #fafafa;
+  --neutral-border: #d9d9d9;
+
+  /* Shadows */
+  --shadow-card:
+    0 1px 2px 0 rgb(0 0 0 / 0.03), 0 1px 6px -1px rgb(0 0 0 / 0.02),
+    0 2px 4px 0 rgb(0 0 0 / 0.02);
+  --shadow-overlay:
+    0 6px 16px 0 rgb(0 0 0 / 0.08), 0 3px 6px -4px rgb(0 0 0 / 0.12),
+    0 9px 28px 8px rgb(0 0 0 / 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+
+    --bg: #000000;
+    --surface: #141414;
+    --surface-muted: #1d1d1d;
+    --surface-elevated: #1f1f1f;
+
+    --fg: #e8e8e8;
+    --fg-muted: #a6a6a6;
+    --fg-subtle: #8c8c8c;
+    --fg-on-primary: #ffffff;
+
+    --border: #424242;
+    --border-subtle: #303030;
+    --border-control: #7a7a7a;
+
+    --primary: #1668dc;
+    --primary-hover: #3c89e8;
+    --primary-active: #1554ad;
+    --primary-soft: #111a2c;
+    --link: #69b1ff;
+    --focus: #69b1ff;
+
+    --success-fg: #73d13d;
+    --success-bg: #162312;
+    --success-border: #274916;
+    --warning-fg: #ffc53d;
+    --warning-bg: #2b2111;
+    --warning-border: #594214;
+    --danger: #d32029;
+    --danger-hover: #e84749;
+    --danger-fg: #ff7875;
+    --danger-bg: #2c1618;
+    --danger-border: #5b2526;
+    --info-fg: #69b1ff;
+    --info-bg: #111a2c;
+    --info-border: #15325b;
+    --neutral-fg: #a6a6a6;
+    --neutral-bg: #1d1d1d;
+    --neutral-border: #424242;
+
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --shadow-overlay:
+      0 6px 16px 0 rgb(0 0 0 / 0.32), 0 3px 6px -4px rgb(0 0 0 / 0.48),
+      0 9px 28px 8px rgb(0 0 0 / 0.2);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-on-primary: var(--fg-on-primary);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-control: var(--border-control);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-soft: var(--primary-soft);
+  --color-link: var(--link);
+  --color-focus: var(--focus);
+  --color-success-fg: var(--success-fg);
+  --color-success-bg: var(--success-bg);
+  --color-success-border: var(--success-border);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-border: var(--danger-border);
+  --color-info-fg: var(--info-fg);
+  --color-info-bg: var(--info-bg);
+  --color-info-border: var(--info-border);
+  --color-neutral-fg: var(--neutral-fg);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-neutral-border: var(--neutral-border);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-overlay: var(--shadow-overlay);
+
+  /* shadcn/ui vocabulary, mapped onto our tokens. */
+  --color-background: var(--surface);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--surface-elevated);
+  --color-popover-foreground: var(--fg);
+  --color-primary-foreground: var(--fg-on-primary);
+  --color-secondary: var(--surface-muted);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--surface-muted);
+  --color-muted-foreground: var(--fg-muted);
+  --color-accent: var(--primary-soft);
+  --color-accent-foreground: var(--fg);
+  --color-destructive: var(--danger-fg);
+  --color-input: var(--border-control);
+  --color-ring: var(--focus);
+}
+
+@theme {
+  /* System font stack, as in the reference: no web font to download. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-heading: var(--font-sans);
+
+  /* Type scale (size / line height): body is text-sm. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.25rem; /* 12/20 captions, tags */
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.375rem; /* 14/22 body, tables, labels */
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem; /* 16/24 card titles, mobile inputs */
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.75rem; /* 20/28 page titles */
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 2rem; /* 24/32 key figures */
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 2.375rem; /* 30/38 rare, large figures */
+
+  /* Shell dimensions (used from step 1.2). */
+  --spacing-sidebar: 200px;
+  --spacing-sidebar-collapsed: 80px;
+  --spacing-header: 64px;
+  --spacing-control: 2.5rem; /* 40 px: buttons and inputs, touch-friendly */
+  --spacing-control-sm: 2rem; /* 32 px: compact buttons in tables */
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+
+  ::selection {
+    background-color: var(--color-primary-soft);
+  }
+
+  /* Visible keyboard focus everywhere; mouse clicks do not show it. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * Keyboard highlight of a menu or select item: Radix moves focus with the arrow
+ * keys and sets data-highlighted. A tinted fill alone is too faint, so an outline
+ * is added. Unlayered on purpose: it must win over the components' outline-hidden.
+ */
+[role="menuitem"][data-highlighted],
+[role="menuitemcheckbox"][data-highlighted],
+[role="menuitemradio"][data-highlighted],
+[role="option"][data-highlighted] {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+@layer components {
+  /* Page content area inside the shell: 16 / 24 / 32 px gutters. */
+  .page-container {
+    width: 100%;
+    padding: 1rem;
+    @media (width >= 48rem) {
+      padding: 1.5rem;
+    }
+    @media (width >= 80rem) {
+      padding: 2rem;
+    }
+  }
+
+  /* Card: white surface, 1 px border, soft shadow, 8 px radius. */
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 3.5rem;
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid var(--color-border-subtle);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    font-weight: 600;
+  }
+  .card-body {
+    padding: 1.5rem;
+  }
+
+  /* Buttons. Variants: primary (one per view), secondary, danger, ghost. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: var(--spacing-control);
+    padding: 0 1rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition-property: color, background-color, border-color, box-shadow;
+    transition-duration: 150ms;
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .btn-sm {
+    min-height: var(--spacing-control-sm);
+    padding: 0 0.75rem;
+    border-radius: var(--radius-md);
+  }
+  .btn-icon {
+    width: var(--spacing-control);
+    padding: 0;
+  }
+  .btn-sm.btn-icon {
+    width: var(--spacing-control-sm);
+  }
+  .btn-primary {
+    background-color: var(--color-primary);
+    color: var(--color-fg-on-primary);
+    box-shadow: 0 2px 0 rgb(5 145 255 / 0.1);
+  }
+  .btn-primary:not(:disabled):hover {
+    background-color: var(--color-primary-hover);
+  }
+  .btn-primary:not(:disabled):active {
+    background-color: var(--color-primary-active);
+  }
+  .btn-secondary {
+    background-color: var(--color-surface);
+    border-color: var(--color-border-control);
+    color: var(--color-fg);
+  }
+  .btn-secondary:not(:disabled):hover {
+    border-color: var(--color-primary-hover);
+    color: var(--color-link);
+  }
+  .btn-danger {
+    background-color: var(--color-danger);
+    color: #ffffff;
+  }
+  .btn-danger:not(:disabled):hover {
+    background-color: var(--color-danger-hover);
+  }
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--color-fg);
+  }
+  .btn-ghost:not(:disabled):hover {
+    background-color: var(--color-surface-muted);
+  }
+
+  /* Links: underlined so they are not identified by color alone. */
+  .link {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+  .link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  /* Form fields: label above, control, then hint or error message. */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  .label {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: 500;
+    color: var(--color-fg);
+  }
+  .input {
+    width: 100%;
+    min-height: var(--spacing-control);
+    padding: 0.4375rem 0.75rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border-control);
+    border-radius: var(--radius-lg);
+    color: var(--color-fg);
+    /* 16 px on phones avoids the iOS zoom on focus; 14 px from md. */
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    transition-property: border-color, box-shadow;
+    transition-duration: 150ms;
+    @media (width >= 48rem) {
+      font-size: var(--text-sm);
+      line-height: var(--text-sm--line-height);
+    }
+  }
+  .input::placeholder {
+    color: var(--color-fg-subtle);
+  }
+  .input:hover:not(:disabled) {
+    border-color: var(--color-primary-hover);
+  }
+  .input:focus-visible {
+    outline: none;
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 2px var(--color-focus);
+  }
+  .input:disabled {
+    cursor: not-allowed;
+    background-color: var(--color-surface-muted);
+    color: var(--color-fg-muted);
+  }
+  /* Error: red border + thicker ring + a message (.field-error), never color alone. */
+  .input[aria-invalid="true"] {
+    border-color: var(--color-danger-fg);
+    box-shadow: 0 0 0 1px var(--color-danger-fg);
+  }
+  textarea.input {
+    min-height: 6rem;
+    resize: vertical;
+  }
+  .field-hint {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--color-fg-muted);
+  }
+  .field-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.25rem;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    color: var(--color-danger-fg);
+  }
 }
