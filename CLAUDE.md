@@ -31,6 +31,15 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 Ces règles sont des propositions validées avec la pile ; leur emplacement exact dans le code se décide au `/plan` de l'étape concernée.
 
+## Base de données
+
+- PostgreSQL (Neon) via Drizzle et `pg`. Client unique : `src/server/db/client.ts` ; schéma : un fichier par domaine dans `src/server/db/schema/`, réexporté par `index.ts`.
+- **Seul `src/server/data/**` importe `@/server/db`** (règle ESLint). Chaque fonction reçoit l'`Actor` (`src/server/access/actor.ts`) en premier argument, filtre la propriété dans la requête, lève `AccessDeniedError` sinon (refus par défaut) et renvoie un DTO minimal.
+- Nommage : camelCase en TypeScript, snake_case en SQL (`casing: "snake_case"`, jamais de nom de colonne écrit à la main) ; tables au pluriel ; `id uuid default gen_random_uuid()` ; `<entité>_id` ; `created_at`/`updated_at` en `timestamptz` ; états et rôles en `pgEnum`.
+- Migrations : `npm run db:generate -- --name=<verbe_objet>`, relire le SQL de `drizzle/`, le commiter ; `npm run db:migrate` sur dev. Jamais `drizzle-kit push` ; une migration commitée ne se modifie plus.
+- Tests : `npm test` (projets `unit` et `integration`). Les `*.int.test.ts` tournent en séquence sur `DATABASE_URL_TEST`, remise à zéro puis migrée à chaque exécution, tables vidées avant chaque test (`truncateAll`).
+- Les variables arrivent dans le conteneur par `env_file` (`compose.yaml`) : après modification de `.env.local`, `docker compose up -d`.
+
 ## Invariants (`fonctionnalites.md` §5.3)
 
 1. Un compte a un seul rôle ; l'inscription publique ne crée que des élèves ; l'administrateur crée les comptes professeur.

@@ -7,6 +7,12 @@ services:
     command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0"
     ports:
       - "3000:3000"
+    # Secrets (DATABASE_URL, DATABASE_URL_TEST…) for every command run in the
+    # container: drizzle-kit and Vitest do not load .env.local themselves.
+    # Recreate the container after editing it: docker compose up -d
+    env_file:
+      - path: .env.local
+        required: false
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
       # Hot reload: the Windows bind mount sends no file events, so both
