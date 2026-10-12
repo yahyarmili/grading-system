@@ -39,11 +39,11 @@ export function InvalidLink() {
         A confirmation link works only once, expires, and stops working when a newer one is sent.
       </Alert>
       <p className="text-sm text-fg-muted">
-        If your email is not confirmed yet, get a new link:{" "}
-        <Link className="link" href="/sign-up">
-          sign up again
-        </Link>{" "}
-        with the same email address.
+        If your email is not confirmed yet,{" "}
+        <Link className="link" href="/resend-confirmation">
+          get a new confirmation link
+        </Link>
+        .
       </p>
     </div>
   );

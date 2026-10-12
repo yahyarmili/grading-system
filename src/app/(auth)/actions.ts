@@ -4,6 +4,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { roleHome } from "@/lib/roles";
+import {
+  requestConfirmationLink,
+  requestPasswordResetLink,
+  resetPasswordWithToken,
+  type LinkRequestState,
+  type ResetPasswordState,
+} from "@/server/auth/recovery";
 import { getActor, getClientIp } from "@/server/auth/session";
 import { signInUser, signOutUser, type SignInState } from "@/server/auth/sign-in";
 import {
@@ -54,4 +61,28 @@ export async function signOutAction(): Promise<void> {
     userId: actor.kind === "user" ? actor.userId : null,
   });
   redirect("/sign-in");
+}
+
+export async function forgotPasswordAction(
+  _previous: LinkRequestState,
+  form: FormData,
+): Promise<LinkRequestState> {
+  return requestPasswordResetLink({ email: form.get("email") }, { schedule: after });
+}
+
+export async function resendConfirmationAction(
+  _previous: LinkRequestState,
+  form: FormData,
+): Promise<LinkRequestState> {
+  return requestConfirmationLink({ email: form.get("email") }, { schedule: after });
+}
+
+export async function resetPasswordAction(
+  _previous: ResetPasswordState,
+  form: FormData,
+): Promise<ResetPasswordState> {
+  const state = await resetPasswordWithToken({ token: form.get("token"), password: form.get("password") });
+  // Every session was closed: the user signs in again with the new password.
+  if (state.status === "done") redirect("/sign-in?reset=done");
+  return state;
 }

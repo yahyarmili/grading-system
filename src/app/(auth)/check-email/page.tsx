@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { MailCheck } from "lucide-react";
 import { Card } from "@/components/card";
 import { EMAIL_VERIFICATION_TTL } from "@/config/provisional";
@@ -16,7 +17,11 @@ export default function Page() {
         <p>We sent you an email. Open the link inside it to confirm your address and finish signing up.</p>
         <p className="text-sm text-fg-muted">
           The link works once and expires in {formatDuration(EMAIL_VERIFICATION_TTL)}. If you cannot
-          find the email, look in your spam folder.
+          find the email, look in your spam folder, or{" "}
+          <Link className="link" href="/resend-confirmation">
+            get a new link
+          </Link>
+          .
         </p>
       </div>
     </Card>

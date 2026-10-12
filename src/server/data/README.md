@@ -7,3 +7,4 @@ The only code allowed to import `@/server/db/*` (enforced by `eslint.config.mjs`
 - A role with no right on the resource gets `AccessDeniedError`. Deny by default.
 - Returns minimal DTOs, chosen field by field; never a raw row.
 - Each rule comes with negative tests (`*.int.test.ts`, AUTH-04).
+- Exception: functions that act on a one-time link or an email request (`confirmEmail`, `resetPassword`, `requestPasswordReset`, `requestEmailVerification`) take no `Actor`. The link proves who acts; the request only sends an email to the owner of the address and answers the same for any email.

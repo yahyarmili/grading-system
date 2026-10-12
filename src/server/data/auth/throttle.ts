@@ -6,7 +6,7 @@ import { db } from "@/server/db/client";
 // Attempt counters in the database (NFR-SEC-02). The key is a digest: no email
 // or IP address in clear.
 
-export type ThrottleScope = "sign_up_ip";
+export type ThrottleScope = "sign_up_ip" | "password_reset_email" | "verification_email";
 type AnyScope = ThrottleScope | LockScope;
 
 function throttleKey(scope: AnyScope, value: string): string {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useRef } from "react";
 import { Alert } from "@/components/alert";
 import { FormField } from "@/components/form-field";
@@ -39,8 +40,11 @@ export function SignInForm() {
       )}
       {state.status === "unconfirmed" && (
         <Alert tone="warning" title="Confirm your email address first" live>
-          Open the link we sent you to confirm your address. No link, or it expired? Sign up again
-          with the same address to get a new one.
+          Open the link we sent you to confirm your address. No email, or the link expired?{" "}
+          <Link className="link" href="/resend-confirmation">
+            Get a new confirmation link
+          </Link>
+          .
         </Alert>
       )}
 
