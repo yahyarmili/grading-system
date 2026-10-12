@@ -30,9 +30,3 @@ export const mockStudentClasses = [
   { id: "c2", name: "Grade 10 — B", teacher: "Sarah Bennett" },
   { id: "c4", name: "French — Group 2", teacher: "Karim Alaoui" },
 ];
-
-export const mockTeachers = [
-  { id: "t1", name: "Sarah Bennett", email: "s.bennett@example.test" },
-  { id: "t2", name: "Karim Alaoui", email: "k.alaoui@example.test" },
-  { id: "t3", name: "Lina Haddad", email: "l.haddad@example.test" },
-];

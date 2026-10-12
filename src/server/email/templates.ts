@@ -62,3 +62,18 @@ Forgot your password? ${resetUrl}
 If it was not you, ignore this email.`,
   };
 }
+
+/** First administrator, created by the local script: sets the password of the account. */
+export function adminSetupMessage(r: Recipient, url: string, validFor: string): EmailMessage {
+  return {
+    kind: "admin_setup",
+    to: r.to,
+    subject: "Set up your administrator account",
+    text: `Hello ${r.firstName},
+
+Your administrator account was created. Choose your password with this link:
+${url}
+
+This link works once and expires in ${validFor}.`,
+  };
+}

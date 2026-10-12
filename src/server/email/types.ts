@@ -4,7 +4,8 @@ export type EmailKind =
   | "email_verification"
   | "password_reset"
   | "teacher_invitation"
-  | "account_exists";
+  | "account_exists"
+  | "admin_setup";
 
 export type EmailMessage = {
   /** Logged on failure instead of the recipient or the content. */

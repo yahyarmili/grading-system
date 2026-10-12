@@ -1,29 +1,40 @@
 import type { Metadata } from "next";
-import { Users } from "lucide-react";
-import { PageHeader, PlaceholderNote } from "@/components/shell/shell-parts";
-import { mockTeachers } from "@/mock/data";
+import { Suspense } from "react";
+import { Card } from "@/components/card";
+import { LoadingState } from "@/components/loading";
+import { PageHeader } from "@/components/shell/shell-parts";
+import { TEACHER_INVITATION_TTL } from "@/config/provisional";
+import { formatDuration } from "@/lib/duration";
+import { getActor } from "@/server/auth/session";
+import { listTeacherInvitations } from "@/server/data/auth/invitations";
+import { InvitationsTable } from "./invitations-table";
+import { InviteForm } from "./invite-form";
 
 export const metadata: Metadata = { title: "Teachers" };
+
+// AUTH-03: the administrator's only screen. Teacher accounts exist only through
+// an invitation; the data layer refuses every action to anyone but the admin.
 
 export default function Page() {
   return (
     <>
-      <PageHeader
-        title="Teachers"
-        meta={[{ icon: Users, label: `${mockTeachers.length} teacher accounts` }]}
-      />
-      <ul className="card divide-y divide-border-subtle">
-        {mockTeachers.map((t) => (
-          <li
-            key={t.id}
-            className="flex flex-col gap-0.5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 md:px-6"
-          >
-            <span className="font-medium">{t.name}</span>
-            <span className="text-fg-muted">{t.email}</span>
-          </li>
-        ))}
-      </ul>
-      <PlaceholderNote>Fictitious data. Creating teacher accounts arrives in E1.</PlaceholderNote>
+      <PageHeader title="Teachers" />
+      <div className="flex flex-col gap-6">
+        <Card
+          title="Invite a teacher"
+          description={`The teacher receives a link to choose a password. It works once and expires in ${formatDuration(TEACHER_INVITATION_TTL)}.`}
+        >
+          <InviteForm />
+        </Card>
+        <Suspense fallback={<LoadingState label="Loading invitations…" />}>
+          <Invitations />
+        </Suspense>
+      </div>
     </>
   );
+}
+
+async function Invitations() {
+  const rows = await listTeacherInvitations(await getActor());
+  return <InvitationsTable rows={rows} />;
 }

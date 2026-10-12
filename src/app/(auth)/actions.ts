@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { roleHome } from "@/lib/roles";
+import { acceptInvitation, type AcceptInvitationState } from "@/server/auth/invitations";
 import {
   requestConfirmationLink,
   requestPasswordResetLink,
@@ -84,5 +85,18 @@ export async function resetPasswordAction(
   const state = await resetPasswordWithToken({ token: form.get("token"), password: form.get("password") });
   // Every session was closed: the user signs in again with the new password.
   if (state.status === "done") redirect("/sign-in?reset=done");
+  return state;
+}
+
+export async function acceptInvitationAction(
+  _previous: AcceptInvitationState,
+  form: FormData,
+): Promise<AcceptInvitationState> {
+  const state = await acceptInvitation(
+    { token: form.get("token"), password: form.get("password") },
+    { headers: await headers() },
+  );
+  // AUTH-03 CA1: the new teacher is signed in and lands in the teacher space.
+  if (state.status === "done") redirect(roleHome.teacher);
   return state;
 }
