@@ -3,7 +3,7 @@
 > Étape 8 de la démarche d'ingénierie. Statut : **brouillon**. Structure validée par l'utilisateur le 2026-10-12 ; contenu des prompts à valider à l'usage.
 > S'appuie sur [fonctionnalites.md](fonctionnalites.md) (plan E1 à E11, identifiants AUTH-01…), [besoins-non-fonctionnels.md](besoins-non-fonctionnels.md), [acteurs.md](acteurs.md) et [stack-technologique.md](stack-technologique.md). Méthode reprise du guide « Complete Claude Code Course Flow » (PDF fourni par l'utilisateur).
 
-**En bref.** Une suite de prompts à copier dans Claude Code, un par sous-fonctionnalité, chacun suivi de ce que vous vérifiez avant de passer au suivant. Les phases 0 à 2, E1 et E2 sont rédigées en entier ; E3 à E11 sont en squelette et seront rédigées à l'approche de chaque étape, à partir de la conception à jour.
+**En bref.** Une suite de prompts à copier dans Claude Code, un par sous-fonctionnalité, chacun suivi de ce que vous vérifiez avant de passer au suivant. Les phases 0 à 2 et les étapes E1 à E4 sont rédigées en entier ; E5 à E11 sont en squelette et seront rédigées à l'approche de chaque étape, à partir de la conception à jour.
 
 ---
 
@@ -334,14 +334,148 @@ Puis **T1**, et **T5** pour Q7.
 
 ---
 
-## E3 à E11 — Squelette
+## E3 — Devoirs et espace élève (ASG-01 à ASG-03, SUB-01)
+
+Préalable : trancher le **fuseau horaire** de la date limite (NFR-USA-02, « à définir, probablement celui du Maroc »), par T5. Sinon, `Africa/Casablanca` est codé comme valeur provisoire [P].
+
+#### E3.0 — Planifier · Plan
+```
+Inspecte l'application (matrice src/server/access/matrix.ts, inventory.ts, couche src/server/data/, maquettes de /teacher/assignments) et planifie les devoirs et l'espace élève : ASG-01 à ASG-03 et SUB-01 (conception/fonctionnalites.md §6 et §8.2 E3, états du devoir en §5.5).
+Il faut :
+- Devoir (title, subject, level A1 à C1, language en ou fr, deadline, instructions facultatives, créateur) et Envoi (devoir × classe) ; création en une seule transaction, au moins une classe parmi les siennes, aucune création partielle ;
+- un fuseau unique pour saisir et afficher la date limite, affiché explicitement, dans un module unique (décision ou valeur provisoire) ; remplacer les formats de date en UTC des écrans concernés ;
+- verrouillage : le plan dit comment le devoir saura qu'il a reçu une remise en E4 (colonne posée dans la transaction de la première remise, ou autre), et comment une modification et une première remise simultanées sont arbitrées (une seule l'emporte) ;
+- propriété indirecte côté élève : un élève lit un devoir par ses appartenances actives, ou parce qu'il a une remise (cas d'un élève retiré, prévu dès maintenant pour E4) ; dis comment ownedBy le gère ;
+- l'état d'une remise vu par l'élève : quelle ligne de la matrice le couvre, sachant que l'élève n'a pas de lecture sur « Submission » ; projection à liste fermée (toStudentStatus) ;
+- les maquettes 1.4 et 1.5 sont conservées pour E7 sous /dev/mockups/, hors des routes réelles ;
+- aucun cache ne sert une version périmée d'un devoir modifié (cacheComponents).
+Le niveau n'est jamais transmis à l'IA (D4) : le schéma le garde comme simple étiquette.
+Montre : tables et contraintes, migration, routes, Server Actions, lignes de matrice et d'inventaire, gestion du fuseau, et la vérification.
+```
+
+#### E3.1 — Créer un devoir (ASG-01)
+```
+/build-ui Implémente la création d'un devoir (ASG-01) : schéma, migration, actions serveur, formulaire Teacher « New assignment ».
+Champs de R1 et R2, choix d'au moins une classe parmi celles du professeur (R3), avertissement près de Subject et Instructions : pas de nom d'élève, ni de niveau, ni de classe, car ces champs iront à l'IA (R4). Date limite saisie et affichée dans le fuseau unique, avec son nom.
+Validation Zod côté serveur, message par champ. Inscris la ressource dans matrix.ts et inventory.ts, et ajoute les fonctions réelles à REAL.
+Couvre CA1 à CA3 par des tests d'intégration, dont une classe d'un autre professeur glissée dans la requête : refus, aucun devoir créé.
+```
+**Vous validez :** un devoir envoyé à deux classes sur trois ; un champ manquant donne un message par champ et rien n'est créé ; la date limite affichée porte son fuseau.
+
+#### E3.2 — Lister et ouvrir ses devoirs (ASG-02)
+```
+/build-ui Remplace les données fictives de la liste Assignments par les vrais devoirs du professeur (ASG-02) : title, language, level, deadline, classes, nombre de remises et de copies à valider (0 jusqu'en E4 et E7), date limite la plus récente d'abord.
+La page d'un devoir montre ses détails réels et ses actions ; la liste des remises arrive en E7 (ASG-02 CA2 rejoué en E7). Déplace les maquettes 1.4 et 1.5 sous /dev/mockups/ (accessibles seulement en développement).
+Page d'un devoir d'autrui ou inexistant : 404 réel, contrôle au niveau de la page (voir CLAUDE.md). Couvre CA1.
+```
+**Vous validez :** vos devoirs seulement, dans le bon ordre ; l'adresse d'un devoir d'un autre professeur donne 404 ; les maquettes restent visibles sous /dev/mockups/.
+
+#### E3.3 — Modifier, supprimer, verrouiller (ASG-03)
+```
+/build-ui Implémente la modification et la suppression d'un devoir (ASG-03) selon le mécanisme de verrouillage du plan.
+Sans remise : tous les champs modifiables sauf les classes ; suppression avec confirmation ; la modification est visible tout de suite par les élèves. Avec remise (mécanisme prêt, déclenché en E4) : seuls title et level restent modifiables, suppression refusée, avec un message clair ; les champs verrouillés sont affichés comme tels.
+La garde est dans la requête d'écriture, pas seulement dans l'écran. Couvre CA1 et CA3 ; teste CA2 en posant le verrou directement dans le test (rejoué sur de vraies remises en E4).
+```
+**Vous validez :** un sujet modifié est vu par un élève sans rechargement forcé du cache ; un autre professeur ne peut ni modifier ni supprimer.
+
+#### E3.4 — Espace de l'élève (SUB-01)
+```
+/build-ui Remplace les données fictives de My assignments par les devoirs reçus de l'élève (SUB-01), sur téléphone d'abord.
+Par devoir : title, subject, instructions (aucun bloc vide si absentes), language, deadline avec fuseau, état de la liste fermée (« To submit », mention « Deadline passed » le cas échéant). Un devoir envoyé à deux classes de l'élève n'apparaît qu'une fois. Élève sans classe : état vide explicite qui renvoie vers Join a class.
+Aucun champ hors de la liste fermée ne sort du serveur : la projection renvoie un DTO minimal, sans état interne.
+Couvre CA1 et CA3 (état vide) ; CA2 est rejoué en E6 et E8.
+```
+**Vous validez :** sur téléphone, un élève de C1 et C3 voit le devoir une seule fois ; un devoir de C2 seule est absent.
+
+#### E3.5 — Vérifier et démontrer
+```
+Rejoue CLS-04 CA2 : un élève retiré ne reçoit pas un devoir créé après son retrait ; réadmis, il reçoit les suivants.
+Vérifie que la matrice étendue passe (assignment, envoi, vue élève) et qu'un second professeur n'accède à rien.
+Écris le parcours E2E d'E3 : le professeur crée un devoir pour C1 et C3, l'élève des deux classes le voit une fois ; un élève sans classe voit l'état vide.
+```
+Puis **T1**, et **T5** pour le fuseau et les nouvelles valeurs provisoires.
+
+---
+
+## E4 — Remise de texte, retard, remplacement (SUB-02, SUB-04, SUB-05)
+
+Préalables, par T5, sinon les recommandations sont codées comme valeurs provisoires : **Q3** (jusqu'à quand remplacer, plafond) et **Q10** (consigne « pas de nom » seule) ont leur échéance « avant E4 » ; la **longueur maximale d'un texte** est « à définir » (NFR-TRT-02).
+
+#### E4.0 — Planifier la remise et la machine d'états · Plan
+```
+Inspecte l'application et planifie la remise de texte (SUB-02, SUB-04, SUB-05, conception/fonctionnalites.md §6 et §8.2 E4) avec la machine d'états complète de la remise (§5.5). C'est la décision la plus coûteuse à changer ensuite : E5 à E9 s'y brancheront.
+Il faut :
+- Remise (une seule active par couple élève-devoir, contrainte en base) et Version (texte OU pages-images, jamais les deux ; le modèle accueille déjà les images, sans migration de fond en E9) ;
+- tous les états de §5.5 déclarés maintenant (src/lib/submission-status.ts) et une table centrale des transitions : toute transition hors table est refusée ; seules 1 et 11 sont atteignables en E4 ;
+- création atomique et idempotente (double clic, nouvel essai après coupure : une seule remise) ;
+- horodatage par l'horloge de la base, retard calculé en SQL, strictement après la date limite, sur la date de première remise (voir « Deux horloges » dans CLAUDE.md) ;
+- verrouillage du devoir posé dans la transaction de la première remise (mécanisme d'E3) ;
+- remplacement : versions archivées ; un indicateur « le professeur a commencé » (modifié ou validé), alimenté en E7 et E8, arbitré de façon atomique avec le remplacement (le premier arrivé l'emporte) ; plafond selon Q3 ;
+- contrôles : compte confirmé, membre actif d'une classe destinataire, devoir lié ; élève retiré : remise refusée, devoir déjà remis gardé en lecture seule ;
+- l'élève ne relit jamais son texte (A3) : aucune lecture de la Version côté élève ;
+- module unique des textes décisionnels (consigne « no name », notice) s'il n'existe pas encore.
+Pas d'évaluation, pas de traitement par lots (E5, E6) : la remise reste « Received ».
+Montre : tables et contraintes, table des transitions, flux de remise et de remplacement, lignes de matrice et d'inventaire, et la vérification (dont la concurrence).
+```
+
+#### E4.1 — Schéma et table des transitions
+```
+Implémente seulement le schéma et la machine d'états du plan approuvé : tables Remise et Version, contraintes, migration relue, table centrale des transitions avec une fonction unique qui applique une transition ou la refuse.
+Tests unitaires : chaque transition de §5.5 acceptée, toute autre refusée, « Published » seulement depuis « Validated ».
+Pas encore d'écran. Inscris les tables dans inventory.ts.
+```
+**Vous validez :** les tests de transitions passent ; la migration crée une seule remise active possible par couple.
+
+#### E4.2 — Remettre un texte (SUB-02)
+```
+/build-ui Implémente la remise d'un texte collé (SUB-02) : écran de remise depuis My assignments, sur téléphone d'abord.
+Consigne « Do not write your name in your text » affichée avant l'envoi (Q10), depuis le module des textes ; zone de texte sans correction automatique (autocorrect, spellcheck, autocapitalize désactivés, NFR-TRT-02) ; limite de longueur annoncée avant l'envoi et appliquée par le serveur, jamais de troncature.
+Confirmation datée après l'envoi, puis état « Submitted, being marked ». Le devoir se verrouille à la première remise.
+Tests : texte conservé à l'identique (fautes, accents, apostrophes typographiques, retours à la ligne, Unicode non normalisé), texte vide ou fait d'espaces refusé, limite dépassée refusée, double envoi = une remise, élève non membre ou retiré refusé. Inscris les fonctions réelles dans REAL. Couvre CA1 à CA3.
+```
+**Vous validez :** sur téléphone, vous collez un texte plein de fautes et le recevez tel quel en base ; un double clic ne crée qu'une remise ; le devoir devient non supprimable.
+
+#### E4.3 — Notice avant la première remise (NFR-DON-04)
+```
+/build-ui Ajoute la notice que l'élève lit avant sa première remise (NFR-DON-04) : responsable du traitement, finalité, ce qui est envoyé à une IA tierce, ce que voit le professeur, droits d'accès et de rectification. Aucune promesse que son nom n'est pas transmis (Q10).
+Texte dans le module des textes ; les éléments non décidés (responsable du traitement : QNF-1) s'affichent comme « to be defined », et la notice dit « demonstration, fictitious data ».
+La lecture est enregistrée (compte, date, version du texte) ; la première remise est refusée côté serveur tant qu'elle ne l'est pas.
+```
+**Vous validez :** un nouvel élève voit la notice une fois, puis remet ; une requête directe sans notice lue est refusée.
+
+#### E4.4 — Retard et fuseau (SUB-04)
+```
+Implémente le marquage « late » (SUB-04) selon le plan : calculé en SQL sur la date de première remise, strictement après la date limite, sans effet sur ce qui ira à l'IA.
+Affiche « Late » à l'élève à côté de « Submitted, being marked » ; le professeur le verra dans sa liste en E7 (SUB-04 CA3 rejoué).
+Tests de frontière : une seconde avant, exactement à la date limite, une seconde après ; date limite un jour de changement d'heure dans le fuseau retenu. Couvre CA1 ; CA2 est testé avec E4.5.
+```
+**Vous validez :** une remise après la date limite est marquée « Late », une remise à l'heure exacte ne l'est pas.
+
+#### E4.5 — Remplacer sa remise (SUB-05)
+```
+/build-ui Implémente le remplacement de la remise (SUB-05) : action « Replace my submission » tant que le professeur n'a ni modifié ni validé, nouvelle version active, ancienne archivée et horodatée, plafond selon Q3 (valeur provisoire si non tranché).
+Le retard reste celui de la première remise (SUB-04 CA2).
+La garde « le professeur a commencé » est dans la requête d'écriture ; en attendant E7 et E8, pose-la directement dans les tests.
+Couvre CA1, CA3 et CA4 (remplacement et premier acte simultanés : un seul aboutit, l'autre reçoit un refus explicite). CA2 est rejoué en E6.
+```
+**Vous validez :** vous remplacez un texte, l'ancien est archivé ; une remise faite à l'heure puis remplacée après la date limite n'est pas marquée « Late ».
+
+#### E4.6 — Vérifier et démontrer
+```
+Rejoue sur de vraies remises : ASG-03 CA2 (devoir verrouillé, suppression refusée), CLS-04 CA3 (la remise d'un élève retiré est conservée) et SUB-01 CA3 (le devoir reste visible en lecture seule pour lui, sans nouvelle remise possible).
+Vérifie que la matrice passe pour « Submission » : l'élève écrit la sienne sans jamais la relire, un autre élève et un autre professeur n'obtiennent rien, et aucune réponse envoyée à l'élève ne contient son texte ni un état interne.
+Écris le parcours E2E d'E4 : remise avant la date limite, remise après, remplacement, double clic.
+```
+Puis **T1**, et **T5** pour Q3, Q10, la longueur maximale et les nouvelles valeurs provisoires.
+
+---
+
+## E5 à E11 — Squelette
 
 À rédiger en détail à l'approche de chaque étape, à partir de la conception à jour. Chaque étape commence par un **Plan** et se termine par **T1**, puis T5 si une décision a changé.
 
 | Étape | Prompts prévus | Outils du guide introduits |
 |---|---|---|
-| **E3** Devoirs, espace élève | E3.0 plan · E3.1 schéma Devoir et Envoi, création avec avertissements (ASG-01) · E3.2 liste (ASG-02) · E3.3 modification, suppression, verrouillage (ASG-03) · E3.4 espace élève, déduplication, état vide (SUB-01) · E3.5 matrice, rejeu CLS-04 CA2, E2E | — |
-| **E4** Remise de texte | E4.0 plan : machine d'états complète (§5.5), Remise et Version · E4.1 table centrale des transitions et tests unitaires · E4.2 remise de texte atomique et idempotente (SUB-02) · E4.3 retard et fuseau (SUB-04) · E4.4 remplacement et archivage (SUB-05) · E4.5 rejeu ASG-03 CA2, E2E | Plan sur la décision la plus coûteuse : la machine d'états |
 | **E5** Rubrique et IA | E5.0 enquête par sous-agents (SDK Mistral et modèles, machine d'états, outillage de tests) · E5.1 plan · E5.2 rubrique versionnée et conversion en note (Q1 provisoire) · E5.3 interface Mistral et simulateur à pannes · E5.4 requête à liste blanche et test d'étanchéité (EVL-02) · E5.5 contrat de sortie, tentatives bornées, proposition immuable (EVL-03) · E5.6 alertes, non évaluable, garde de la rubrique française (EVL-04, Q6) · E5.7 commande interne de déclenchement, jeu adverse · E5.8 création de l'agent `feature-reviewer` et revue en contexte neuf · T3 | Sous-agents, agent relecteur. Préalable : quotas et refus d'entraînement relevés dans la console Mistral (QNF-5) |
 | **E6** Traitement par lots | E6.0 plan Vercel Workflows · E6.1 déclenchement à la remise et au remplacement · E6.2 parallélisme borné, nouvelles tentatives, reprise (PRC-01) · E6.3 échecs et relance (PRC-02) · E6.4 tests de pannes, lot à marqueurs uniques · E6.5 mesure des événements par copie, revue | Revue en contexte neuf : mélange entre copies |
 | **E7** Revue par le professeur | E7.0 plan · E7.1 liste réelle à partir de la maquette 1.4 (REV-01) · E7.2 écran de copie à partir de la maquette 1.5 (REV-02) · E7.3 évaluation du professeur, recalcul, note fixée (REV-03) · E7.4 journal atomique et conflits (REV-04) · E7.5 relance depuis la liste, rejeux · revue | — |
@@ -353,7 +487,8 @@ Puis **T1**, et **T5** pour Q7.
 
 ## 4. Points ouverts qui touchent ces prompts
 
-- Q1 (note sur 20), Q2 (premier administrateur), Q3, Q4, Q6, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
+- Q1 (note sur 20), Q2 (premier administrateur), Q3, Q4, Q6, Q9, Q10 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9). Q3 et Q10 sont dues avant E4.
+- Fuseau de la date limite (NFR-USA-02) : à trancher avant E3. Longueur maximale d'un texte (NFR-TRT-02) : avant E4.
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
 - Q5 : langue des remarques de l'IA. L'interface est en anglais, mais pour une copie en français la question reste ouverte.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.
