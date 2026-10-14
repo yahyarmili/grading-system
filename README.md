@@ -13,7 +13,7 @@ Preview Vercel publique (protection désactivée pour la démonstration), relié
 | Étape | Contenu | État |
 |---|---|---|
 | E1 | Comptes, rôles, accès (AUTH-01 à AUTH-05) | Livrée |
-| E2 | Classes et invitation (CLS-01 à CLS-04) | En cours : créer et lister ses classes (CLS-01), lien et code d'invitation (CLS-02), rejoindre par lien ou code (CLS-03), liste des élèves, retrait et réadmission (CLS-04) livrés ; E2E de démonstration et T5 à venir (E2.5) |
+| E2 | Classes et invitation (CLS-01 à CLS-04) | En cours : créer et lister ses classes (CLS-01), lien et code d'invitation (CLS-02), rejoindre par lien ou code (CLS-03), liste des élèves, retrait et réadmission (CLS-04) livrés ; parcours E2E et démonstration à deux professeurs faits ; T1 et T5 à venir |
 
 Suivi prompt par prompt : [`conception/prompts-implementation.md`](conception/prompts-implementation.md).
 

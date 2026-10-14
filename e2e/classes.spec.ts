@@ -1,19 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
-import { type Browser } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { classCard, createClass, phone, teacherWithClass } from "./support/classes";
 import { createStudent, createTeacher, expectNotFound, PASSWORD, signIn, uniqueEmail, waitForLink } from "./support/helpers";
 
 // CLS-01: a teacher creates and lists their classes (CA1 to CA3).
-
-async function createClass(page: Page, name: string) {
-  await page.getByRole("button", { name: "New class" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "New class" });
-  await dialog.getByLabel(/^Class name/).fill(name);
-  await dialog.getByRole("button", { name: "Create class" }).click();
-  return dialog;
-}
-
-const classCard = (page: Page, name: string) =>
-  page.getByRole("listitem").filter({ has: page.getByRole("heading", { name, exact: true }) });
 
 test("a teacher creates two classes; a second teacher sees only their own", async ({ page, browser }) => {
   const sarah = await createTeacher("Sarah", "Bennett");
@@ -115,21 +104,6 @@ test("a teacher shares, renews and disables the class link and code", async ({ b
   expect(response?.status()).toBe(404);
 });
 
-/** A teacher with one class, in their own browser; returns the class link and code. */
-async function teacherWithClass(browser: Browser, name: string) {
-  const page = await (await browser.newContext()).newPage();
-  await signIn(page, await createTeacher("Sarah", "Bennett"));
-  await expect(page).toHaveURL(/\/teacher\//);
-  await page.goto("/teacher/classes");
-  await expect(await createClass(page, name)).toBeHidden();
-  await classCard(page, name).getByRole("link", { name }).click();
-  const invite = page.locator("section").filter({ has: page.getByRole("heading", { name: "Invite students" }) });
-  const link = await invite.getByLabel("Link").inputValue();
-  const code = (await invite.getByLabel("Code").textContent())!;
-  return { page, link, code };
-}
-
-const phone = { viewport: { width: 375, height: 812 } };
 
 // CLS-03 R3, CA1: a new student opens the link without a session, signs up,
 // confirms in another browser (a phone's mail app), signs in: in the class.

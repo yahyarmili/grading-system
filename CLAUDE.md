@@ -18,7 +18,7 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 ## État (2026-10-14)
 
-- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02), E2.3 (CLS-03) et E2.4 (CLS-04) faites, commitées sur `preview`, pas poussées. **Prochain prompt : E2.5** (E2E, démonstration, T1, T5). Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
+- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02), E2.3 (CLS-03), E2.4 (CLS-04) et le parcours E2E d'E2.5 (`e2e/e2-journey.spec.ts` : parcours de l'étape et scénario de sortie) faits, commités sur `preview`, pas poussés. **Reste d'E2.5 : T1, puis T5 pour Q7.** Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
   - Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D] ;
