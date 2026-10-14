@@ -4,15 +4,21 @@ import { DEADLINE_TIME_ZONE } from "@/config/decisions";
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
 import { instantToWallTime } from "@/lib/time-zone";
-import { ASSIGNMENT_MESSAGES, createTeacherAssignment } from "@/server/assignments/assignments";
+import {
+  ASSIGNMENT_MESSAGES,
+  createTeacherAssignment,
+  deleteTeacherAssignment,
+  editTeacherAssignment,
+} from "@/server/assignments/assignments";
 import { ASSIGNMENT_ERRORS } from "@/server/assignments/schemas";
-import { getTeacherAssignment, listTeacherAssignments } from "@/server/data/assignments/assignments";
+import { getTeacherAssignment, listTeacherAssignments, updateAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { db } from "@/server/db/client";
 import { assignmentClasses, assignments, securityEvents, users } from "@/server/db/schema";
 
 // ASG-01: create an assignment and choose its classes (R1 to R3, CA1 to CA3).
 // ASG-02: list one's assignments and open one (R1, R2, CA1).
+// ASG-03: edit or delete an assignment, locked by the first submission (R1, R2, CA1 to CA3).
 
 let count = 0;
 async function createUser(role: "student" | "teacher" | "admin"): Promise<Actor & { kind: "user" }> {
@@ -231,5 +237,191 @@ describe("ASG-02 CA1: a teacher with three assignments", () => {
     expect(await listTeacherAssignments(await createUser("teacher"))).toEqual([]);
     await expect(listTeacherAssignments(await createUser("student"))).rejects.toBeInstanceOf(AccessDeniedError);
     await expect(listTeacherAssignments(await createUser("admin"))).rejects.toBeInstanceOf(AccessDeniedError);
+  });
+});
+
+describe("ASG-03: edit or delete an assignment", () => {
+  async function setup() {
+    const teacher = await createUser("teacher");
+    const c1 = await newClass(teacher, "C1");
+    const state = await createTeacherAssignment(teacher, form([c1]));
+    if (state.status !== "done") throw new Error(JSON.stringify(state));
+    const [row] = await db.select().from(assignments).where(eq(assignments.id, state.assignmentId));
+    return { teacher, c1, id: state.assignmentId, row };
+  }
+
+  /** The edit form as sent, prefilled with the assignment as stored. */
+  const edit = (row: typeof assignments.$inferSelect, overrides: Record<string, unknown> = {}) => ({
+    title: row.title,
+    level: row.level,
+    subject: row.subject,
+    language: row.language,
+    deadline: instantToWallTime(row.deadline, DEADLINE_TIME_ZONE),
+    instructions: row.instructions ?? "",
+    ...overrides,
+  });
+
+  const stored = async (id: string) => (await db.select().from(assignments).where(eq(assignments.id, id)))[0];
+
+  /** CA2 is replayed on real submissions in E4; here the lock is set as the first submission will set it. */
+  const lock = (id: string) => db.update(assignments).set({ lockedAt: sql`now()` }).where(eq(assignments.id, id));
+
+  const inDays = (n: number) => instantToWallTime(new Date(Date.now() + n * 24 * 3600 * 1000), DEADLINE_TIME_ZONE);
+
+  describe("CA1: without a submission", () => {
+    it("every field but the classes changes, at once, and the task version moves", async () => {
+      const { teacher, c1, id, row } = await setup();
+      const deadline = inDays(14);
+      const state = await editTeacherAssignment(teacher, id, edit(row, {
+        title: "  My   village ", level: "A2", subject: "Describe your village.", language: "fr",
+        deadline, instructions: "  ",
+      }));
+      expect(state.status).toBe("done");
+
+      const after = await stored(id);
+      expect(after).toMatchObject({
+        title: "My village", level: "A2", subject: "Describe your village.", language: "fr",
+        instructions: null, contentVersion: 2, lockedAt: null,
+      });
+      expect(instantToWallTime(after.deadline, DEADLINE_TIME_ZONE)).toBe(deadline);
+      // Every reading goes to the stored row: the new subject shows on the next request
+      // (the student's side is replayed with SUB-01, E3.4 and E3.5).
+      expect(await getTeacherAssignment(teacher, id)).toMatchObject({ subject: "Describe your village.", classes: ["C1"] });
+      expect(await recipientsOf(id)).toEqual([c1]);
+    });
+
+    it("a change of the title or level alone, or a task sent back unchanged, keeps the task version", async () => {
+      const { teacher, id, row } = await setup();
+      expect((await editTeacherAssignment(teacher, id, edit(row, { title: "Renamed", level: "C1" }))).status).toBe("done");
+      expect(await stored(id)).toMatchObject({ title: "Renamed", level: "C1", contentVersion: 1 });
+    });
+
+    it("a refused field saves nothing, with one message per field", async () => {
+      const { teacher, id, row } = await setup();
+      const state = await editTeacherAssignment(teacher, id, edit(row, {
+        title: "", subject: " ", level: "D1", language: "de", deadline: "2020-01-01T10:00",
+      }));
+      expect(state).toMatchObject({
+        status: "invalid",
+        fieldErrors: {
+          title: ASSIGNMENT_ERRORS.title, subject: ASSIGNMENT_ERRORS.subject, level: ASSIGNMENT_ERRORS.level,
+          language: ASSIGNMENT_ERRORS.language,
+        },
+      });
+      expect(await stored(id)).toEqual(row);
+    });
+
+    it("a deadline kept as it was may be past; a new one must be in the future [P]", async () => {
+      const { teacher, id } = await setup();
+      await db.update(assignments).set({ deadline: new Date("2026-01-05T09:00:00Z") }).where(eq(assignments.id, id));
+      const past = await stored(id);
+      expect((await editTeacherAssignment(teacher, id, edit(past, { title: "Kept deadline" }))).status).toBe("done");
+      const moved = await editTeacherAssignment(teacher, id, edit(past, { deadline: "2026-01-06T09:00" }));
+      expect(moved).toMatchObject({ status: "invalid", fieldErrors: { deadline: ASSIGNMENT_ERRORS.deadlinePast } });
+      expect((await stored(id)).deadline).toEqual(past.deadline);
+    });
+
+    it("deleted: gone from the list, its recipient classes with it", async () => {
+      const { teacher, id } = await setup();
+      expect(await deleteTeacherAssignment(teacher, id)).toEqual({ ok: true });
+      expect(await listTeacherAssignments(teacher)).toEqual([]);
+      expect(await getTeacherAssignment(teacher, id)).toBeNull();
+      expect(await allRecipients()).toHaveLength(0);
+      // Deleted twice: not found, nothing else happens.
+      expect(await deleteTeacherAssignment(teacher, id)).toEqual({ ok: false, message: ASSIGNMENT_MESSAGES.notFound });
+    });
+  });
+
+  describe("CA2: with a submission (lock set in the test, replayed in E4)", () => {
+    it.each([
+      ["subject", { subject: "Another subject." }],
+      ["language", { language: "fr" }],
+      ["instructions", { instructions: "Use the past simple." }],
+      ["deadline", { deadline: inDays(30) }],
+    ])("changing the %s is refused, nothing saved, not even the title", async (_field, change) => {
+      const { teacher, id, row } = await setup();
+      await lock(id);
+      const locked = await stored(id);
+      const state = await editTeacherAssignment(teacher, id, edit(row, { ...change, title: "Renamed" }));
+      expect(state).toMatchObject({ status: "error", message: ASSIGNMENT_MESSAGES.locked });
+      expect(await stored(id)).toEqual(locked);
+    });
+
+    it("the title and the level still change, from the locked form or from a full form left unchanged", async () => {
+      const { teacher, id, row } = await setup();
+      await lock(id);
+      // The locked form sends no task field.
+      expect((await editTeacherAssignment(teacher, id, { title: "Renamed", level: "C1" })).status).toBe("done");
+      expect(await stored(id)).toMatchObject({ title: "Renamed", level: "C1", subject: row.subject, contentVersion: 1 });
+      // A form opened before the lock, task unchanged.
+      expect((await editTeacherAssignment(teacher, id, edit(row, { title: "Again" }))).status).toBe("done");
+      expect(await stored(id)).toMatchObject({ title: "Again", contentVersion: 1 });
+      expect(await getTeacherAssignment(teacher, id)).toMatchObject({ locked: true });
+    });
+
+    it("deletion is refused with a clear message; the assignment and its classes stay", async () => {
+      const { teacher, id } = await setup();
+      await lock(id);
+      expect(await deleteTeacherAssignment(teacher, id)).toEqual({ ok: false, message: ASSIGNMENT_MESSAGES.notDeleted });
+      expect(await stored(id)).toBeDefined();
+      expect(await allRecipients()).toHaveLength(1);
+    });
+
+    it("the guard is in the write statement: called directly, the data layer refuses too", async () => {
+      const { teacher, id, row } = await setup();
+      await lock(id);
+      const task = { subject: "Another subject.", language: row.language, deadline: row.deadline, instructions: row.instructions };
+      expect(await updateAssignment(teacher, id, { title: row.title, level: row.level, task })).toEqual({
+        ok: false, reason: "locked",
+      });
+      expect((await stored(id)).subject).toBe(row.subject);
+    });
+
+    it("a first submission and an edit at the same time: only one goes through", async () => {
+      const { teacher, id, row } = await setup();
+      const task = { subject: "Another subject.", language: row.language, deadline: row.deadline, instructions: row.instructions };
+      let edited: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // The first submission's statement (E4) holds the row until it commits.
+        await tx
+          .update(assignments)
+          .set({ lockedAt: sql`coalesce(${assignments.lockedAt}, now())` })
+          .where(eq(assignments.id, id));
+        edited = updateAssignment(teacher, id, { title: row.title, level: row.level, task });
+        // The edit waits on the row meanwhile, then reads it locked.
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      });
+      expect(await edited).toEqual({ ok: false, reason: "locked" });
+      expect(await stored(id)).toMatchObject({ subject: row.subject, contentVersion: 1 });
+    });
+  });
+
+  describe("CA3: another teacher neither edits nor deletes", () => {
+    it("answered as a missing assignment; nothing changes", async () => {
+      const { id, row } = await setup();
+      const karim = await createUser("teacher");
+      expect(await editTeacherAssignment(karim, id, edit(row, { title: "Karim's" }))).toMatchObject({
+        status: "error", message: ASSIGNMENT_MESSAGES.notFound,
+      });
+      expect(await editTeacherAssignment(karim, crypto.randomUUID(), edit(row))).toMatchObject({
+        status: "error", message: ASSIGNMENT_MESSAGES.notFound,
+      });
+      expect(await deleteTeacherAssignment(karim, id)).toEqual({ ok: false, message: ASSIGNMENT_MESSAGES.notFound });
+      expect(await deleteTeacherAssignment(karim, "not-an-id")).toEqual({ ok: false, message: ASSIGNMENT_MESSAGES.notFound });
+      // The data layer itself finds nothing to change.
+      expect(await updateAssignment(karim, id, { title: "Karim's", level: "A1" })).toBeNull();
+      expect(await stored(id)).toEqual(row);
+    });
+
+    it.each(["student", "admin"] as const)("%s: refused and logged, nothing changes", async (role) => {
+      const { id, row } = await setup();
+      const actor = await createUser(role);
+      expect(await editTeacherAssignment(actor, id, edit(row, { title: "Hacked" }))).toMatchObject({
+        status: "error", message: ASSIGNMENT_MESSAGES.notAllowed,
+      });
+      expect(await deleteTeacherAssignment(actor, id)).toEqual({ ok: false, message: ASSIGNMENT_MESSAGES.notAllowed });
+      expect(await stored(id)).toEqual(row);
+      expect(await db.select().from(securityEvents).where(eq(securityEvents.actorUserId, actor.userId))).toHaveLength(2);
+    });
   });
 });

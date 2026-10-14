@@ -19,7 +19,7 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 ## État (2026-10-14)
 
 - **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 livrée** (E2.0 à E2.5, T1 fait ; T5 pour Q7 fait).
-- **E3 en cours** : E3.0 (plan), E3.1 (ASG-01 : création, `/teacher/assignments/new`) et E3.2 (ASG-02 : liste réelle, page d’un devoir avec 404 réel ; maquettes 1.4 et 1.5 sous `/dev/mockups`, en développement seulement) faits. Plan approuvé d'E3 : `~/.claude/plans/pasted-content-id-faad-inspecte-l-appli-typed-meerkat.md` (verrou `locked_at` et `content_version`, propriété dérivée côté élève, lignes `assignmentRecipients` et `ownSubmissionStatus`, fuseau).
+- **E3 en cours** : E3.0 (plan), E3.1 (ASG-01 : création, `/teacher/assignments/new`), E3.2 (ASG-02 : liste réelle, page d’un devoir avec 404 réel ; maquettes 1.4 et 1.5 sous `/dev/mockups`, en développement seulement) et E3.3 (ASG-03 : modification `/teacher/assignments/[id]/edit` et suppression avec confirmation ; garde `locked_at IS NULL` dans la requête d’écriture, tâche renvoyée inchangée acceptée même verrouillée ; CA2 testé en posant le verrou dans le test, rejoué en E4) faits. Plan approuvé d'E3 : `~/.claude/plans/pasted-content-id-faad-inspecte-l-appli-typed-meerkat.md` (verrou `locked_at` et `content_version`, propriété dérivée côté élève, lignes `assignmentRecipients` et `ownSubmissionStatus`, fuseau).
 - **Réception dérivée [D, 2026-10-14]** : un élève voit les devoirs des classes où son appartenance est active, quelle que soit la date d'envoi (réadmis ou arrivé tard, il voit aussi les devoirs déjà envoyés). Pas de table de destinataires par élève.
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
@@ -27,7 +27,7 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
   - les lignes de matrice [P] : `teacherInvitation`, `classInvite`, `classMembership`, `classRoster` ; événements de sécurité `class_member_removed` et `class_member_readmitted` [P] ;
   - `CLASS_INVITE_INTENT_TTL` (7 jours, [P] arbitraire) : durée du cookie et de l'intention liée au compte ; depuis Q7, le lien expire avant (1 heure) ;
   - format du code de classe [P] : 8 symboles Crockford Base32, affiché `XXXX-XXXX` ; pas de réactivation après désactivation (on renouvelle) ;
-  - E3 : la réception dérivée [D] ; les lignes [P] `assignmentRecipients` et `ownSubmissionStatus` ; `content_version` et l'arbitrage modification / première remise [P] ; les longueurs maximales d'un devoir (`provisional.ts`) ; heure ambiguë = première occurrence, heure sautée refusée, date limite dans le futur [P] ; le texte d'avertissement R4 (`src/lib/texts.ts`) ;
+  - E3 : la réception dérivée [D] ; les lignes [P] `assignmentRecipients` et `ownSubmissionStatus` ; `content_version` et l'arbitrage modification / première remise [P] ; les longueurs maximales d'un devoir (`provisional.ts`) ; heure ambiguë = première occurrence, heure sautée refusée, date limite dans le futur [P] ; le texte d'avertissement R4 et les textes du verrou (`src/lib/texts.ts`) ; date limite modifiée : dans le futur seulement si elle change [P] ;
   - la preview publique [D] ;
   - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
 - **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0006`.

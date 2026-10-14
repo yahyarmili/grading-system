@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { createClass, phone } from "./support/classes";
-import { createTeacher, expectNotFound, signIn } from "./support/helpers";
+import { createTeacher, expectNotFound, signIn, sql } from "./support/helpers";
 
-// ASG-01: the "New assignment" form, in a real browser. The integration tests
+// ASG-01 to ASG-03: the assignment screens, in a real browser. The integration tests
 // cover the rules; this checks the screen: messages per field, the deadline
 // read back in the single time zone, and the summary after creation.
 
@@ -121,4 +121,74 @@ test("mockups 1.4 and 1.5 stay under /dev/mockups, out of the teacher space", as
   await expect(page).toHaveURL(/\/dev\/mockups\/assignments\//);
   await page.waitForLoadState("networkidle");
   await page.screenshot({ path: "test-results/asg02-3-mockup-1-4.png", fullPage: true });
+});
+
+test("ASG-03: edit, then delete with confirmation; once locked, only the title and level", async ({ page }) => {
+  await signIn(page, await createTeacher("Sarah", "Bennett"));
+  await expect(page).toHaveURL(/\/teacher\//);
+  await page.goto("/teacher/classes");
+  await expect(await createClass(page, "C1")).toBeHidden();
+
+  async function create(title: string) {
+    await page.goto("/teacher/assignments/new");
+    await page.getByLabel(/^Title/).fill(title);
+    await page.getByLabel(/^Subject/).fill("Describe your town.");
+    await page.getByLabel(/^Level/).selectOption("B1");
+    await page.getByRole("radio", { name: "English" }).check();
+    await page.getByLabel(/^Deadline/).fill("2030-06-14T18:00");
+    await page.getByRole("checkbox", { name: "C1" }).check();
+    await page.getByRole("button", { name: "Create assignment" }).click();
+    await page.getByRole("link", { name: "Open the assignment" }).click();
+    await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+    return new URL(page.url()).pathname;
+  }
+
+  // CA1: the edit form, prefilled; the new subject shows on the page.
+  const url = await create("My town");
+  await page.getByRole("link", { name: "Edit" }).filter({ visible: true }).click();
+  await expect(page.getByRole("heading", { name: "Edit assignment", level: 1 })).toBeVisible();
+  await expect(page.getByLabel(/^Deadline/)).toHaveValue("2030-06-14T18:00");
+  await expect(page.getByText("The classes are chosen when the assignment is created")).toBeVisible();
+  await page.getByLabel(/^Subject/).fill("");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Enter the subject of the task." })).toBeVisible();
+  await expect(page.getByLabel(/^Subject/)).toBeFocused();
+  await page.getByLabel(/^Subject/).fill("Describe your village.");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Changes saved" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: "test-results/asg03-1-saved-desktop.png", fullPage: true });
+  await page.getByRole("link", { name: "Open the assignment" }).click();
+  await expect(page.getByText("Describe your village.").filter({ visible: true })).toBeVisible();
+
+  // R2: locked as the first submission will lock it (E4): the task is read only, no Delete.
+  await sql("UPDATE assignments SET locked_at = now() WHERE id = $1", [url.split("/").pop()]);
+  await page.reload();
+  await expect(page.getByText("Locked by submissions").filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/asg03-2-locked-page-desktop.png", fullPage: true });
+  await page.getByRole("link", { name: "Edit" }).filter({ visible: true }).click();
+  await expect(page.getByRole("heading", { name: "Edit assignment", level: 1 })).toBeVisible();
+  await expect(page.getByText("Locked", { exact: true }).filter({ visible: true })).toBeVisible();
+  await expect(page.getByLabel(/^Subject/)).toHaveCount(0);
+  await expect(page.getByLabel(/^Deadline/)).toHaveCount(0);
+  await page.getByLabel(/^Title/).fill("My village");
+  await page.getByLabel(/^Level/).selectOption("B2");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Changes saved" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: "test-results/asg03-3-locked-edit-desktop.png", fullPage: true });
+
+  // CA1: deleted after confirmation, gone from the list.
+  await create("To delete");
+  await page.getByRole("button", { name: "Delete" }).filter({ visible: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete “To delete”?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Keep it" })).toBeFocused();
+  await page.screenshot({ path: "test-results/asg03-4-delete-dialog-desktop.png" });
+  await dialog.getByRole("button", { name: "Delete" }).click();
+  await expect(page).toHaveURL(/\/teacher\/assignments$/);
+  const table = page.getByRole("table", { name: "Assignments" });
+  await expect(table.getByRole("link", { name: "My village" })).toBeVisible();
+  await expect(table.getByRole("link", { name: "To delete" })).toHaveCount(0);
 });

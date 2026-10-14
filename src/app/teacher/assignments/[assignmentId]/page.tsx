@@ -2,18 +2,22 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CalendarClock, GraduationCap, Inbox, Languages, Users } from "lucide-react";
 import { z } from "zod";
+import { Alert } from "@/components/alert";
 import { EmptyState } from "@/components/empty-state";
 import { BackLink, PageHeader } from "@/components/shell/shell-parts";
 import { languageLabels } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
+import { ASSIGNMENT_LOCKED_NOTICE, ASSIGNMENT_NOT_DELETED_NOTICE } from "@/lib/texts";
 import { getActor } from "@/server/auth/session";
 import { getTeacherAssignment } from "@/server/data/assignments/assignments";
+import { AssignmentActions } from "./assignment-actions";
 
 export const metadata: Metadata = { title: "Assignment" };
 
-// ASG-02: one of the teacher's assignments. Another teacher's assignment, or
-// one that does not exist, answers 404 alike (AUTH-04 R3). The check runs
-// before any streaming, which would fix the status at 200: the page blocks on it.
+// ASG-02, ASG-03: one of the teacher's assignments, with Edit and Delete.
+// Another teacher's assignment, or one that does not exist, answers 404 alike
+// (AUTH-04 R3). The check runs before any streaming, which would fix the
+// status at 200: the page blocks on it.
 export const instant = false;
 
 export default async function Page({ params }: PageProps<"/teacher/assignments/[assignmentId]">) {
@@ -33,8 +37,14 @@ export default async function Page({ params }: PageProps<"/teacher/assignments/[
           { icon: GraduationCap, label: `Level ${assignment.level}` },
           { icon: CalendarClock, label: `Due ${formatDateTime(assignment.deadline)}` },
         ]}
+        actions={<AssignmentActions id={assignment.id} title={assignment.title} locked={assignment.locked} />}
       />
       <div className="flex max-w-3xl flex-col gap-6">
+        {assignment.locked && (
+          <Alert tone="warning" title="Locked by submissions">
+            {ASSIGNMENT_LOCKED_NOTICE} {ASSIGNMENT_NOT_DELETED_NOTICE}
+          </Alert>
+        )}
         <section aria-labelledby="task-title" className="card flex flex-col gap-4 p-5">
           <h2 id="task-title" className="text-base font-semibold">
             The task

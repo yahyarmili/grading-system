@@ -18,3 +18,14 @@ export const LEVEL_NOT_SENT_NOTICE = "A label for you. It is never sent to the A
 
 /** D8: the deadline never closes the assignment. */
 export const LATE_ACCEPTED_NOTICE = "Late submissions are accepted and marked late.";
+
+/** ASG-03 R2 [P]: after the first submission, the task is locked and the assignment stays. */
+export const ASSIGNMENT_LOCKED_NOTICE =
+  "Students have submitted: the subject, language, instructions and deadline are locked, " +
+  "so that every copy is marked on the same task. You can still change the title and the level.";
+
+/** ASG-03 R2 [P]: why an assignment with a submission is not deleted. */
+export const ASSIGNMENT_NOT_DELETED_NOTICE = "An assignment with submissions can't be deleted.";
+
+/** ASG-03 R1 [P]: an edit before the first submission reaches the students at once. */
+export const ASSIGNMENT_EDIT_VISIBLE_NOTICE = "Your students see the changes as soon as you save them.";

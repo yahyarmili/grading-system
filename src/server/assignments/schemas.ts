@@ -49,7 +49,7 @@ const instructionsSchema = z
  * A wall time ("YYYY-MM-DDTHH:mm") in the single time zone, read as an
  * instant. [P] A skipped time is refused; a repeated one is its first occurrence.
  */
-const deadlineSchema = z
+const wallDeadlineSchema = z
   .string({ error: ASSIGNMENT_ERRORS.deadline })
   .trim()
   .min(1, { error: ASSIGNMENT_ERRORS.deadline })
@@ -59,9 +59,12 @@ const deadlineSchema = z
     // A real calendar time that the zone skips, or not a date and time at all.
     ctx.addIssue({ code: "custom", message: isWallTime(wall) ? ASSIGNMENT_ERRORS.deadlineSkipped : ASSIGNMENT_ERRORS.deadline });
     return z.NEVER;
-  })
-  // [P] A new deadline is in the future.
-  .refine((deadline) => deadline.getTime() > Date.now(), { error: ASSIGNMENT_ERRORS.deadlinePast });
+  });
+
+/** [P] A new deadline is in the future. An edit checks it only when the deadline changes (ASG-03). */
+export const isFutureDeadline = (deadline: Date) => deadline.getTime() > Date.now();
+
+const deadlineSchema = wallDeadlineSchema.refine(isFutureDeadline, { error: ASSIGNMENT_ERRORS.deadlinePast });
 
 /** R3: at least one class; the same class twice counts once. */
 const classIdsSchema = z
@@ -77,4 +80,15 @@ export const createAssignmentSchema = z.object({
   deadline: deadlineSchema,
   instructions: instructionsSchema,
   classIds: classIdsSchema,
+});
+
+/** ASG-03: what an edit always carries; a lock leaves these two open (R2). */
+export const assignmentLabelsSchema = createAssignmentSchema.pick({ title: true, level: true });
+
+/** ASG-03: the task, locked by the first submission. A deadline kept as it was may be past. */
+export const assignmentTaskSchema = z.object({
+  subject: subjectSchema,
+  language: z.enum(assignmentLanguages, { error: ASSIGNMENT_ERRORS.language }),
+  deadline: wallDeadlineSchema,
+  instructions: instructionsSchema,
 });

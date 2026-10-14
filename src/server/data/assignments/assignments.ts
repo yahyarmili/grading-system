@@ -1,7 +1,7 @@
 import "server-only";
-import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Actor } from "@/server/access/actor";
-import { authorize } from "@/server/access/policy";
+import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
 import { assignmentClasses, assignments, classes } from "@/server/db/schema";
 import type { AssignmentLanguage, AssignmentLevel } from "@/lib/assignment";
@@ -140,4 +140,74 @@ export async function getTeacherAssignment(actor: Actor, assignmentId: string): 
   authorize(actor, "assignmentRecipients", "read");
   const [found] = byAssignment(await assignmentRows(and(eq(assignments.id, assignmentId), ownedBy(grant, owners))));
   return found ?? null;
+}
+
+/** ASG-03: an edit. Without `task`, only the title and the level change, which a lock allows (R2). */
+export type AssignmentChanges = {
+  title: string;
+  level: AssignmentLevel;
+  task?: { subject: string; language: AssignmentLanguage; deadline: Date; instructions: string | null };
+};
+
+/** Done, or refused because a submission locked the assignment; null when absent or another person's. */
+export type ChangeAssignmentResult = { ok: true } | { ok: false; reason: "locked" };
+
+const mine = (grant: Grant, assignmentId: string) =>
+  and(eq(assignments.id, assignmentId), ownedBy(grant, owners));
+
+/** After 0 rows: the assignment exists for this teacher, so the lock refused the write. */
+async function lockedOrAbsent(where: SQL | undefined): Promise<ChangeAssignmentResult | null> {
+  const [found] = await db.select({ id: assignments.id }).from(assignments).where(where);
+  return found ? { ok: false, reason: "locked" } : null;
+}
+
+/**
+ * R1, R2: the guard is in the statement itself. A change of the task (subject,
+ * language, instructions, deadline) needs `locked_at IS NULL`; the first
+ * submission sets it on the same row (E4), so of the two only one goes
+ * through. A task sent back unchanged is not a change: allowed even when
+ * locked, and the content version stays.
+ */
+export async function updateAssignment(
+  actor: Actor,
+  assignmentId: string,
+  changes: AssignmentChanges,
+): Promise<ChangeAssignmentResult | null> {
+  const grant = authorize(actor, "assignment", "write");
+  const where = mine(grant, assignmentId);
+  const { task } = changes;
+  // Compared with the row as stored before the update (Postgres reads old values in SET and WHERE).
+  const sameTask = task
+    ? and(
+        eq(assignments.subject, task.subject),
+        eq(assignments.language, task.language),
+        eq(assignments.deadline, task.deadline),
+        task.instructions === null ? isNull(assignments.instructions) : eq(assignments.instructions, task.instructions),
+      )
+    : undefined;
+
+  const [updated] = await db
+    .update(assignments)
+    .set({
+      title: changes.title,
+      level: changes.level,
+      ...(task && {
+        ...task,
+        contentVersion: sql`${assignments.contentVersion} + case when ${sameTask} then 0 else 1 end`,
+      }),
+    })
+    .where(and(where, task && or(isNull(assignments.lockedAt), sameTask)))
+    .returning({ id: assignments.id });
+  return updated ? { ok: true } : lockedOrAbsent(where);
+}
+
+/** R2: deleted only without a submission; its recipient rows go with it (cascade). */
+export async function deleteAssignment(actor: Actor, assignmentId: string): Promise<ChangeAssignmentResult | null> {
+  const grant = authorize(actor, "assignment", "write");
+  const where = mine(grant, assignmentId);
+  const [deleted] = await db
+    .delete(assignments)
+    .where(and(where, isNull(assignments.lockedAt)))
+    .returning({ id: assignments.id });
+  return deleted ? { ok: true } : lockedOrAbsent(where);
 }

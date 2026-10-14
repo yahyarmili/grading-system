@@ -7,7 +7,7 @@ import { AccessDeniedError } from "@/server/access/errors";
 import { ACCESS_MATRIX, ACTIONS, COLUMNS, RESOURCES, type Action, type Column, type Resource } from "@/server/access/matrix";
 import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
-import { createAssignment, getTeacherAssignment } from "@/server/data/assignments/assignments";
+import { createAssignment, getTeacherAssignment, updateAssignment } from "@/server/data/assignments/assignments";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
 import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
@@ -177,10 +177,14 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     read: { run: (actor, { classId }) => listClassStudents(actor, classId) },
     write: { run: (actor, { classId }) => removeStudent(actor, classId, people.concernedStudent.userId) },
   },
+  // Editing the owner's assignment (ASG-03): another teacher's edit finds nothing.
+  // The student's read of an assignment (received, without its classes) arrives with SUB-01 (E3.4).
+  assignment: {
+    setup: ownedAssignment,
+    write: { run: (actor, { assignmentId }) => updateAssignment(actor, assignmentId, { title: "Renamed", level: "B2" }) },
+  },
   // Sending an assignment to the owner's class: the other teacher's request
   // is refused like a missing class, nothing created (ASG-01 R3).
-  // The student's read of an assignment (received, without its classes) arrives with SUB-01 (E3.4).
-  assignment: { setup: ownedClass, write: { run: sendAssignment } },
   assignmentRecipients: {
     setup: ownedAssignment,
     // The teacher's page carries the recipient classes: the student is refused there.
