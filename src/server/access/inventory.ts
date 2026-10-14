@@ -17,8 +17,7 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   auth_tokens: { internal: "digests of one-time links (AUTH-01, 03, 05)" },
   auth_throttles: { internal: "attempt counters (AUTH-02 R2, AUTH-05 R3)" },
   security_events: { internal: "security log (DON-05), read by no screen in the MVP" },
-  // The invitation link and code (classInvite, E2.2) are held here too.
-  classes: ["class"],
+  classes: ["class", "classInvite"],
   // Read for the student side of "class" until classMembership and classRoster (E2.3, E2.4).
   class_memberships: ["class"],
 };
@@ -43,6 +42,8 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/admin/teachers/actions.ts#reissueInvitationAction": { resource: "teacherInvitation", action: "write" },
   "src/app/admin/teachers/actions.ts#cancelInvitationAction": { resource: "teacherInvitation", action: "write" },
   "src/app/teacher/classes/actions.ts#createClassAction": { resource: "class", action: "write" },
+  "src/app/teacher/classes/actions.ts#renewInviteAction": { resource: "classInvite", action: "write" },
+  "src/app/teacher/classes/actions.ts#disableInviteAction": { resource: "classInvite", action: "write" },
 };
 
 /**
@@ -68,4 +69,5 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/auth/throttle.ts#clearAttempts": "internal: attempt counters",
   "src/server/data/auth/tokens.ts#issueToken": "internal: one-time links, inside a guarded transaction",
   "src/server/data/auth/tokens.ts#consumeToken": "internal: one-time links, inside a guarded transaction",
+  "src/server/data/classes/invites.ts#findClassByInvite": "the code or link is the proof; only behind the attempt limit (CLS-02 CA4)",
 };

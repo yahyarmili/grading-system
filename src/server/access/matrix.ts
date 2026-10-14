@@ -45,9 +45,16 @@ export const ACCESS_MATRIX = {
     concernedStudent: NO, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: LW, visitor: NO,
   },
   class: {
-    label: "Class, link, code, list of students",
+    // §5.4 "Class, link, code, list of students", split [P]: the link and code in classInvite.
+    label: "Class",
     // Student: their classes with an active membership, without the list of students (CLS-04).
     concernedStudent: L, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
+  },
+  classInvite: {
+    // [P] Detail of "Class, link, code": a student who joined sees the class,
+    // never its link or code; joining goes through the code, not this row.
+    label: "Class invitation link and code",
+    concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   assignment: {
     label: "Assignment",

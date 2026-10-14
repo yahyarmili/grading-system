@@ -54,3 +54,33 @@ export function newInvite(key = inviteKey()): { nonce: string; linkDigest: strin
 
 /** "ABCD-EFGH": easier to read and to type. */
 export const formatCode = (code: string) => `${code.slice(0, 4)}-${code.slice(4)}`;
+
+/**
+ * A typed code in canonical form, or null if it cannot be one: any case,
+ * spaces and hyphens ignored, and the letters people confuse read as digits
+ * (O as 0, I and L as 1), as Crockford Base32 intends.
+ */
+export function normalizeCode(input: string): string | null {
+  const code = input
+    .toUpperCase()
+    .replace(/[\s-]/g, "")
+    .replace(/O/g, "0")
+    .replace(/[IL]/g, "1");
+  return code.length === CODE_LENGTH && [...code].every((c) => CROCKFORD.includes(c)) ? code : null;
+}
+
+/** The link token, as it appears in the URL: refused at once if malformed. */
+export const LINK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+/**
+ * Whether a class's link and code work (CLS-02 R3): not disabled, and not
+ * older than the lifetime when one is set (Q7: none for now).
+ */
+export function isInviteUsable(
+  invite: { disabledAt: Date | null; issuedAt: Date },
+  ttlSeconds: number | null,
+  now: Date,
+): boolean {
+  if (invite.disabledAt) return false;
+  return ttlSeconds === null || now.getTime() < invite.issuedAt.getTime() + ttlSeconds * 1000;
+}

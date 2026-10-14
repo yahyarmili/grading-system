@@ -9,6 +9,7 @@ import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
 import { createClass, getClass } from "@/server/data/classes/classes";
+import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { db } from "@/server/db/client";
 import { classes, classMemberships, users } from "@/server/db/schema";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
@@ -154,22 +155,30 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     },
   },
   class: {
-    setup: async () => {
-      const [owned] = await db
-        .insert(classes)
-        .values({
-          teacherId: people.ownerTeacher.userId, name: "Owned class",
-          inviteNonce: "n", inviteLinkDigest: "l", inviteCodeDigest: "c",
-        })
-        .returning({ id: classes.id });
-      await db.insert(classMemberships).values({ classId: owned.id, studentId: people.concernedStudent.userId });
-      return { classId: owned.id };
-    },
+    setup: ownedClass,
     read: { run: (actor, { classId }) => getClass(actor, classId) },
-    // No write reaches an existing class before E2.2: creating one is the actor's own.
+    // Creating a class makes the actor's own; there is no "other" one to reach.
     write: { run: (actor) => createClass(actor, { name: "Grade 10 — A" }), creates: true },
   },
+  classInvite: {
+    setup: ownedClass,
+    read: { run: (actor, { classId }) => getClassInvite(actor, classId) },
+    write: { run: (actor, { classId }) => renewClassInvite(actor, classId) },
+  },
 };
+
+/** A class of the owner teacher, with the concerned student as an active member. */
+async function ownedClass(): Promise<Fixture> {
+  const [owned] = await db
+    .insert(classes)
+    .values({
+      teacherId: people.ownerTeacher.userId, name: "Owned class",
+      inviteNonce: "n", inviteLinkDigest: "l", inviteCodeDigest: "c",
+    })
+    .returning({ id: classes.id });
+  await db.insert(classMemberships).values({ classId: owned.id, studentId: people.concernedStudent.userId });
+  return { classId: owned.id };
+}
 
 const OWN_COLUMN = { student: "concernedStudent", teacher: "ownerTeacher" } as const;
 

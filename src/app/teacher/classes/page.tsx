@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { CalendarDays, School, Users } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
@@ -50,8 +51,13 @@ async function ClassList() {
       <MetaList className="mb-4" items={[{ icon: School, label: list.classes.length === 1 ? "1 class" : `${list.classes.length} classes` }]} />
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {list.classes.map((c) => (
-          <li key={c.id} className="card flex flex-col gap-3 p-5">
-            <h2 className="text-base font-semibold break-words">{c.name}</h2>
+          <li key={c.id} className="card relative flex flex-col gap-3 p-5 hover:border-border-control">
+            <h2 className="text-base font-semibold break-words">
+              {/* The whole card is the link; the name is its accessible text. */}
+              <Link href={`/teacher/classes/${c.id}`} className="rounded-sm after:absolute after:inset-0 after:rounded-lg">
+                {c.name}
+              </Link>
+            </h2>
             <MetaList
               items={[
                 { icon: Users, label: students(c.activeStudents) },

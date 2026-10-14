@@ -57,3 +57,59 @@ test("a teacher creates two classes; a second teacher sees only their own", asyn
   await expect(other.getByText("Grade 11 — Literature")).toHaveCount(0);
   await expect(other.getByText("1 class", { exact: true })).toBeVisible();
 });
+
+// CLS-02: link and code of a class, copied in one click, renewed, disabled (CA1 to CA3).
+test("a teacher shares, renews and disables the class link and code", async ({ browser }) => {
+  const context = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"] });
+  const page = await context.newPage();
+  await signIn(page, await createTeacher("Sarah", "Bennett"));
+  await expect(page).toHaveURL(/\/teacher\//);
+  await page.goto("/teacher/classes");
+  await expect(await createClass(page, "Grade 10 — A")).toBeHidden();
+
+  // The card opens the class page.
+  await classCard(page, "Grade 10 — A").getByRole("link", { name: "Grade 10 — A" }).click();
+  await expect(page.getByRole("heading", { name: "Grade 10 — A", level: 1 })).toBeVisible();
+  const invite = page.locator("section").filter({ has: page.getByRole("heading", { name: "Invite students" }) });
+  await expect(invite.getByText("Link and code: Active")).toBeVisible();
+
+  // CA1: link and code shown, copied in one click.
+  const link = await invite.getByLabel("Link").inputValue();
+  expect(new URL(link).pathname).toBe("/join");
+  const code = (await invite.getByLabel("Code").textContent())!;
+  expect(code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+  await invite.getByRole("button", { name: "Copy code" }).click();
+  await expect(invite.getByRole("button", { name: "Copied" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(code);
+  await invite.getByRole("button", { name: "Copy link" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(link);
+  await page.screenshot({ path: "test-results/class-invite-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: "test-results/class-invite-phone.png", fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  // CA2: renewal gives a new link and code.
+  await invite.getByRole("button", { name: "Generate new link and code" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Generate" }).click();
+  await expect(invite.getByText("New link and code created.")).toBeVisible();
+  await expect(invite.getByLabel("Code")).not.toHaveText(code);
+  expect(await invite.getByLabel("Link").inputValue()).not.toBe(link);
+
+  // CA3: disabled, nothing to share any more; renewing brings them back.
+  await invite.getByRole("button", { name: "Disable" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Disable" }).click();
+  await expect(invite.getByText("Link and code: Disabled")).toBeVisible();
+  await expect(invite.getByText("nobody can join with them")).toBeVisible();
+  await expect(invite.getByLabel("Code")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/class-invite-disabled-desktop.png", fullPage: true });
+  await invite.getByRole("button", { name: "Generate new link and code" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Generate" }).click();
+  await expect(invite.getByText("Link and code: Active")).toBeVisible();
+
+  // Another teacher: the class page answers "not found".
+  const other = await (await browser.newContext()).newPage();
+  await signIn(other, await createTeacher("Karim", "Alaoui"));
+  await expect(other).toHaveURL(/\/teacher\//);
+  const response = await other.goto(page.url());
+  expect(response?.status()).toBe(404);
+});

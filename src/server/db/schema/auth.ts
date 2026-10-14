@@ -181,6 +181,9 @@ export const securityEventType = pgEnum("security_event_type", [
   "invitation_revoked",
   "invitation_accepted",
   "access_denied",
+  // E2, CLS-02
+  "class_invite_renewed",
+  "class_invite_disabled",
 ]);
 
 /** NFR-DON-05: security log, separate from the review log. No email, secret or content. */

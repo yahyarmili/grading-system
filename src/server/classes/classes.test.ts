@@ -6,6 +6,8 @@ import {
   formatCode,
   inviteCode,
   inviteKey,
+  isInviteUsable,
+  normalizeCode,
   linkDigest,
   linkToken,
   newInvite,
@@ -74,5 +76,46 @@ describe("invitation link and code (CLS-02 R2)", () => {
 
   it("refuses to run without a secret", () => {
     expect(() => inviteKey("")).toThrow();
+  });
+});
+
+describe("typed code (CLS-02, CLS-03)", () => {
+  it.each([
+    ["ABCD-2345", "ABCD2345"],
+    ["abcd 2345", "ABCD2345"],
+    [" abcd-23 45 ", "ABCD2345"],
+    ["OIL0-1234", "0110" + "1234"],
+  ])("reads %j as %j", (typed, code) => {
+    expect(normalizeCode(typed)).toBe(code);
+  });
+
+  it.each(["", "ABCD-234", "ABCD-23456", "ABCU-2345", "ABCD_2345", "ÀBCD-2345"])("refuses %j", (typed) => {
+    expect(normalizeCode(typed)).toBeNull();
+  });
+
+  it("reads back every generated code once formatted", () => {
+    const key = inviteKey("test secret");
+    for (let i = 0; i < 50; i++) {
+      const code = inviteCode(key, `n${i}`);
+      expect(normalizeCode(formatCode(code).toLowerCase())).toBe(code);
+    }
+  });
+});
+
+describe("link and code validity (CLS-02 R3, Q7)", () => {
+  const issuedAt = new Date("2026-10-01T00:00:00Z");
+  const later = (seconds: number) => new Date(issuedAt.getTime() + seconds * 1000);
+
+  it("works without expiry while not disabled (Q7 recommendation)", () => {
+    expect(isInviteUsable({ disabledAt: null, issuedAt }, null, later(10 ** 8))).toBe(true);
+  });
+
+  it("stops at once when disabled", () => {
+    expect(isInviteUsable({ disabledAt: later(1), issuedAt }, null, later(2))).toBe(false);
+  });
+
+  it("expires after a lifetime, if Q7 sets one", () => {
+    expect(isInviteUsable({ disabledAt: null, issuedAt }, 60, later(59))).toBe(true);
+    expect(isInviteUsable({ disabledAt: null, issuedAt }, 60, later(60))).toBe(false);
   });
 });

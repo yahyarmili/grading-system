@@ -37,7 +37,7 @@ export async function countAttempt(
   return { allowed: rows[0].failures <= limit.max };
 }
 
-export type LockScope = "sign_in_email";
+export type LockScope = "sign_in_email" | "class_join_user";
 
 /** True while the value is locked out (AUTH-02 CA3). */
 export async function isLocked(scope: LockScope, value: string): Promise<boolean> {

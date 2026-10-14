@@ -62,3 +62,15 @@ export const PASSWORD_MAX_LENGTH = 128;
 
 /** [PROVISIONAL, [P] arbitrary] Maximum length of a class name (CLS-01). */
 export const CLASS_NAME_MAX_LENGTH = 60;
+
+/**
+ * [Q7 open] Lifetime of a class link and code, in seconds; null = no automatic
+ * expiry (recommendation of Q7, not decided). Disabling and renewing stay the controls.
+ */
+export const CLASS_INVITE_TTL: number | null = null;
+
+/** [PROVISIONAL, [P] arbitrary, as for sign-in] N: failed class code or link entries per student before the lockout (CLS-02 CA4). */
+export const CLASS_JOIN_MAX_FAILURES = 5;
+
+/** [PROVISIONAL, [P] arbitrary, as for sign-in] D: lockout after N failures, even with a valid code. */
+export const CLASS_JOIN_LOCKOUT = 15 * MINUTE;
