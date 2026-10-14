@@ -13,7 +13,7 @@ Preview Vercel publique (protection désactivée pour la démonstration), relié
 | Étape | Contenu | État |
 |---|---|---|
 | E1 | Comptes, rôles, accès (AUTH-01 à AUTH-05) | Livrée |
-| E2 | Classes et invitation (CLS-01 à CLS-04) | Prochaine |
+| E2 | Classes et invitation (CLS-01 à CLS-04) | En cours : créer et lister ses classes (CLS-01), lien et code d'invitation (CLS-02) livrés ; rejoindre, retrait et réadmission à venir |
 
 Suivi prompt par prompt : [`conception/prompts-implementation.md`](conception/prompts-implementation.md).
 
@@ -56,7 +56,7 @@ Node ne tourne que dans Docker.
 
 ## Déploiement (Vercel)
 
-- La branche **`preview`** produit la preview ; `main` n'est pas déployée (`vercel.json`). Mettre la preview à jour : intégrer `main` dans `preview`, puis pousser `preview`.
+- La branche **`preview`** produit la preview ; `main` n'est pas déployée (`vercel.json`). À la fin de chaque étape : commit sur `main`, avance rapide de `preview` jusqu'à `main`, puis poussée de `preview`. Les migrations sont appliquées avant sur la base dev, que la preview utilise.
 - Variables, saisies dans Vercel pour l'environnement **Preview** seulement : `DATABASE_URL` (chaîne poolée de la branche Neon dev), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (le domaine de branche ci-dessus), `SMTP_USER`, `SMTP_PASSWORD`.
 - Fonctions en `cle1` (Cleveland), à côté de Neon `us-east-2` (Ohio). Neon suspend sa base après 5 min d'inactivité : la première requête qui suit prend quelques secondes.
 
@@ -68,6 +68,7 @@ Node ne tourne que dans Docker.
 | `src/server/access/` | Matrice d'accès en données, contrôle unique `authorize()`, inventaire |
 | `src/server/data/` | Seul code qui accède à la base ; applique la matrice |
 | `src/server/auth/`, `src/server/email/` | Parcours d'authentification, interface email unique |
+| `src/server/classes/` | Classes : validation, lien et code d'invitation (dérivés, jamais stockés), essais limités |
 | `src/config/provisional.ts` | Valeurs non décidées, marquées provisoires |
 | `drizzle/`, `scripts/` | Migrations SQL, script du premier administrateur |
 | `tests/`, `e2e/` | Vitest (unitaires, intégration), Playwright |

@@ -14,17 +14,21 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 - `conception/fonctionnalites.md` : décisions D1 à D10 (§1, ne pas les remettre en cause sans demande), fonctionnalités `AUTH-01`, `REV-03`…, matrice d'accès §5.4, états de la remise §5.5, plan E1 à E11 §8, questions Q1 à Q10 §9.
 - `conception/besoins-non-fonctionnels.md` (`NFR-…`, statut en démonstration §2.8), `acteurs.md`, `stack-technologique.md`.
 - **Suivi** : `conception/prompts-implementation.md`. L'utilisateur lance les prompts un par un et valide chacun avant le suivant ; une étape E commence par un `/plan`. Ne prends pas d'avance sur le prompt suivant.
+- **Fin de chaque prompt** [D, 2026-10-14] : une fois les tests passés, commiter sur `main`, avancer `preview` jusqu'à `main` puis pousser `preview` (déploiement Vercel). `main` n'est pas poussée sans demande.
 
-## État (2026-10-12)
+## État (2026-10-14)
 
-- **E1 livrée** (E1.0 à E1.8, T1 fait) ; preview en ligne : https://grading-system-git-preview-yahya-rmili.vercel.app. **Prochain prompt : E2.0** (plan des classes, `prompts-implementation.md`).
-- **T5 de fin d'E1 non fait** ; à consigner dans `conception/` quand l'utilisateur le demande :
-  - les valeurs de `src/config/provisional.ts` ;
+- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01) et E2.2 (CLS-02) faites et sur la preview. **Prochain prompt : E2.3** (rejoindre une classe), puis E2.4, E2.5. Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
+- **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
+  - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
   - Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D] ;
-  - la ligne de matrice `teacherInvitation` [P] ;
+  - Q7 : recommandation appliquée (`CLASS_INVITE_TTL = null`, pas d'expiration), non décidée ;
+  - les lignes de matrice [P] : `teacherInvitation`, `classInvite` ;
+  - format du code de classe [P] : 8 symboles Crockford Base32, affiché `XXXX-XXXX` ; pas de réactivation après désactivation (on renouvelle) ;
   - la preview publique [D] ;
   - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
-- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs.
+- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0003`.
+- **Test instable connu** : deux tests de `tests/sign-in.int.test.ts` vieillissent une session de 1 s avec l'horloge de Neon ; un décalage avec l'horloge du conteneur les fait échouer. Une tâche séparée a été proposée.
 
 ## Environnement
 
@@ -53,6 +57,12 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 - Toute nouvelle table, Server Action, route ou export de `src/server/data/` s'inscrit dans `src/server/access/inventory.ts`. Sinon `tests/access-inventory.test.ts` échoue.
 - Une nouvelle ressource reçoit d'abord sa ligne dans la matrice. Ses fonctions réelles s'ajoutent à `REAL` dans `tests/access-matrix.int.test.ts`, qui rejoue chaque cellule.
 - Ressource d'autrui : `null`, comme une ressource absente. Rôle sans droit : `AccessDeniedError`. Les pages répondent 404 dans les deux cas.
+- Dans `REAL`, une opération vise la ressource de la fixture (`setup`). Les colonnes « autre » doivent donner « absent », sauf pour une opération `creates` (elle crée la ressource de l'acteur).
+- **404 réel** : sous `cacheComponents`, `notFound()` appelé sous un `Suspense` garde le statut 200. Une page de ressource vérifie l'accès au niveau de la page, avant tout streaming, avec `export const instant = false` (voir `src/app/teacher/classes/[classId]/page.tsx`).
+
+**Classes (E2)** :
+- Le lien et le code ne sont jamais stockés. Ils sont dérivés du `invite_nonce` de la classe avec une clé tirée de `BETTER_AUTH_SECRET` (`src/server/classes/invite-codes.ts`) ; seules leurs empreintes sont en base. Changer ce secret change tous les liens et codes.
+- Toute saisie d'un code ou d'un lien passe par `tryInvite` (`src/server/classes/attempts.ts`) : verrou après N échecs par élève, refus unique, pas de remise à zéro sur succès.
 
 **Règle 3, email (E1)** : `src/server/email/`.
 - Capture en test.
@@ -78,7 +88,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 ## Déploiement (Vercel Hobby)
 
 - La branche `preview` produit la preview. `main` n'est pas déployée (`vercel.json`) : la Production n'a aucune variable et son build échoue, c'est voulu.
-- Mise à jour de la preview : intégrer `main` dans `preview`, puis pousser. Pousser seulement à la demande de l'utilisateur.
+- Mise à jour de la preview : intégrer `main` dans `preview` (avance rapide), puis pousser `preview`, à la fin de chaque prompt (voir « Fin de chaque prompt »). Les migrations sont appliquées sur dev avant : la preview utilise cette base.
 - Variables dans Vercel, environnement **Preview** seulement : `DATABASE_URL` (chaîne poolée de la branche Neon dev), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (le domaine de branche), `SMTP_USER`, `SMTP_PASSWORD`. Toute nouvelle variable y est ajoutée par l'utilisateur.
 - Fonctions en `cle1`, à côté de Neon. Preview publique [D], sur la base dev. Neon suspend sa base après 5 min : la première requête qui suit prend 4 à 5 s de plus (mesuré depuis le poste).
 
