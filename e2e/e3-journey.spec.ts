@@ -68,8 +68,12 @@ test("E3 journey: an assignment for C1 and C3, seen once by the student of both;
   await expectNotFound(karim, assignmentUrl);
   await expectNotFound(karim, `${assignmentUrl}/edit`);
   await karim.goto("/teacher/assignments");
-  await expect(karim.getByText("My town")).toHaveCount(0);
   await expect(karim.getByRole("heading", { name: "Assignments", level: 1 })).toBeVisible();
+  await expect(karim.getByText("My town")).toHaveCount(0);
+  // Without a class, the empty state leads to Classes.
+  await expect(karim.getByText("No assignments yet")).toBeVisible();
+  await karim.getByRole("link", { name: "Go to Classes" }).click();
+  await expect(karim).toHaveURL(/\/teacher\/classes$/);
 });
 
 test("E3 journey: a student without a class sees the empty state, which leads to Join a class", async ({ browser }) => {

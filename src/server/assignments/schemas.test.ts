@@ -3,7 +3,13 @@ import { z } from "zod";
 import { DEADLINE_TIME_ZONE } from "@/config/decisions";
 import { ASSIGNMENT_TITLE_MAX_LENGTH } from "@/config/provisional";
 import { instantToWallTime } from "@/lib/time-zone";
-import { ASSIGNMENT_ERRORS, createAssignmentSchema } from "./schemas";
+import {
+  ASSIGNMENT_ERRORS,
+  assignmentLabelsSchema,
+  assignmentTaskSchema,
+  createAssignmentSchema,
+  isFutureDeadline,
+} from "./schemas";
 
 // ASG-01 R1 to R3, CA2: one message per field.
 
@@ -66,5 +72,26 @@ describe("createAssignmentSchema", () => {
 
   it("counts the same class once", () => {
     expect(createAssignmentSchema.parse({ ...valid, classIds: [classId, classId] }).classIds).toEqual([classId]);
+  });
+});
+
+// ASG-03 R1, R2: the edit carries no class; a lock leaves the title and the level.
+describe("edit schemas", () => {
+  it("the labels: title and level only, refused out of the list", () => {
+    expect(assignmentLabelsSchema.parse({ ...valid, title: " Renamed " })).toEqual({ title: "Renamed", level: "B1" });
+    const parsed = assignmentLabelsSchema.safeParse({ title: "", level: "D1" });
+    expect(parsed.success ? {} : z.flattenError(parsed.error).fieldErrors).toEqual({
+      title: [ASSIGNMENT_ERRORS.title],
+      level: [ASSIGNMENT_ERRORS.level],
+    });
+  });
+
+  it("the task: a deadline kept as it was may be past; the classes are not part of it", () => {
+    const parsed = assignmentTaskSchema.parse({ ...valid, deadline: "2020-01-01T10:00", instructions: "  " });
+    expect(parsed).toEqual({
+      subject: "Describe your town.", language: "en", deadline: expect.any(Date), instructions: null,
+    });
+    expect(isFutureDeadline(parsed.deadline)).toBe(false);
+    expect(assignmentTaskSchema.safeParse({ ...valid, language: "de" }).success).toBe(false);
   });
 });

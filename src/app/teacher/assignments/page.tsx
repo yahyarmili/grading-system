@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ClipboardCheck, ClipboardList, Plus } from "lucide-react";
+import { ClipboardCheck, ClipboardList, Plus, School } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { LoadingState } from "@/components/loading";
 import { PageHeader } from "@/components/shell/shell-parts";
 import { Button } from "@/components/ui/button";
 import { getActor } from "@/server/auth/session";
 import { listTeacherAssignments } from "@/server/data/assignments/assignments";
+import { listClasses } from "@/server/data/classes/classes";
 import { AssignmentsTable } from "./assignments-table";
 
 export const metadata: Metadata = { title: "Assignments" };
@@ -62,16 +63,38 @@ async function AssignmentList() {
       />
       {rows.length === 0 ? (
         <div className="card">
-          <EmptyState
-            icon={ClipboardList}
-            title="No assignments yet"
-            description="Create an assignment and choose the classes that receive it."
-            action={<NewAssignmentButton variant="outline" />}
-          />
+          <NoAssignments />
         </div>
       ) : (
         <AssignmentsTable rows={rows} />
       )}
     </>
+  );
+}
+
+/** Empty list: leads to the creation, or to Classes when there is no class to send to. */
+async function NoAssignments() {
+  const list = await listClasses(await getActor());
+  if (list.role === "teacher" && list.classes.length === 0) {
+    return (
+      <EmptyState
+        icon={School}
+        title="No assignments yet"
+        description="An assignment is sent to one or more of your classes. Create a class first."
+        action={
+          <Button variant="outline" asChild>
+            <Link href="/teacher/classes">Go to Classes</Link>
+          </Button>
+        }
+      />
+    );
+  }
+  return (
+    <EmptyState
+      icon={ClipboardList}
+      title="No assignments yet"
+      description="Create an assignment and choose the classes that receive it."
+      action={<NewAssignmentButton variant="outline" />}
+    />
   );
 }

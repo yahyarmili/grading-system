@@ -17,9 +17,8 @@ import {
   submissionStatuses,
   type SubmissionStatus,
 } from "@/lib/submission-status";
+import { formatDate } from "@/lib/dates";
 import { mockSubmissions, type MockSubmission } from "@/mock/submissions";
-
-const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
 
 const columns: Column<MockSubmission>[] = [
   {
@@ -40,7 +39,7 @@ const columns: Column<MockSubmission>[] = [
     cell: (s) =>
       s.submittedAt ? (
         <time dateTime={s.submittedAt} className="whitespace-nowrap">
-          {dateFormat.format(new Date(s.submittedAt))}
+          {formatDate(s.submittedAt)}
         </time>
       ) : (
         <span className="text-fg-muted">—</span>
