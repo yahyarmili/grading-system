@@ -7,14 +7,14 @@ import { AccessDeniedError } from "@/server/access/errors";
 import { ACCESS_MATRIX, ACTIONS, COLUMNS, RESOURCES, type Action, type Column, type Resource } from "@/server/access/matrix";
 import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
-import { createAssignment } from "@/server/data/assignments/assignments";
+import { createAssignment, getTeacherAssignment } from "@/server/data/assignments/assignments";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
 import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
 import { db } from "@/server/db/client";
-import { classes, classMemberships, users } from "@/server/db/schema";
+import { assignmentClasses, assignments, classes, classMemberships, users } from "@/server/db/schema";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
 
 // AUTH-04: every cell of the matrix (fonctionnalites.md §5.4) is replayed.
@@ -179,9 +179,31 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   },
   // Sending an assignment to the owner's class: the other teacher's request
   // is refused like a missing class, nothing created (ASG-01 R3).
+  // The student's read of an assignment (received, without its classes) arrives with SUB-01 (E3.4).
   assignment: { setup: ownedClass, write: { run: sendAssignment } },
-  assignmentRecipients: { setup: ownedClass, write: { run: sendAssignment } },
+  assignmentRecipients: {
+    setup: ownedAssignment,
+    // The teacher's page carries the recipient classes: the student is refused there.
+    read: { run: (actor, { assignmentId }) => getTeacherAssignment(actor, assignmentId) },
+    write: { run: sendAssignment },
+  },
 };
+
+/** The owner's class with the concerned student, and an assignment sent to it. */
+async function ownedAssignment(): Promise<Fixture> {
+  const fixture = await ownedClass();
+  const [created] = await db
+    .insert(assignments)
+    .values({
+      teacherId: people.ownerTeacher.userId, title: "Owned assignment", subject: "Subject",
+      level: "B1", language: "en", deadline: new Date(Date.now() + 24 * 3600 * 1000),
+    })
+    .returning({ id: assignments.id });
+  await db.insert(assignmentClasses).values({
+    assignmentId: created.id, classId: fixture.classId, teacherId: people.ownerTeacher.userId,
+  });
+  return { ...fixture, assignmentId: created.id };
+}
 
 /** Creates an assignment for the fixture's class; null when refused (as absent). */
 async function sendAssignment(actor: Actor, { classId }: Fixture) {

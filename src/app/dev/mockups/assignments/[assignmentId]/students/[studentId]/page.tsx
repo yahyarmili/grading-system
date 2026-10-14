@@ -16,13 +16,14 @@ import {
   submissionsFor,
   type SubmissionRow,
 } from "@/mock/assignment-submissions";
+import { formatDate } from "@/lib/dates";
 import { CopyPanel } from "./copy-panel";
 import { EvaluationForm } from "./evaluation-form";
 
 // Mockup of REV-02 and REV-03: one student's copy for one assignment, fictitious data.
 // No history of the student's previous results on this screen (REV-02 R2, halo effect).
 
-type Props = PageProps<"/teacher/assignments/[assignmentId]/students/[studentId]">;
+type Props = PageProps<"/dev/mockups/assignments/[assignmentId]/students/[studentId]">;
 
 export function generateStaticParams() {
   return mockAssignments.flatMap((a) =>
@@ -32,7 +33,7 @@ export function generateStaticParams() {
 
 export const metadata: Metadata = { title: "Submission" };
 
-const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
+const dateFormat = { format: formatDate };
 
 export default function Page({ params }: Props) {
   return (
@@ -57,7 +58,7 @@ async function CopyScreen({ params }: Pick<Props, "params">) {
 
   return (
     <>
-      <BackLink href={`/teacher/assignments/${assignment.id}`}>{assignment.title}</BackLink>
+      <BackLink href={`/dev/mockups/assignments/${assignment.id}`}>{assignment.title}</BackLink>
       <Identity row={row} />
       {row.status === "to_submit" || !copy || !row.mode ? (
         // REV-02 R4: no text yet, a status page without a form.

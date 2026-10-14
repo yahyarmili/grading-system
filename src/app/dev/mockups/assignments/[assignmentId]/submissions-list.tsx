@@ -35,6 +35,7 @@ import {
   type SubmissionStatus,
 } from "@/lib/submission-status";
 import type { SubmissionRow } from "@/mock/assignment-submissions";
+import { formatDate } from "@/lib/dates";
 
 type StatusFilter = SubmissionStatus | "failed" | "all";
 
@@ -51,7 +52,7 @@ function sortGrade(row: SubmissionRow) {
   return row.teacherGrade ?? row.proposedGrade ?? null;
 }
 
-const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
+const dateFormat = { format: formatDate };
 
 function Missing({ label }: { label: string }) {
   return (
@@ -139,7 +140,7 @@ export function SubmissionsList({
       header: "Student",
       // REV-02: a click on the name opens the copy; last name first, as sorted.
       cell: (r) => (
-        <Link href={`/teacher/assignments/${assignmentId}/students/${r.id}`} className="link-cell whitespace-nowrap">
+        <Link href={`/dev/mockups/assignments/${assignmentId}/students/${r.id}`} className="link-cell whitespace-nowrap">
           <span className="font-semibold">{r.lastName}</span> <span className="font-normal">{r.firstName}</span>
         </Link>
       ),

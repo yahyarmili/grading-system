@@ -2,14 +2,17 @@ import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { DEADLINE_TIME_ZONE } from "@/config/decisions";
 import type { Actor } from "@/server/access/actor";
+import { AccessDeniedError } from "@/server/access/errors";
 import { instantToWallTime } from "@/lib/time-zone";
 import { ASSIGNMENT_MESSAGES, createTeacherAssignment } from "@/server/assignments/assignments";
 import { ASSIGNMENT_ERRORS } from "@/server/assignments/schemas";
+import { getTeacherAssignment, listTeacherAssignments } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { db } from "@/server/db/client";
 import { assignmentClasses, assignments, securityEvents, users } from "@/server/db/schema";
 
 // ASG-01: create an assignment and choose its classes (R1 to R3, CA1 to CA3).
+// ASG-02: list one's assignments and open one (R1, R2, CA1).
 
 let count = 0;
 async function createUser(role: "student" | "teacher" | "admin"): Promise<Actor & { kind: "user" }> {
@@ -185,5 +188,48 @@ describe("only a teacher creates an assignment", () => {
     const c1 = await newClass(teacher, "C1");
     expect((await createTeacherAssignment({ kind: "visitor" }, form([c1]))).status).toBe("error");
     expect(await allAssignments()).toHaveLength(0);
+  });
+});
+
+describe("ASG-02 CA1: a teacher with three assignments", () => {
+  /** A wall time in the single zone, n days from now. */
+  const inDays = (n: number) => instantToWallTime(new Date(Date.now() + n * 24 * 3600 * 1000), DEADLINE_TIME_ZONE);
+
+  async function create(teacher: Actor, title: string, classIds: string[], days: number, level = "B1", language = "en") {
+    const state = await createTeacherAssignment(teacher, form(classIds, { title, deadline: inDays(days), level, language }));
+    if (state.status !== "done") throw new Error(JSON.stringify(state));
+    return state.assignmentId;
+  }
+
+  it("lists them with their fields, latest deadline first; another teacher sees none of them", async () => {
+    const sarah = await createUser("teacher");
+    const karim = await createUser("teacher");
+    const [b, a] = [await newClass(sarah, "Grade 10 — B"), await newClass(sarah, "Grade 10 — A")];
+    const soon = await create(sarah, "Soon", [a], 2, "A2", "fr");
+    const later = await create(sarah, "Later", [b, a], 20, "C1");
+    const middle = await create(sarah, "Middle", [b], 10);
+    await create(karim, "Karim's", [await newClass(karim, "K1")], 5);
+
+    const list = await listTeacherAssignments(sarah);
+    expect(list.map((x) => x.id)).toEqual([later, middle, soon]);
+    expect(list[0]).toMatchObject({
+      title: "Later", level: "C1", language: "en", classes: ["Grade 10 — A", "Grade 10 — B"], submissions: 0, toReview: 0,
+    });
+    expect(list[2]).toMatchObject({ title: "Soon", level: "A2", language: "fr", classes: ["Grade 10 — A"] });
+    expect(new Date(list[1].deadline).getTime()).toBeGreaterThan(Date.now());
+
+    // Another teacher's assignment is absent, like a missing one (AUTH-04 R3).
+    expect((await listTeacherAssignments(karim)).map((x) => x.title)).toEqual(["Karim's"]);
+    expect(await getTeacherAssignment(karim, later)).toBeNull();
+    expect(await getTeacherAssignment(sarah, crypto.randomUUID())).toBeNull();
+    expect(await getTeacherAssignment(sarah, later)).toMatchObject({
+      id: later, subject: "Describe your town in about 150 words.", instructions: "Use the present simple.", locked: false,
+    });
+  });
+
+  it("an empty list for a teacher without assignments; refused to a student or an administrator", async () => {
+    expect(await listTeacherAssignments(await createUser("teacher"))).toEqual([]);
+    await expect(listTeacherAssignments(await createUser("student"))).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(listTeacherAssignments(await createUser("admin"))).rejects.toBeInstanceOf(AccessDeniedError);
   });
 });

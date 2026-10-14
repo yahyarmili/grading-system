@@ -31,8 +31,12 @@ export function formatDate(value: string | Date): string {
   return dateFormat.format(toDate(value));
 }
 
-/** "Oct 20, 2026, 18:00 (Casablanca time, GMT+0)": the zone is always written. */
-export function formatDateTime(value: string | Date): string {
+/**
+ * "Oct 20, 2026, 18:00 (Casablanca time, GMT+0)": the zone is written. In a
+ * table whose column header names the zone, `{ zone: false }` leaves it out.
+ */
+export function formatDateTime(value: string | Date, { zone = true }: { zone?: boolean } = {}): string {
   const date = toDate(value);
-  return `${dateTimeFormat.format(date)} (${TIME_ZONE_NAME}, ${offsetLabel(date, DEADLINE_TIME_ZONE)})`;
+  const text = dateTimeFormat.format(date);
+  return zone ? `${text} (${TIME_ZONE_NAME}, ${offsetLabel(date, DEADLINE_TIME_ZONE)})` : text;
 }

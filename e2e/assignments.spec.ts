@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createClass, phone } from "./support/classes";
-import { createTeacher, signIn } from "./support/helpers";
+import { createTeacher, expectNotFound, signIn } from "./support/helpers";
 
 // ASG-01: the "New assignment" form, in a real browser. The integration tests
 // cover the rules; this checks the screen: messages per field, the deadline
@@ -21,7 +21,7 @@ test("ASG-01: create an assignment for C1 and C3", async ({ page, browser }) => 
   for (const name of ["C1", "C2", "C3"]) await expect(await createClass(page, name)).toBeHidden();
 
   await page.goto("/teacher/assignments");
-  await page.getByRole("link", { name: "New assignment" }).click();
+  await page.getByRole("link", { name: "New assignment" }).first().click();
   await expect(page.getByRole("heading", { name: "New assignment", level: 1 })).toBeVisible();
   await expect(page.getByText("Do not write a student's name, the level or the class")).toBeVisible();
 
@@ -60,4 +60,65 @@ test("ASG-01: create an assignment for C1 and C3", async ({ page, browser }) => 
   // The capture waits for hydration: taken earlier, it touches the server HTML.
   await narrow.waitForLoadState("networkidle");
   await narrow.screenshot({ path: "test-results/asg01-4-form-phone.png", fullPage: true });
+});
+
+test("ASG-02: the list and the page of an assignment; another teacher gets 404", async ({ page, browser }) => {
+  await signIn(page, await createTeacher("Sarah", "Bennett"));
+  await expect(page).toHaveURL(/\/teacher\//);
+
+  // No assignment yet: the empty state leads to the form.
+  await page.goto("/teacher/assignments");
+  await expect(page.getByText("No assignments yet")).toBeVisible();
+
+  await page.goto("/teacher/classes");
+  for (const name of ["C1", "C2"]) await expect(await createClass(page, name)).toBeHidden();
+  for (const [title, deadline, classes] of [["Soon", "2030-01-10T09:00", ["C1"]], ["Later", "2030-06-14T18:00", ["C1", "C2"]]] as const) {
+    await page.goto("/teacher/assignments/new");
+    await page.getByLabel(/^Title/).fill(title);
+    await page.getByLabel(/^Subject/).fill("Describe your town.");
+    await page.getByLabel(/^Level/).selectOption("B1");
+    await page.getByRole("radio", { name: "French" }).check();
+    await page.getByLabel(/^Deadline/).fill(deadline);
+    for (const name of classes) await page.getByRole("checkbox", { name }).check();
+    await page.getByRole("button", { name: "Create assignment" }).click();
+    await expect(page.getByRole("status").filter({ hasText: `Assignment “${title}” created` })).toBeVisible();
+  }
+
+  // Latest deadline first, with its fields.
+  await page.getByRole("link", { name: "Back to assignments" }).click();
+  const table = page.getByRole("table", { name: "Assignments" });
+  await expect(table.getByRole("row")).toHaveCount(3);
+  await expect(table.getByRole("row").nth(1)).toContainText("Later");
+  await expect(table.getByRole("row").nth(1)).toContainText("C1, C2");
+  await expect(table.getByRole("row").nth(1)).toContainText("Jun 14, 2030, 18:00");
+  await expect(table.getByRole("row").nth(2)).toContainText("Soon");
+  await expect(table.getByRole("columnheader", { name: /Deadline \(Casablanca time\)/ })).toBeVisible();
+  await page.screenshot({ path: "test-results/asg02-1-list-desktop.png", fullPage: true });
+
+  // Opening it shows the real details.
+  await table.getByRole("link", { name: "Later" }).click();
+  await expect(page.getByRole("heading", { name: "Later", level: 1 })).toBeVisible();
+  await expect(page.getByText(/Due Jun 14, 2030, 18:00 \(Casablanca time, GMT\+\d\)/).filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("Describe your town.").filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("No submissions yet").filter({ visible: true })).toBeVisible();
+  await page.screenshot({ path: "test-results/asg02-2-assignment-desktop.png", fullPage: true });
+  const url = new URL(page.url()).pathname;
+
+  // Another teacher, or an assignment that does not exist: a real 404.
+  const karim = await (await browser.newContext()).newPage();
+  await signIn(karim, await createTeacher("Karim", "Haddad"));
+  await expect(karim).toHaveURL(/\/teacher\//);
+  await expectNotFound(karim, url);
+  await expectNotFound(karim, `/teacher/assignments/${crypto.randomUUID()}`);
+  await expectNotFound(karim, "/teacher/assignments/not-an-id");
+  await karim.goto("/teacher/assignments");
+  await expect(karim.getByText("No assignments yet")).toBeVisible();
+});
+
+test("mockups 1.4 and 1.5 stay under /dev/mockups, out of the teacher space", async ({ page }) => {
+  await page.goto("/dev/mockups");
+  await page.getByRole("link").filter({ hasText: /./ }).first().click();
+  await expect(page).toHaveURL(/\/dev\/mockups\/assignments\//);
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: "test-results/asg02-3-mockup-1-4.png", fullPage: true });
 });

@@ -88,8 +88,13 @@ function CreateForm({ classes, onAgain }: { classes: ClassOption[]; onAgain: () 
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={onAgain}>Create another assignment</Button>
-          <Button variant="outline" asChild>
+          <Button asChild>
+            <Link href={`/teacher/assignments/${state.assignmentId}`}>Open the assignment</Link>
+          </Button>
+          <Button variant="outline" onClick={onAgain}>
+            Create another assignment
+          </Button>
+          <Button variant="ghost" asChild>
             <Link href="/teacher/assignments">Back to assignments</Link>
           </Button>
         </div>

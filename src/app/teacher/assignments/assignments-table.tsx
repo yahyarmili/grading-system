@@ -2,62 +2,57 @@
 
 import Link from "next/link";
 import { DataTable, type Column } from "@/components/data-table";
+import { languageLabels } from "@/lib/assignment";
+import { formatDateTime, TIME_ZONE_NAME } from "@/lib/dates";
+import type { TeacherAssignmentItem } from "@/server/data/assignments/assignments";
 
-export type AssignmentRow = {
-  id: string;
-  title: string;
-  classes: string[];
-  language: string;
-  due: string; // ISO date
-  students: number;
-  submitted: number;
-  toReview: number;
-};
+// ASG-02 R1: one row per assignment of the teacher.
 
-const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
-
-const columns: Column<AssignmentRow>[] = [
+const columns: Column<TeacherAssignmentItem>[] = [
   {
     key: "title",
     header: "Assignment",
     cell: (a) => (
-      <div className="flex flex-col">
-        <Link
-          href={`/teacher/assignments/${a.id}`}
-          className="link-cell"
-        >
-          {a.title}
-        </Link>
-        <span className="text-xs text-fg-muted">{a.language}</span>
-      </div>
+      <Link href={`/teacher/assignments/${a.id}`} className="link-cell">
+        {a.title}
+      </Link>
     ),
     sortValue: (a) => a.title,
   },
   {
+    key: "language",
+    header: "Language",
+    cell: (a) => languageLabels[a.language],
+    sortValue: (a) => languageLabels[a.language],
+  },
+  {
+    key: "level",
+    header: "Level",
+    cell: (a) => a.level,
+    sortValue: (a) => a.level,
+  },
+  {
     key: "classes",
     header: "Classes",
-    cell: (a) => <span className="whitespace-nowrap">{a.classes.join(", ")}</span>,
+    cell: (a) => a.classes.join(", "),
   },
   {
-    key: "due",
-    header: "Due",
+    key: "deadline",
+    // The zone is named once, in the header.
+    header: `Deadline (${TIME_ZONE_NAME})`,
     cell: (a) => (
-      <time dateTime={a.due} className="whitespace-nowrap">
-        {dateFormat.format(new Date(a.due))}
+      <time dateTime={a.deadline} className="whitespace-nowrap">
+        {formatDateTime(a.deadline, { zone: false })}
       </time>
     ),
-    sortValue: (a) => a.due,
+    sortValue: (a) => a.deadline,
   },
   {
-    key: "submitted",
-    header: "Submitted",
+    key: "submissions",
+    header: "Submissions",
     className: "text-right",
-    cell: (a) => (
-      <span className="whitespace-nowrap tabular-nums">
-        {a.submitted} <span className="text-fg-muted">of {a.students}</span>
-      </span>
-    ),
-    sortValue: (a) => a.submitted,
+    cell: (a) => <span className="tabular-nums">{a.submissions}</span>,
+    sortValue: (a) => a.submissions,
   },
   {
     key: "toReview",
@@ -73,7 +68,7 @@ const columns: Column<AssignmentRow>[] = [
   },
 ];
 
-export function AssignmentsTable({ rows }: { rows: AssignmentRow[] }) {
+export function AssignmentsTable({ rows }: { rows: TeacherAssignmentItem[] }) {
   return (
     <DataTable
       label="Assignments"
@@ -81,7 +76,8 @@ export function AssignmentsTable({ rows }: { rows: AssignmentRow[] }) {
       columns={columns}
       rows={rows}
       getRowKey={(a) => a.id}
-      initialSort={{ key: "due", direction: "descending" }}
+      // R2: latest deadline first.
+      initialSort={{ key: "deadline", direction: "descending" }}
     />
   );
 }

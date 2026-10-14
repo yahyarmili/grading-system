@@ -19,7 +19,7 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 ## État (2026-10-14)
 
 - **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 livrée** (E2.0 à E2.5, T1 fait ; T5 pour Q7 fait).
-- **E3 en cours** : E3.0 (plan) et E3.1 (ASG-01 : création d'un devoir, `/teacher/assignments/new`) faits. Plan approuvé d'E3 : `~/.claude/plans/pasted-content-id-faad-inspecte-l-appli-typed-meerkat.md` (verrou `locked_at` et `content_version`, propriété dérivée côté élève, lignes `assignmentRecipients` et `ownSubmissionStatus`, fuseau).
+- **E3 en cours** : E3.0 (plan), E3.1 (ASG-01 : création, `/teacher/assignments/new`) et E3.2 (ASG-02 : liste réelle, page d’un devoir avec 404 réel ; maquettes 1.4 et 1.5 sous `/dev/mockups`, en développement seulement) faits. Plan approuvé d'E3 : `~/.claude/plans/pasted-content-id-faad-inspecte-l-appli-typed-meerkat.md` (verrou `locked_at` et `content_version`, propriété dérivée côté élève, lignes `assignmentRecipients` et `ownSubmissionStatus`, fuseau).
 - **Réception dérivée [D, 2026-10-14]** : un élève voit les devoirs des classes où son appartenance est active, quelle que soit la date d'envoi (réadmis ou arrivé tard, il voit aussi les devoirs déjà envoyés). Pas de table de destinataires par élève.
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
