@@ -56,7 +56,7 @@ Node ne tourne que dans Docker.
 
 ## Déploiement (Vercel)
 
-- La branche **`preview`** produit la preview ; `main` n'est pas déployée (`vercel.json`). À la fin de chaque étape : commit sur `main`, avance rapide de `preview` jusqu'à `main`, puis poussée de `preview`. Les migrations sont appliquées avant sur la base dev, que la preview utilise.
+- La branche **`preview`** produit la preview ; `main` n'est pas déployée (`vercel.json`). Le travail se commite directement sur `preview` ; pousser `preview` met la preview à jour. Les migrations sont appliquées avant sur la base dev, que la preview utilise.
 - Variables, saisies dans Vercel pour l'environnement **Preview** seulement : `DATABASE_URL` (chaîne poolée de la branche Neon dev), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (le domaine de branche ci-dessus), `SMTP_USER`, `SMTP_PASSWORD`.
 - Fonctions en `cle1` (Cleveland), à côté de Neon `us-east-2` (Ohio). Neon suspend sa base après 5 min d'inactivité : la première requête qui suit prend quelques secondes.
 

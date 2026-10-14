@@ -14,7 +14,7 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 - `conception/fonctionnalites.md` : décisions D1 à D10 (§1, ne pas les remettre en cause sans demande), fonctionnalités `AUTH-01`, `REV-03`…, matrice d'accès §5.4, états de la remise §5.5, plan E1 à E11 §8, questions Q1 à Q10 §9.
 - `conception/besoins-non-fonctionnels.md` (`NFR-…`, statut en démonstration §2.8), `acteurs.md`, `stack-technologique.md`.
 - **Suivi** : `conception/prompts-implementation.md`. L'utilisateur lance les prompts un par un et valide chacun avant le suivant ; une étape E commence par un `/plan`. Ne prends pas d'avance sur le prompt suivant.
-- **Fin de chaque prompt** [D, 2026-10-14] : une fois les tests passés, commiter sur `main`, avancer `preview` jusqu'à `main` puis pousser `preview` (déploiement Vercel). `main` n'est pas poussée sans demande.
+- **Branche de travail** [D, 2026-10-14] : on travaille et on commite directement sur `preview` (checkout fait). Fin de chaque prompt : commit sur `preview`, **sans pousser** ; pousser seulement à la demande de l'utilisateur. `main` n'avance pas en attendant.
 
 ## État (2026-10-14)
 
@@ -88,7 +88,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 ## Déploiement (Vercel Hobby)
 
 - La branche `preview` produit la preview. `main` n'est pas déployée (`vercel.json`) : la Production n'a aucune variable et son build échoue, c'est voulu.
-- Mise à jour de la preview : intégrer `main` dans `preview` (avance rapide), puis pousser `preview`, à la fin de chaque prompt (voir « Fin de chaque prompt »). Les migrations sont appliquées sur dev avant : la preview utilise cette base.
+- Mise à jour de la preview : pousser `preview`, à la demande de l'utilisateur (voir « Branche de travail »). Les migrations sont appliquées sur dev avant : la preview utilise cette base.
 - Variables dans Vercel, environnement **Preview** seulement : `DATABASE_URL` (chaîne poolée de la branche Neon dev), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (le domaine de branche), `SMTP_USER`, `SMTP_PASSWORD`. Toute nouvelle variable y est ajoutée par l'utilisateur.
 - Fonctions en `cle1`, à côté de Neon. Preview publique [D], sur la base dev. Neon suspend sa base après 5 min : la première requête qui suit prend 4 à 5 s de plus (mesuré depuis le poste).
 
