@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { check, index, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 
 // Classes and memberships (E2, CLS-01 to CLS-04).
@@ -38,6 +38,8 @@ export const classes = pgTable(
     check("classes_name_trimmed", sql`${t.name} = btrim(${t.name}) and ${t.name} <> ''`),
     // CLS-01 R2: unique per teacher, whatever the case; two teachers may share a name.
     uniqueIndex("classes_teacher_name_idx").on(t.teacherId, sql`lower(${t.name})`),
+    // Target of the composite key of assignment_classes: an assignment goes only to its teacher's classes.
+    unique("classes_id_teacher_unique").on(t.id, t.teacherId),
   ],
 );
 

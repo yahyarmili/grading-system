@@ -7,6 +7,7 @@ import { AccessDeniedError } from "@/server/access/errors";
 import { ACCESS_MATRIX, ACTIONS, COLUMNS, RESOURCES, type Action, type Column, type Resource } from "@/server/access/matrix";
 import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
+import { createAssignment } from "@/server/data/assignments/assignments";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
 import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
@@ -176,7 +177,20 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     read: { run: (actor, { classId }) => listClassStudents(actor, classId) },
     write: { run: (actor, { classId }) => removeStudent(actor, classId, people.concernedStudent.userId) },
   },
+  // Sending an assignment to the owner's class: the other teacher's request
+  // is refused like a missing class, nothing created (ASG-01 R3).
+  assignment: { setup: ownedClass, write: { run: sendAssignment } },
+  assignmentRecipients: { setup: ownedClass, write: { run: sendAssignment } },
 };
+
+/** Creates an assignment for the fixture's class; null when refused (as absent). */
+async function sendAssignment(actor: Actor, { classId }: Fixture) {
+  const result = await createAssignment(actor, {
+    title: "My town", subject: "Describe your town.", level: "B1", language: "en",
+    deadline: new Date(Date.now() + 7 * 24 * 3600 * 1000), instructions: null, classIds: [classId],
+  });
+  return result.ok ? result : null;
+}
 
 /** A class of the owner teacher, with the concerned student as an active member. */
 async function ownedClass(): Promise<Fixture> {

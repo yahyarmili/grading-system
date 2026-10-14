@@ -77,3 +77,15 @@ export const CLASS_JOIN_LOCKOUT = 15 * MINUTE;
  * or email confirmation (CLS-03 R3).
  */
 export const CLASS_INVITE_INTENT_TTL = 7 * DAY;
+
+// ---------------------------------------------------------------------------
+// Assignments (E3). PROVISIONAL.
+
+/** [PROVISIONAL, [P] arbitrary] Maximum length of an assignment title (ASG-01). */
+export const ASSIGNMENT_TITLE_MAX_LENGTH = 120;
+
+/** [PROVISIONAL, [P] arbitrary] Maximum length of the subject, sent to the AI (ASG-01 R4). */
+export const ASSIGNMENT_SUBJECT_MAX_LENGTH = 2000;
+
+/** [PROVISIONAL, [P] arbitrary] Maximum length of the instructions, sent to the AI (ASG-01 R4). */
+export const ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH = 4000;

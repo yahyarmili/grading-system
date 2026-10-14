@@ -43,6 +43,13 @@
       "when": 1791983135377,
       "tag": "0005_add_class_member_events",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792004004245,
+      "tag": "0006_create_assignments",
+      "breakpoints": true
     }
   ]
 }

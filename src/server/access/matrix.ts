@@ -70,8 +70,24 @@ export const ACCESS_MATRIX = {
   },
   assignment: {
     label: "Assignment",
-    // Student: assignments of their classes, or with a submission. Teacher: writes per locking (ASG-03).
+    // Student: assignments sent to a class where their membership is active
+    // (received by derivation [D]), or, from E4, with a submission of theirs.
+    // Teacher: writes per locking (ASG-03), guarded in the write statement.
     concernedStudent: L, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
+  },
+  assignmentRecipients: {
+    // [P] Detail of "Assignment": the classes it is sent to (Envoi, ASG-01 R3).
+    // Chosen at creation only. The student never sees them: an assignment
+    // sent to two of their classes is one assignment.
+    label: "Assignment recipient classes",
+    concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
+  },
+  ownSubmissionStatus: {
+    // [P] What the student reads of their own submission: its status in the
+    // closed list of SUB-01 R3 (toStudentStatus), never the submission itself
+    // (no read on "submission"). The teacher reads the internal status through "submission".
+    label: "Status of the own submission, closed list (SUB-01 R3)",
+    concernedStudent: L, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
   },
   submission: {
     label: "Submission and images",

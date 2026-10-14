@@ -10,3 +10,11 @@ const HOUR = 60 * 60;
  * renewing stay available to the teacher.
  */
 export const CLASS_INVITE_TTL = 1 * HOUR;
+
+/**
+ * [D, 2026-10-14, NFR-USA-02] The single time zone in which a deadline is
+ * entered and shown, with its name, the same for students and teachers. The
+ * other dates of the screens use it too. An IANA name, never a fixed offset:
+ * Morocco's offset changes (Ramadan, and the tz database's later rules).
+ */
+export const DEADLINE_TIME_ZONE = "Africa/Casablanca";

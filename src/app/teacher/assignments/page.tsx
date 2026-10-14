@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import { ClipboardCheck, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { ClipboardCheck, ClipboardList, Plus } from "lucide-react";
 import { PageHeader, PlaceholderNote } from "@/components/shell/shell-parts";
+import { Button } from "@/components/ui/button";
 import { mockAssignments, submissionsFor } from "@/mock/assignment-submissions";
 import { AssignmentsTable, type AssignmentRow } from "./assignments-table";
 
@@ -30,9 +32,19 @@ export default function Page() {
           { icon: ClipboardList, label: `${rows.length} assignments` },
           { icon: ClipboardCheck, label: `${toReview} submissions to review` },
         ]}
+        actions={
+          <Button asChild>
+            <Link href="/teacher/assignments/new">
+              <Plus aria-hidden="true" />
+              New assignment
+            </Link>
+          </Button>
+        }
       />
       <AssignmentsTable rows={rows} />
-      <PlaceholderNote>Fictitious data. Creating and editing assignments arrives in E3.</PlaceholderNote>
+      <PlaceholderNote>
+        Fictitious data in this list. “New assignment” creates real assignments; they appear here in the next step.
+      </PlaceholderNote>
     </>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { UserMinus, UserPlus, UserRoundX, Users } from "lucide-react";
 import { Alert } from "@/components/alert";
+import { formatDate } from "@/lib/dates";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
@@ -15,9 +16,8 @@ import { readmitStudentAction, removeStudentAction } from "../actions";
 // CLS-04: the class's students, removal and readmission. Only the owner
 // teacher reaches this screen (row "classRoster" of the matrix).
 
-// Time zone not decided yet (NFR-USA-02): dates are shown in UTC.
-const day = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-const on = (iso: string) => day.format(new Date(iso));
+// Dates in the single time zone (NFR-USA-02).
+const on = (iso: string) => formatDate(iso);
 
 const fullName = (s: RosterStudent) => `${s.firstName} ${s.lastName}`;
 

@@ -20,6 +20,8 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   classes: ["class", "classInvite"],
   class_memberships: ["class", "classMembership", "classRoster"],
   class_join_intents: { internal: "digests of class links opened before confirmation (CLS-03 R3), used once confirmed" },
+  assignments: ["assignment"],
+  assignment_classes: ["assignmentRecipients"],
 };
 
 /**
@@ -49,6 +51,7 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/classes/actions.ts#disableInviteAction": { resource: "classInvite", action: "write" },
   "src/app/teacher/classes/actions.ts#removeStudentAction": { resource: "classRoster", action: "write" },
   "src/app/teacher/classes/actions.ts#readmitStudentAction": { resource: "classRoster", action: "write" },
+  "src/app/teacher/assignments/actions.ts#createAssignmentAction": { resource: "assignment", action: "write" },
 };
 
 /**

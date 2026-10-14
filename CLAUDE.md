@@ -18,16 +18,19 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 ## État (2026-10-14)
 
-- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02), E2.3 (CLS-03), E2.4 (CLS-04) et le parcours E2E d'E2.5 (`e2e/e2-journey.spec.ts` : parcours de l'étape et scénario de sortie) faits, ainsi que T1 d'E2, commités sur `preview`. T5 pour Q7 fait et code aligné (lien et code valables 1 heure). Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
+- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 livrée** (E2.0 à E2.5, T1 fait ; T5 pour Q7 fait).
+- **E3 en cours** : E3.0 (plan) et E3.1 (ASG-01 : création d'un devoir, `/teacher/assignments/new`) faits. Plan approuvé d'E3 : `~/.claude/plans/pasted-content-id-faad-inspecte-l-appli-typed-meerkat.md` (verrou `locked_at` et `content_version`, propriété dérivée côté élève, lignes `assignmentRecipients` et `ownSubmissionStatus`, fuseau).
+- **Réception dérivée [D, 2026-10-14]** : un élève voit les devoirs des classes où son appartenance est active, quelle que soit la date d'envoi (réadmis ou arrivé tard, il voit aussi les devoirs déjà envoyés). Pas de table de destinataires par élève.
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
   - Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D] ;
   - les lignes de matrice [P] : `teacherInvitation`, `classInvite`, `classMembership`, `classRoster` ; événements de sécurité `class_member_removed` et `class_member_readmitted` [P] ;
   - `CLASS_INVITE_INTENT_TTL` (7 jours, [P] arbitraire) : durée du cookie et de l'intention liée au compte ; depuis Q7, le lien expire avant (1 heure) ;
   - format du code de classe [P] : 8 symboles Crockford Base32, affiché `XXXX-XXXX` ; pas de réactivation après désactivation (on renouvelle) ;
+  - E3 : la réception dérivée [D] ; les lignes [P] `assignmentRecipients` et `ownSubmissionStatus` ; `content_version` et l'arbitrage modification / première remise [P] ; les longueurs maximales d'un devoir (`provisional.ts`) ; heure ambiguë = première occurrence, heure sautée refusée, date limite dans le futur [P] ; le texte d'avertissement R4 (`src/lib/texts.ts`) ;
   - la preview publique [D] ;
   - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
-- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0005`.
+- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0006`.
 
 ## Environnement
 
@@ -114,7 +117,9 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 
 Contenu de l'application en anglais (interface, emails, messages) ; code et identifiants en anglais ; échanges, prompts et documents de conception en français.
 
-**Fuseau [D, 2026-10-14]** : `Africa/Casablanca`, pour saisir et afficher la date limite, avec son nom affiché, identique pour l'élève et le professeur (NFR-USA-02). Valeur dans `src/config/decisions.ts`, ajoutée en E3. Les écrans formatés aujourd'hui en UTC passent à ce fuseau au fil d'E3.
+**Fuseau [D, 2026-10-14]** : `Africa/Casablanca`, pour saisir et afficher la date limite, avec son nom affiché, identique pour l'élève et le professeur (NFR-USA-02). Valeur : `DEADLINE_TIME_ZONE` dans `src/config/decisions.ts`. Conversion heure murale ↔ instant : `src/lib/time-zone.ts` (sans dépendance) ; affichage : `formatDate` et `formatDateTime` de `src/lib/dates.ts`, jamais un `Intl.DateTimeFormat` en UTC dans un écran. Le décalage suit la tzdata de Node : avec 2026c, le Maroc est en GMT+0 depuis le 2026-09-20 (les tests du fuseau en dépendent).
+
+**Migrations générées** : relire l'ordre des instructions. drizzle-kit place une contrainte unique ajoutée à une table existante après les clés étrangères qui la visent (cas de `0006`, corrigé à la main avant commit).
 
 ## Travail sur la conception
 

@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { CalendarDays, School, Users } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { LoadingState } from "@/components/loading";
+import { formatDate } from "@/lib/dates";
 import { MetaList, PageHeader } from "@/components/shell/shell-parts";
 import { getActor } from "@/server/auth/session";
 import { listClasses } from "@/server/data/classes/classes";
@@ -12,9 +13,6 @@ import { NewClassDialog } from "./new-class-dialog";
 export const metadata: Metadata = { title: "Classes" };
 
 // CLS-01: the teacher's own classes only; the data layer filters on the owner.
-
-// Time zone not decided yet (NFR-USA-02): dates are shown in UTC.
-const day = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 const students = (n: number) => (n === 1 ? "1 student" : `${n} students`);
 
@@ -61,7 +59,7 @@ async function ClassList() {
             <MetaList
               items={[
                 { icon: Users, label: students(c.activeStudents) },
-                { icon: CalendarDays, label: `Created ${day.format(new Date(c.createdAt))}` },
+                { icon: CalendarDays, label: `Created ${formatDate(c.createdAt)}` },
               ]}
             />
           </li>

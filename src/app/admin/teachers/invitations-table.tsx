@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Ban, CircleCheck, Clock, MailPlus, TimerOff, UserPlus, type LucideIcon } from "lucide-react";
 import { Alert } from "@/components/alert";
+import { formatDateTime } from "@/lib/dates";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
@@ -19,15 +20,8 @@ const states: Record<InvitationState, { label: string; tone: Tone; icon: LucideI
   cancelled: { label: "Cancelled", tone: "neutral", icon: Ban },
 };
 
-// Time zone not decided yet (NFR-USA-02): dates are shown in UTC, and say so.
-const dateTime = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "UTC",
-});
-const at = (iso: string) => `${dateTime.format(new Date(iso))} UTC`;
+// In the single time zone, named (NFR-USA-02).
+const at = (iso: string) => formatDateTime(iso);
 
 function Details({ row }: { row: InvitationRow }) {
   if (row.state === "accepted" && row.acceptedAt) return <>Accepted {at(row.acceptedAt)}</>;
