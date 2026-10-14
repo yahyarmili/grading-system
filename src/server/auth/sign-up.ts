@@ -37,6 +37,8 @@ type Context = {
   ip: string;
   /** Runs the email after the response (after() in a Server Action): same timing for every outcome. */
   schedule: (task: () => Promise<void>) => void;
+  /** A class link opened before signing up (cookie), joined at confirmation (CLS-03 R3). */
+  inviteToken?: string;
 };
 
 function sendLater(schedule: Context["schedule"], message: EmailMessage) {
@@ -75,7 +77,7 @@ export async function signUpStudent(raw: unknown, ctx: Context): Promise<SignUpS
 
   let registration;
   try {
-    registration = await registerStudent(ctx.actor, parsed.data);
+    registration = await registerStudent(ctx.actor, parsed.data, { inviteToken: ctx.inviteToken });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
       return { status: "error", message: SIGN_UP_MESSAGES.notAvailable };

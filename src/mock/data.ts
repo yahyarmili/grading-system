@@ -17,9 +17,3 @@ export const mockStudentAssignments: {
   { id: "a1", title: "My last holiday", className: "Grade 10 — A, Grade 10 — B", due: "2026-10-20", status: "being_marked", late: false },
   { id: "a4", title: "Mon quartier", className: "French — Group 2", due: "2026-10-06", status: "marked", late: true },
 ];
-
-export const mockStudentClasses = [
-  { id: "c1", name: "Grade 10 — A", teacher: "Sarah Bennett" },
-  { id: "c2", name: "Grade 10 — B", teacher: "Sarah Bennett" },
-  { id: "c4", name: "French — Group 2", teacher: "Karim Alaoui" },
-];

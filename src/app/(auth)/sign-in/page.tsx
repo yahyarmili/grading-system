@@ -6,6 +6,7 @@ import { Alert } from "@/components/alert";
 import { Card } from "@/components/card";
 import { roleHome } from "@/lib/roles";
 import { getCurrentUser } from "@/server/auth/session";
+import { InviteNotice } from "../invite-notice";
 import { SignInForm } from "./sign-in-form";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -19,6 +20,9 @@ export default function Page({ searchParams }: PageProps<"/sign-in">) {
       <h1 className="sr-only">Sign in</h1>
       <Suspense fallback={null}>
         <ResetNotice searchParams={searchParams} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <InviteNotice action="sign-in" />
       </Suspense>
       <Card title="Sign in" description="Students, teachers and administrators.">
         <SignInForm />

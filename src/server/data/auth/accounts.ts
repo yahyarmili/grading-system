@@ -7,6 +7,7 @@ import { AccessDeniedError } from "@/server/access/errors";
 import type { SignUpInput } from "@/server/auth/schemas";
 import { db } from "@/server/db/client";
 import { accounts, sessions, users } from "@/server/db/schema";
+import { joinFromIntents, recordJoinIntent } from "../classes/join-intents";
 import { recordSecurityEvent } from "./security-events";
 import { consumeToken, issueToken } from "./tokens";
 
@@ -23,7 +24,15 @@ export type StudentRegistration =
  * AUTH-01: public sign-up produces a student, and nothing else (invariant 1).
  * Visitors only. The role is written here, never read from the input.
  */
-export async function registerStudent(actor: Actor, input: SignUpInput): Promise<StudentRegistration> {
+/**
+ * A class link opened before signing up (`inviteToken`) is bound to the new or
+ * still unconfirmed account, and used at confirmation (CLS-03 R3).
+ */
+export async function registerStudent(
+  actor: Actor,
+  input: SignUpInput,
+  options: { inviteToken?: string } = {},
+): Promise<StudentRegistration> {
   if (actor.kind !== "visitor") throw new AccessDeniedError();
 
   // Hashed in every case, so an existing email does not answer faster.
@@ -40,6 +49,7 @@ export async function registerStudent(actor: Actor, input: SignUpInput): Promise
     }
     if (existing) {
       // The stored account is unchanged; a new link replaces the old one.
+      if (options.inviteToken) await recordJoinIntent(tx, existing.id, options.inviteToken);
       const verificationToken = await issueToken(
         tx, "email_verification", { userId: existing.id }, EMAIL_VERIFICATION_TTL,
       );
@@ -68,6 +78,7 @@ export async function registerStudent(actor: Actor, input: SignUpInput): Promise
       accountId: user.id,
       password: passwordHash,
     });
+    if (options.inviteToken) await recordJoinIntent(tx, user.id, options.inviteToken);
     const verificationToken = await issueToken(
       tx, "email_verification", { userId: user.id }, EMAIL_VERIFICATION_TTL,
     );
@@ -87,6 +98,8 @@ export async function confirmEmail(token: string): Promise<boolean> {
       .update(users)
       .set({ emailVerified: true })
       .where(and(eq(users.id, used.userId), eq(users.emailVerified, false)));
+    // A class link opened before signing up: joined now that the account is confirmed.
+    await joinFromIntents(tx, used.userId);
     await recordSecurityEvent("email_verified", { actorUserId: used.userId, subjectId: used.userId }, tx);
     return true;
   });
@@ -149,6 +162,8 @@ export async function resetPassword(token: string, newPassword: string): Promise
       await tx.insert(accounts).values({ userId, providerId: "credential", accountId: userId, password: passwordHash });
     }
     await tx.update(users).set({ emailVerified: true }).where(eq(users.id, userId));
+    // The address is confirmed here too: a class link opened before signing up is joined.
+    await joinFromIntents(tx, userId);
     await tx.delete(sessions).where(eq(sessions.userId, userId));
     await recordSecurityEvent("password_reset", { actorUserId: userId, subjectId: userId }, tx);
     return true;

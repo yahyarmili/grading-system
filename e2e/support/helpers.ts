@@ -101,16 +101,21 @@ export async function expectNotFound(page: Page, pathname: string) {
  * A confirmed teacher, written straight to the test database: the invitation
  * journey has its own test (teacher.spec.ts). Returns the email.
  */
-export async function createTeacher(firstName: string, lastName: string): Promise<string> {
-  const email = uniqueEmail("teacher");
+export const createTeacher = (firstName: string, lastName: string) => createAccount("teacher", firstName, lastName);
+
+/** A confirmed student, written straight to the test database (sign-up has its own test). */
+export const createStudent = (firstName: string, lastName: string) => createAccount("student", firstName, lastName);
+
+async function createAccount(role: "teacher" | "student", firstName: string, lastName: string): Promise<string> {
+  const email = uniqueEmail(role);
   const { hashPassword } = await import("better-auth/crypto");
   const client = new Client({ connectionString: testDatabaseUrl() });
   await client.connect();
   try {
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO users (email, email_verified, name, first_name, last_name, role)
-       VALUES ($1, true, $2, $3, $4, 'teacher') RETURNING id`,
-      [email, `${firstName} ${lastName}`, firstName, lastName],
+       VALUES ($1, true, $2, $3, $4, $5) RETURNING id`,
+      [email, `${firstName} ${lastName}`, firstName, lastName, role],
     );
     await client.query(
       `INSERT INTO accounts (user_id, provider_id, account_id, password) VALUES ($1, 'credential', $2, $3)`,

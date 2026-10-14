@@ -13,6 +13,9 @@ import {
   type ResetPasswordState,
 } from "@/server/auth/recovery";
 import { getActor, getClientIp } from "@/server/auth/session";
+import { forgetInvite, rememberedInvite, rememberInvite } from "@/server/classes/invite-cookie";
+import { joinWithLink } from "@/server/classes/join";
+import { AccessDeniedError } from "@/server/access/errors";
 import { signInUser, signOutUser, type SignInState } from "@/server/auth/sign-in";
 import {
   confirmEmailWithToken,
@@ -29,7 +32,13 @@ export async function signUpAction(_previous: SignUpState, form: FormData): Prom
       email: form.get("email"),
       password: form.get("password"),
     },
-    { actor: await getActor(), ip: await getClientIp(), schedule: after },
+    {
+      actor: await getActor(),
+      ip: await getClientIp(),
+      schedule: after,
+      // A class link opened before signing up: joined once the email is confirmed (CLS-03 R3).
+      inviteToken: await rememberedInvite(),
+    },
   );
   // No email in the URL: the next screen does not say which address was used.
   if (state.status === "done") redirect("/check-email");
@@ -50,9 +59,19 @@ export async function signInAction(_previous: SignInState, form: FormData): Prom
     { email: form.get("email"), password: form.get("password") },
     { headers: await headers() },
   );
+  if (state.status !== "done") return state;
+
+  // A class link opened before signing in (CLS-03 R3): a student joins now.
+  const invite = await rememberedInvite();
+  if (invite) {
+    await forgetInvite();
+    if (state.role === "student") {
+      const notice = await joinWithLink({ kind: "user", userId: state.userId, role: "student" }, invite);
+      redirect(`/student/classes?join=${notice}`);
+    }
+  }
   // AUTH-02 CA1: straight to the space of the account's role.
-  if (state.status === "done") redirect(roleHome[state.role]);
-  return state;
+  redirect(roleHome[state.role]);
 }
 
 /** The caller then loads /sign-in in full (SignOutButton): no page of the session stays in memory. */
@@ -99,4 +118,29 @@ export async function acceptInvitationAction(
   // AUTH-03 CA1: the new teacher is signed in and lands in the teacher space.
   if (state.status === "done") redirect(roleHome.teacher);
   return state;
+}
+
+/**
+ * A visitor opened a class link (/join): the link is remembered, then the
+ * visitor signs in or signs up (CLS-03 R3). Nothing is joined yet.
+ */
+export async function rememberInviteAction(form: FormData): Promise<void> {
+  const token = form.get("token");
+  if (typeof token === "string") await rememberInvite(token);
+  redirect(form.get("next") === "sign-up" ? "/sign-up" : "/sign-in");
+}
+
+/** A signed-in student joins the class of a link (CLS-03 CA1), by a POST: opening the link joins nothing. */
+export async function joinByLinkAction(form: FormData): Promise<void> {
+  const actor = await getActor();
+  await forgetInvite();
+  let notice;
+  try {
+    notice = await joinWithLink(actor, form.get("token"));
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+    // Only students join; the page says so to anyone else.
+    redirect(actor.kind === "user" ? roleHome[actor.role] : "/sign-in");
+  }
+  redirect(`/student/classes?join=${notice}`);
 }

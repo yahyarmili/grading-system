@@ -74,3 +74,10 @@ export const CLASS_JOIN_MAX_FAILURES = 5;
 
 /** [PROVISIONAL, [P] arbitrary, as for sign-in] D: lockout after N failures, even with a valid code. */
 export const CLASS_JOIN_LOCKOUT = 15 * MINUTE;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] How long a class link opened without a session
+ * is remembered (cookie, and the intent bound to a new account) until sign-in
+ * or email confirmation (CLS-03 R3).
+ */
+export const CLASS_INVITE_INTENT_TTL = 7 * DAY;

@@ -67,3 +67,21 @@ export const classMemberships = pgTable(
     check("class_memberships_removed_at", sql`(${t.status} = 'removed') = (${t.removedAt} is not null)`),
   ],
 );
+
+/**
+ * A class link opened before the account was confirmed (CLS-03 R3): bound to
+ * the account at sign-up, used once the email is confirmed, even in another
+ * browser than the one that opened the link. Holds a digest, never the link.
+ */
+export const classJoinIntents = pgTable(
+  "class_join_intents",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    linkDigest: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("class_join_intents_user_link_idx").on(t.userId, t.linkDigest)],
+);

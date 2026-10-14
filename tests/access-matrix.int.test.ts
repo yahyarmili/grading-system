@@ -10,6 +10,7 @@ import { ownedBy } from "@/server/data/access";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
 import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
+import { joinClass } from "@/server/data/classes/memberships";
 import { db } from "@/server/db/client";
 import { classes, classMemberships, users } from "@/server/db/schema";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
@@ -164,6 +165,10 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     setup: ownedClass,
     read: { run: (actor, { classId }) => getClassInvite(actor, classId) },
     write: { run: (actor, { classId }) => renewClassInvite(actor, classId) },
+  },
+  classMembership: {
+    // Joining makes the actor's own membership; an unknown code is refused, nothing joined.
+    write: { run: (actor) => joinClass(actor, { code: "ZZZZ-9999" }), creates: true },
   },
 };
 

@@ -62,13 +62,13 @@ async function visit(path: string, cookie?: string) {
 describe("CA1: a confirmed account reaches the space of its role", () => {
   it.each<Role>(["student", "teacher", "admin"])("signs in a %s", async (role) => {
     const userId = await createUser(`${role}@example.test`, role);
-    expect(await signIn(`${role}@example.test`, PASSWORD)).toEqual({ status: "done", role });
+    expect(await signIn(`${role}@example.test`, PASSWORD)).toMatchObject({ status: "done", role });
     expect(await db.select().from(sessions).where(eq(sessions.userId, userId))).toHaveLength(1);
   });
 
   it("accepts the email with another case or spaces", async () => {
     await createUser("sam@example.test", "student");
-    expect(await signIn("  SAM@Example.test ", PASSWORD)).toEqual({ status: "done", role: "student" });
+    expect(await signIn("  SAM@Example.test ", PASSWORD)).toMatchObject({ status: "done", role: "student" });
   });
 
   it("records the sign-in in the security log, without the email", async () => {
@@ -125,7 +125,7 @@ describe(`CA3: after ${SIGN_IN_MAX_FAILURES} failures, sign-in is paused (provis
     await failNTimes("sam@example.test");
     await db.update(authThrottles).set({ lockedUntil: sql`now() - interval '1 second'` });
 
-    expect(await signIn("sam@example.test", PASSWORD)).toEqual({ status: "done", role: "student" });
+    expect(await signIn("sam@example.test", PASSWORD)).toMatchObject({ status: "done", role: "student" });
     expect(await db.select().from(authThrottles)).toHaveLength(0);
   });
 
@@ -133,7 +133,7 @@ describe(`CA3: after ${SIGN_IN_MAX_FAILURES} failures, sign-in is paused (provis
     await createUser("sam@example.test", "student");
     await createUser("kim@example.test", "student");
     await failNTimes("sam@example.test");
-    expect(await signIn("kim@example.test", PASSWORD)).toEqual({ status: "done", role: "student" });
+    expect(await signIn("kim@example.test", PASSWORD)).toMatchObject({ status: "done", role: "student" });
   });
 });
 

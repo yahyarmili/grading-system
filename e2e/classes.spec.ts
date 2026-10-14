@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createTeacher, signIn } from "./support/helpers";
+import { type Browser } from "@playwright/test";
+import { createStudent, createTeacher, PASSWORD, signIn, sql, uniqueEmail, waitForLink } from "./support/helpers";
 
 // CLS-01: a teacher creates and lists their classes (CA1 to CA3).
 
@@ -112,4 +113,120 @@ test("a teacher shares, renews and disables the class link and code", async ({ b
   await expect(other).toHaveURL(/\/teacher\//);
   const response = await other.goto(page.url());
   expect(response?.status()).toBe(404);
+});
+
+/** A teacher with one class, in their own browser; returns the class link and code. */
+async function teacherWithClass(browser: Browser, name: string) {
+  const page = await (await browser.newContext()).newPage();
+  await signIn(page, await createTeacher("Sarah", "Bennett"));
+  await expect(page).toHaveURL(/\/teacher\//);
+  await page.goto("/teacher/classes");
+  await expect(await createClass(page, name)).toBeHidden();
+  await classCard(page, name).getByRole("link", { name }).click();
+  const invite = page.locator("section").filter({ has: page.getByRole("heading", { name: "Invite students" }) });
+  const link = await invite.getByLabel("Link").inputValue();
+  const code = (await invite.getByLabel("Code").textContent())!;
+  return { page, link, code };
+}
+
+const phone = { viewport: { width: 375, height: 812 } };
+
+// CLS-03 R3, CA1: a new student opens the link without a session, signs up,
+// confirms in another browser (a phone's mail app), signs in: in the class.
+test("a new student joins through the link: sign up, confirm elsewhere, sign in", async ({ browser }) => {
+  const teacher = await teacherWithClass(browser, "Grade 10 — A");
+  const student = await (await browser.newContext(phone)).newPage();
+  const email = uniqueEmail("student");
+
+  // Opening the link joins nothing and shows no class data.
+  await student.goto(teacher.link);
+  await expect(student.getByRole("heading", { name: "Join a class" })).toBeVisible();
+  await expect(student.getByText("Grade 10 — A")).toHaveCount(0);
+  await student.screenshot({ path: "test-results/join-link-visitor-phone.png", fullPage: true });
+  await student.getByRole("button", { name: "Create a student account" }).click();
+
+  await expect(student).toHaveURL(/\/sign-up$/);
+  await expect(student.getByText("Create your account and confirm your email: you join the class then.")).toBeVisible();
+  await student.getByLabel("First name").fill("Sam");
+  await student.getByLabel("Last name").fill("Lee");
+  await student.getByLabel("Email").fill(email);
+  await student.getByLabel(/^Password/).fill(PASSWORD);
+  await student.getByRole("button", { name: "Create account" }).click();
+  await expect(student.getByRole("heading", { name: "Check your email" })).toBeVisible();
+
+  // Unconfirmed: no session, so no class (CLS-03 R3).
+  await signIn(student, email);
+  await expect(student.getByText("Confirm your email address first")).toBeVisible();
+
+  // Confirmed in another browser, where the link was never opened.
+  const mailApp = await (await browser.newContext(phone)).newPage();
+  await mailApp.goto(await waitForLink(email, "email_verification"));
+  await mailApp.getByRole("button", { name: "Confirm my email" }).click();
+  await expect(mailApp.getByRole("heading", { name: "Email confirmed" })).toBeVisible();
+  await signIn(mailApp, email);
+  await expect(mailApp).toHaveURL(/\/student\//);
+  await mailApp.goto("/student/classes");
+  await expect(mailApp.getByRole("heading", { name: "Grade 10 — A" })).toBeVisible();
+  await expect(mailApp.getByText("Sarah Bennett")).toBeVisible();
+  await mailApp.screenshot({ path: "test-results/my-classes-phone.png", fullPage: true });
+
+  // Back in the first browser: signing in joins again, without a duplicate.
+  await signIn(student, email);
+  await expect(student).toHaveURL(/\/student\/classes\?join=done$/);
+  await expect(student.getByText("You are in the class")).toBeVisible();
+  await expect(student.getByRole("heading", { name: "Grade 10 — A" })).toHaveCount(1);
+});
+
+// CLS-03 CA1 to CA4: an existing student joins by link (sign-in first), then by code;
+// once removed, the same code gets the neutral refusal.
+test("an existing student joins by link and by code; removed, the code is refused", async ({ browser }) => {
+  const first = await teacherWithClass(browser, "Grade 10 — A");
+  const second = await teacherWithClass(browser, "French — Group 2");
+  const email = await createStudent("Adam", "Rami");
+  const student = await (await browser.newContext(phone)).newPage();
+
+  // Link without a session: sign in, then joined at once.
+  await student.goto(first.link);
+  await student.getByRole("button", { name: "Sign in to join" }).click();
+  await expect(student.getByText("Sign in with your student account: you join the class right after.")).toBeVisible();
+  await student.getByLabel("Email").fill(email);
+  await student.getByLabel(/^Password/).fill(PASSWORD);
+  await student.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(student).toHaveURL(/\/student\/classes\?join=done$/);
+
+  // CA3: a second class, by code typed loosely.
+  const form = student.locator("form").filter({ has: student.getByLabel("Class code") });
+  await form.getByLabel("Class code").fill(second.code.toLowerCase().replace("-", " "));
+  await form.getByRole("button", { name: "Join the class" }).click();
+  await expect(student.getByText("You joined the class")).toBeVisible();
+  await expect(student.getByRole("heading", { name: "Grade 10 — A" })).toBeVisible();
+  await expect(student.getByRole("heading", { name: "French — Group 2" })).toBeVisible();
+
+  // CA2: the same code again, no duplicate.
+  await form.getByLabel("Class code").fill(second.code);
+  await form.getByRole("button", { name: "Join the class" }).click();
+  await expect(student.getByText("You are already in this class")).toBeVisible();
+  await expect(student.getByRole("heading", { name: "French — Group 2" })).toHaveCount(1);
+
+  // CA4: removed (the screen arrives with CLS-04), the active code is refused like an unknown one.
+  await sql(
+    `UPDATE class_memberships SET status = 'removed', removed_at = now()
+     WHERE student_id = (SELECT id FROM users WHERE email = $1)
+       AND class_id = (SELECT id FROM classes WHERE name = 'French — Group 2')`,
+    [email],
+  );
+  await student.reload();
+  await expect(student.getByRole("heading", { name: "French — Group 2" })).toHaveCount(0);
+  await form.getByLabel("Class code").fill(second.code);
+  await form.getByRole("button", { name: "Join the class" }).click();
+  await expect(student.getByText("This link or code doesn't work. Check it with your teacher.")).toBeVisible();
+  await student.screenshot({ path: "test-results/join-refused-phone.png", fullPage: true });
+  await form.getByLabel("Class code").fill("ZZZZ-9999");
+  await form.getByRole("button", { name: "Join the class" }).click();
+  await expect(student.getByText("This link or code doesn't work. Check it with your teacher.")).toBeVisible();
+  await expect(student.getByRole("heading", { name: "French — Group 2" })).toHaveCount(0);
+
+  // A teacher opening a class link cannot join.
+  await first.page.goto(second.link);
+  await expect(first.page.getByText("Only student accounts can join a class.")).toBeVisible();
 });

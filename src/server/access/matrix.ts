@@ -56,6 +56,12 @@ export const ACCESS_MATRIX = {
     label: "Class invitation link and code",
     concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
+  classMembership: {
+    // [P] The student's own membership: joining by link or code (CLS-03).
+    // The teacher reads and changes memberships through classRoster (CLS-04).
+    label: "Own class membership (join)",
+    concernedStudent: W, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
+  },
   assignment: {
     label: "Assignment",
     // Student: assignments of their classes, or with a submission. Teacher: writes per locking (ASG-03).

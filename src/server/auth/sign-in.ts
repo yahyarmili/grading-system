@@ -23,7 +23,7 @@ export type SignInState =
   | { status: "invalid"; fieldErrors: Partial<Record<SignInField, string>>; email: string }
   | { status: "rejected"; email: string }
   | { status: "unconfirmed"; email: string }
-  | { status: "done"; role: Role };
+  | { status: "done"; role: Role; userId: string };
 
 function errorCode(error: unknown): string | undefined {
   return (error as { body?: { code?: string } } | null)?.body?.code;
@@ -54,7 +54,7 @@ export async function signInUser(raw: unknown, ctx: { headers: Headers }): Promi
     });
     await clearAttempts("sign_in_email", email);
     await recordSecurityEvent("sign_in_succeeded", { actorUserId: result.user.id, subjectId: result.user.id });
-    return { status: "done", role: (result.user as { role: Role }).role };
+    return { status: "done", role: (result.user as { role: Role }).role, userId: result.user.id };
   } catch (error) {
     const code = errorCode(error);
     // Right password, unconfirmed address: no session, a way forward (R3).

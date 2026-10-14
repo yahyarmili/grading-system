@@ -18,16 +18,17 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 ## État (2026-10-14)
 
-- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01) et E2.2 (CLS-02) faites et sur la preview. **Prochain prompt : E2.3** (rejoindre une classe), puis E2.4, E2.5. Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
+- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02) et E2.3 (CLS-03) faites ; E2.3 est commitée sur `preview`, pas poussée. **Prochain prompt : E2.4** (élèves, retrait, réadmission), puis E2.5. Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
   - Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D] ;
   - Q7 : recommandation appliquée (`CLASS_INVITE_TTL = null`, pas d'expiration), non décidée ;
-  - les lignes de matrice [P] : `teacherInvitation`, `classInvite` ;
+  - les lignes de matrice [P] : `teacherInvitation`, `classInvite`, `classMembership` ;
+  - `CLASS_INVITE_INTENT_TTL` (7 jours, [P] arbitraire) : durée du cookie et de l'intention liée au compte ;
   - format du code de classe [P] : 8 symboles Crockford Base32, affiché `XXXX-XXXX` ; pas de réactivation après désactivation (on renouvelle) ;
   - la preview publique [D] ;
   - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
-- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0003`.
+- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0004`.
 - **Test instable connu** : deux tests de `tests/sign-in.int.test.ts` vieillissent une session de 1 s avec l'horloge de Neon ; un décalage avec l'horloge du conteneur les fait échouer. Une tâche séparée a été proposée.
 
 ## Environnement
