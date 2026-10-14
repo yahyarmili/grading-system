@@ -17,6 +17,10 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   auth_tokens: { internal: "digests of one-time links (AUTH-01, 03, 05)" },
   auth_throttles: { internal: "attempt counters (AUTH-02 R2, AUTH-05 R3)" },
   security_events: { internal: "security log (DON-05), read by no screen in the MVP" },
+  // The invitation link and code (classInvite, E2.2) are held here too.
+  classes: ["class"],
+  // Read for the student side of "class" until classMembership and classRoster (E2.3, E2.4).
+  class_memberships: ["class"],
 };
 
 /**
@@ -38,6 +42,7 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/admin/teachers/actions.ts#inviteTeacherAction": { resource: "teacherInvitation", action: "write" },
   "src/app/admin/teachers/actions.ts#reissueInvitationAction": { resource: "teacherInvitation", action: "write" },
   "src/app/admin/teachers/actions.ts#cancelInvitationAction": { resource: "teacherInvitation", action: "write" },
+  "src/app/teacher/classes/actions.ts#createClassAction": { resource: "class", action: "write" },
 };
 
 /**

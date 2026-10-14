@@ -103,7 +103,7 @@ describe("every data function goes through authorize()", () => {
   it("covers the real data layer", () => {
     const { problems, resources } = checkDataExports(dataSources());
     expect(problems).toEqual([]);
-    expect([...resources]).toEqual(["teacherInvitation"]);
+    expect([...resources].sort()).toEqual(["class", "teacherInvitation"]);
   });
 
   it("fails on fictitious data functions that skip or misuse it", () => {

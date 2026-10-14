@@ -46,7 +46,7 @@ export const ACCESS_MATRIX = {
   },
   class: {
     label: "Class, link, code, list of students",
-    // Student: their classes, without the list of students.
+    // Student: their classes with an active membership, without the list of students (CLS-04).
     concernedStudent: L, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   assignment: {

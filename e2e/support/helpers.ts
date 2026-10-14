@@ -96,3 +96,28 @@ export async function expectNotFound(page: Page, pathname: string) {
   const response = await page.goto(pathname);
   expect(response?.status(), pathname).toBe(404);
 }
+
+/**
+ * A confirmed teacher, written straight to the test database: the invitation
+ * journey has its own test (teacher.spec.ts). Returns the email.
+ */
+export async function createTeacher(firstName: string, lastName: string): Promise<string> {
+  const email = uniqueEmail("teacher");
+  const { hashPassword } = await import("better-auth/crypto");
+  const client = new Client({ connectionString: testDatabaseUrl() });
+  await client.connect();
+  try {
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO users (email, email_verified, name, first_name, last_name, role)
+       VALUES ($1, true, $2, $3, $4, 'teacher') RETURNING id`,
+      [email, `${firstName} ${lastName}`, firstName, lastName],
+    );
+    await client.query(
+      `INSERT INTO accounts (user_id, provider_id, account_id, password) VALUES ($1, 'credential', $2, $3)`,
+      [rows[0].id, rows[0].id, await hashPassword(PASSWORD)],
+    );
+  } finally {
+    await client.end();
+  }
+  return email;
+}

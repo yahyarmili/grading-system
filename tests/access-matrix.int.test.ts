@@ -8,8 +8,9 @@ import { ACCESS_MATRIX, ACTIONS, COLUMNS, RESOURCES, type Action, type Column, t
 import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
+import { createClass, getClass } from "@/server/data/classes/classes";
 import { db } from "@/server/db/client";
-import { users } from "@/server/db/schema";
+import { classes, classMemberships, users } from "@/server/db/schema";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
 
 // AUTH-04: every cell of the matrix (fonctionnalites.md §5.4) is replayed.
@@ -135,14 +136,57 @@ describe("a missing resource and another person's resource get the same answer (
   });
 });
 
+
 // Real data functions, replayed against their row. A resource whose data
 // functions call authorize() must appear here (checked below).
-const REAL: Partial<Record<Resource, Record<Action, (actor: Actor) => Promise<unknown>>>> = {
+// `setup` builds the resource of the concerned student and the owner teacher;
+// an operation reaches it, or (`creates`) makes a new one for the actor.
+type Fixture = Record<string, string>;
+type Operation = { run: (actor: Actor, fixture: Fixture) => Promise<unknown>; creates?: boolean };
+type RealResource = { setup?: () => Promise<Fixture> } & Partial<Record<Action, Operation>>;
+
+const REAL: Partial<Record<Resource, RealResource>> = {
   teacherInvitation: {
-    read: (actor) => listTeacherInvitations(actor),
-    write: (actor) => createTeacherInvitation(actor, { firstName: "Tara", lastName: "Quinn", email: "tara@example.test" }),
+    read: { run: (actor) => listTeacherInvitations(actor) },
+    write: {
+      run: (actor) => createTeacherInvitation(actor, { firstName: "Tara", lastName: "Quinn", email: "tara@example.test" }),
+      creates: true,
+    },
+  },
+  class: {
+    setup: async () => {
+      const [owned] = await db
+        .insert(classes)
+        .values({
+          teacherId: people.ownerTeacher.userId, name: "Owned class",
+          inviteNonce: "n", inviteLinkDigest: "l", inviteCodeDigest: "c",
+        })
+        .returning({ id: classes.id });
+      await db.insert(classMemberships).values({ classId: owned.id, studentId: people.concernedStudent.userId });
+      return { classId: owned.id };
+    },
+    read: { run: (actor, { classId }) => getClass(actor, classId) },
+    // No write reaches an existing class before E2.2: creating one is the actor's own.
+    write: { run: (actor) => createClass(actor, { name: "Grade 10 — A" }), creates: true },
   },
 };
+
+const OWN_COLUMN = { student: "concernedStudent", teacher: "ownerTeacher" } as const;
+
+/**
+ * What a real operation must give: found where the cell allows it; for
+ * another person's resource, absent like a missing one (AUTH-04 R3), unless
+ * the operation creates the actor's own; denied for a role without the action.
+ */
+function expected(resource: Resource, column: Column, action: Action, operation: Operation): Outcome {
+  const allows = (c: Column) => (ACCESS_MATRIX[resource][c] as readonly Action[]).includes(action);
+  if (allows(column)) return "found";
+  const actor = people[column];
+  if (actor.kind === "user" && (actor.role === "student" || actor.role === "teacher") && allows(OWN_COLUMN[actor.role])) {
+    return operation.creates ? "found" : "absent";
+  }
+  return "denied";
+}
 
 describe("real data functions follow their row", () => {
   it("covers every resource the data layer authorizes", () => {
@@ -150,19 +194,29 @@ describe("real data functions follow their row", () => {
     expect([...resources].filter((r) => !(r in REAL))).toEqual([]);
   });
 
-  for (const [resource, operations] of Object.entries(REAL) as [Resource, Record<Action, (actor: Actor) => Promise<unknown>>][]) {
+  beforeEach(async () => {
+    await db.insert(users).values(
+      COLUMNS.flatMap((column) => {
+        const actor = people[column];
+        return actor.kind === "user"
+          ? [{
+              id: actor.userId, email: `${column.toLowerCase()}@example.test`, emailVerified: true,
+              name: column, firstName: column, lastName: "User", role: actor.role,
+            }]
+          : [];
+      }),
+    );
+  });
+
+  for (const [resource, real] of Object.entries(REAL) as [Resource, RealResource][]) {
     it.each(COLUMNS)(`${resource}: %s`, async (column) => {
-      const actor = people[column];
-      if (actor.kind === "user") {
-        await db.insert(users).values({
-          id: actor.userId, email: `${column.toLowerCase()}@example.test`, emailVerified: true,
-          name: column, firstName: column, lastName: "User", role: actor.role,
-        });
-      }
+      const fixture = (await real.setup?.()) ?? {};
       for (const action of ACTIONS) {
-        const run = operations[action](actor);
-        if ((ACCESS_MATRIX[resource][column] as readonly Action[]).includes(action)) await expect(run).resolves.toBeDefined();
-        else await expect(run).rejects.toBeInstanceOf(AccessDeniedError);
+        const operation = real[action];
+        if (!operation) continue;
+        expect(await outcome(operation.run(people[column], fixture)), action).toBe(
+          expected(resource, column, action, operation),
+        );
       }
     });
   }

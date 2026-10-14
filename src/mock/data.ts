@@ -3,13 +3,6 @@
 
 import type { StudentStatus } from "@/lib/submission-status";
 
-/** Students counts of Grade 10 classes come from the roster (assignment-submissions.ts). */
-export const mockTeacherClasses: { id: string; name: string; students?: number }[] = [
-  { id: "c1", name: "Grade 10 — A" },
-  { id: "c2", name: "Grade 10 — B" },
-  { id: "c3", name: "Grade 11 — Literature", students: 19 },
-];
-
 /** The student's view: "Adam Rami", in two of Sarah Bennett's classes and one of Karim Alaoui's. */
 export const mockStudentAssignments: {
   id: string;

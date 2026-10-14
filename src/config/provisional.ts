@@ -56,3 +56,9 @@ export const SIGN_UP_WINDOW = 1 * HOUR;
 /** [PROVISIONAL] Password length bounds (Better Auth defaults). */
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
+
+// ---------------------------------------------------------------------------
+// Classes (E2). PROVISIONAL.
+
+/** [PROVISIONAL, [P] arbitrary] Maximum length of a class name (CLS-01). */
+export const CLASS_NAME_MAX_LENGTH = 60;
