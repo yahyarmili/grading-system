@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+import { CLASS_INVITE_TTL } from "@/config/decisions";
 import { CLASS_INVITE_INTENT_TTL, CLASS_JOIN_MAX_FAILURES } from "@/config/provisional";
 import type { Actor } from "@/server/access/actor";
 import { requestPasswordResetLink, resetPasswordWithToken } from "@/server/auth/recovery";
@@ -13,7 +14,7 @@ import { listClasses } from "@/server/data/classes/classes";
 import { getClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
 import { db } from "@/server/db/client";
-import { classJoinIntents, classMemberships, users } from "@/server/db/schema";
+import { classes, classJoinIntents, classMemberships, users } from "@/server/db/schema";
 import { getCaptureSender } from "@/server/email";
 
 // CLS-03: a student joins a class by link or code (R1 to R4, CA1 to CA4), and
@@ -255,6 +256,17 @@ describe("R3: a link opened without a session survives sign-up and confirmation"
 
     const tokens = getCaptureSender().captured().filter((m) => m.kind === "email_verification");
     for (const message of tokens) await confirmEmailWithToken(message.text.match(/token=([A-Za-z0-9_-]{43})/)![1]);
+    expect(await db.select().from(classMemberships)).toHaveLength(0);
+    expect(await db.select().from(classJoinIntents)).toHaveLength(0);
+  });
+
+  // Q7 [D]: the link lasts 1 hour from its creation; a later confirmation joins nothing.
+  it("joins nothing if the link expired before the confirmation", async () => {
+    const teacher = await createUser("teacher");
+    const grade10 = await newClass(teacher, "Grade 10");
+    await signUp("sam@example.test", grade10.token);
+    await db.update(classes).set({ inviteIssuedAt: sql`now() - make_interval(secs => ${CLASS_INVITE_TTL + 60})` });
+    expect(await confirmEmailWithToken(lastToken("email_verification"))).toEqual({ status: "done" });
     expect(await db.select().from(classMemberships)).toHaveLength(0);
     expect(await db.select().from(classJoinIntents)).toHaveLength(0);
   });

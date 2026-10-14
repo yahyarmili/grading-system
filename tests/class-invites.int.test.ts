@@ -1,5 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { CLASS_INVITE_TTL } from "@/config/decisions";
 import { CLASS_JOIN_MAX_FAILURES } from "@/config/provisional";
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
@@ -105,7 +106,7 @@ describe("CA2: renewed code", () => {
   });
 });
 
-describe("CA3: disabled or unknown code", () => {
+describe("CA3: disabled, expired or unknown code", () => {
   it("refuses a disabled link and code, with the answer given for an unknown one; members stay", async () => {
     const teacher = await createUser("teacher");
     const id = await newClass(teacher);
@@ -127,6 +128,32 @@ describe("CA3: disabled or unknown code", () => {
     ];
     expect(new Set([...disabled, ...unknown].map((r) => JSON.stringify(r)))).toEqual(new Set(['{"outcome":"refused"}']));
     expect(await db.select().from(classMemberships)).toHaveLength(1);
+  });
+
+  // R4, Q7 [D]: 1 hour from the link's creation. Aged by a minute more or
+  // less than that, so a drift between the two clocks does not matter.
+  it("refuses a link and code older than their lifetime, like an unknown one; members stay; renewing brings them back", async () => {
+    const teacher = await createUser("teacher");
+    const id = await newClass(teacher);
+    const { code, token } = await inviteOf(teacher, id);
+    const member = await createUser("student");
+    await db.insert(classMemberships).values({ classId: id, studentId: member.userId });
+    const age = (seconds: number) =>
+      db.update(classes).set({ inviteIssuedAt: sql`now() - make_interval(secs => ${seconds})` }).where(eq(classes.id, id));
+    const attempt = async (input: Parameters<typeof tryInvite>[1]) => tryInvite((await createUser("student")).userId, input);
+
+    await age(CLASS_INVITE_TTL - 60);
+    expect(await attempt({ code })).toEqual({ outcome: "found", classId: id });
+    expect(await getClassInvite(teacher, id)).toMatchObject({ state: "active" });
+
+    await age(CLASS_INVITE_TTL + 60);
+    expect([await attempt({ code }), await attempt({ linkToken: token })]).toEqual([{ outcome: "refused" }, { outcome: "refused" }]);
+    expect(await getClassInvite(teacher, id)).toMatchObject({ state: "expired", link: null, code: null });
+    expect(await db.select().from(classMemberships)).toHaveLength(1);
+
+    await renewInvite(teacher, id);
+    const renewed = await inviteOf(teacher, id);
+    expect(await attempt({ code: renewed.code })).toEqual({ outcome: "found", classId: id });
   });
 
   it("disabling twice keeps the first date", async () => {

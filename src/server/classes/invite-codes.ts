@@ -74,13 +74,13 @@ export const LINK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 /**
  * Whether a class's link and code work (CLS-02 R3): not disabled, and not
- * older than the lifetime when one is set (Q7: none for now).
+ * older than the lifetime, counted from the link's creation (Q7, CLS-02 R4).
  */
 export function isInviteUsable(
   invite: { disabledAt: Date | null; issuedAt: Date },
-  ttlSeconds: number | null,
+  ttlSeconds: number,
   now: Date,
 ): boolean {
   if (invite.disabledAt) return false;
-  return ttlSeconds === null || now.getTime() < invite.issuedAt.getTime() + ttlSeconds * 1000;
+  return now.getTime() < invite.issuedAt.getTime() + ttlSeconds * 1000;
 }

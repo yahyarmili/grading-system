@@ -1,6 +1,7 @@
 import "server-only";
 import { eq, inArray, sql } from "drizzle-orm";
-import { CLASS_INVITE_INTENT_TTL, CLASS_INVITE_TTL } from "@/config/provisional";
+import { CLASS_INVITE_TTL } from "@/config/decisions";
+import { CLASS_INVITE_INTENT_TTL } from "@/config/provisional";
 import { isInviteUsable, LINK_TOKEN_PATTERN, linkDigest } from "@/server/classes/invite-codes";
 import type { db } from "@/server/db/client";
 import { classes, classJoinIntents, classMemberships } from "@/server/db/schema";

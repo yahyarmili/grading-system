@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CLASS_INVITE_TTL } from "@/config/decisions";
 import { CLASS_NAME_MAX_LENGTH } from "@/config/provisional";
 import {
   CODE_LENGTH,
@@ -102,20 +103,20 @@ describe("typed code (CLS-02, CLS-03)", () => {
   });
 });
 
-describe("link and code validity (CLS-02 R3, Q7)", () => {
+describe("link and code validity (CLS-02 R3, R4, Q7)", () => {
   const issuedAt = new Date("2026-10-01T00:00:00Z");
   const later = (seconds: number) => new Date(issuedAt.getTime() + seconds * 1000);
 
-  it("works without expiry while not disabled (Q7 recommendation)", () => {
-    expect(isInviteUsable({ disabledAt: null, issuedAt }, null, later(10 ** 8))).toBe(true);
+  it("lasts 1 hour from the link's creation (Q7 decision)", () => {
+    expect(CLASS_INVITE_TTL).toBe(60 * 60);
+  });
+
+  it("works until the lifetime ends, then expires", () => {
+    expect(isInviteUsable({ disabledAt: null, issuedAt }, CLASS_INVITE_TTL, later(CLASS_INVITE_TTL - 1))).toBe(true);
+    expect(isInviteUsable({ disabledAt: null, issuedAt }, CLASS_INVITE_TTL, later(CLASS_INVITE_TTL))).toBe(false);
   });
 
   it("stops at once when disabled", () => {
-    expect(isInviteUsable({ disabledAt: later(1), issuedAt }, null, later(2))).toBe(false);
-  });
-
-  it("expires after a lifetime, if Q7 sets one", () => {
-    expect(isInviteUsable({ disabledAt: null, issuedAt }, 60, later(59))).toBe(true);
-    expect(isInviteUsable({ disabledAt: null, issuedAt }, 60, later(60))).toBe(false);
+    expect(isInviteUsable({ disabledAt: later(1), issuedAt }, CLASS_INVITE_TTL, later(2))).toBe(false);
   });
 });

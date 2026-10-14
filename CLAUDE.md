@@ -18,12 +18,12 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 ## État (2026-10-14)
 
-- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02), E2.3 (CLS-03), E2.4 (CLS-04) et le parcours E2E d'E2.5 (`e2e/e2-journey.spec.ts` : parcours de l'étape et scénario de sortie) faits, ainsi que T1 d'E2, commités sur `preview`, pas poussés. T5 pour Q7 fait (décision consignée) ; **le code reste à aligner sur Q7** (voir « Classes (E2) »). Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
+- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02), E2.3 (CLS-03), E2.4 (CLS-04) et le parcours E2E d'E2.5 (`e2e/e2-journey.spec.ts` : parcours de l'étape et scénario de sortie) faits, ainsi que T1 d'E2, commités sur `preview`. T5 pour Q7 fait et code aligné (lien et code valables 1 heure). Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
   - Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D] ;
   - les lignes de matrice [P] : `teacherInvitation`, `classInvite`, `classMembership`, `classRoster` ; événements de sécurité `class_member_removed` et `class_member_readmitted` [P] ;
-  - `CLASS_INVITE_INTENT_TTL` (7 jours, [P] arbitraire) : durée du cookie et de l'intention liée au compte ;
+  - `CLASS_INVITE_INTENT_TTL` (7 jours, [P] arbitraire) : durée du cookie et de l'intention liée au compte ; depuis Q7, le lien expire avant (1 heure) ;
   - format du code de classe [P] : 8 symboles Crockford Base32, affiché `XXXX-XXXX` ; pas de réactivation après désactivation (on renouvelle) ;
   - la preview publique [D] ;
   - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
@@ -61,7 +61,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 
 **Classes (E2)** :
 - Le lien et le code ne sont jamais stockés. Ils sont dérivés du `invite_nonce` de la classe avec une clé tirée de `BETTER_AUTH_SECRET` (`src/server/classes/invite-codes.ts`) ; seules leurs empreintes sont en base. Changer ce secret change tous les liens et codes.
-- **Q7 [D, 2026-10-14]** : le lien et le code expirent 1 heure après la création du lien, un renouvellement en créant un nouveau (CLS-02 R4 ; date `invite_issued_at`). Le code n'est pas encore aligné : `CLASS_INVITE_TTL` vaut toujours `null`.
+- **Q7 [D, 2026-10-14]** : le lien et le code expirent 1 heure après la création du lien, un renouvellement en créant un nouveau (CLS-02 R4 ; date `invite_issued_at`). Valeur : `CLASS_INVITE_TTL` dans `src/config/decisions.ts`.
 - Toute saisie d'un code ou d'un lien passe par `tryInvite` (`src/server/classes/attempts.ts`) : verrou après N échecs par élève, refus unique, pas de remise à zéro sur succès.
 
 **Règle 3, email (E1)** : `src/server/email/`.
@@ -108,7 +108,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 
 ## Valeurs provisoires
 
-`fonctionnalites.md` n'a pas été validé explicitement : les recommandations de Q1 à Q10 ne sont pas des décisions (par exemple Q1 note sur 20, Q3 remplacement d'une remise, Q4 correction de la transcription, Q6 rubrique française). Toute valeur non décidée (format de la note, durée d'un lien, nombre d'essais…) est codée comme valeur provisoire, marquée comme telle, dans un fichier de configuration unique (`src/config/provisional.ts`). Signale-la ; ne la présente pas comme décidée et n'invente aucun chiffre.
+`fonctionnalites.md` n'a pas été validé explicitement : les recommandations de Q1 à Q10 ne sont pas des décisions (par exemple Q1 note sur 20, Q3 remplacement d'une remise, Q4 correction de la transcription, Q6 rubrique française). Toute valeur non décidée (format de la note, durée d'un lien, nombre d'essais…) est codée comme valeur provisoire, marquée comme telle, dans un fichier de configuration unique (`src/config/provisional.ts`) ; une valeur décidée [D] passe dans `src/config/decisions.ts`. Signale-la ; ne la présente pas comme décidée et n'invente aucun chiffre.
 
 ## Langue
 

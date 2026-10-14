@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, sql } from "drizzle-orm";
-import { CLASS_INVITE_TTL } from "@/config/provisional";
+import { CLASS_INVITE_TTL } from "@/config/decisions";
 import type { Actor } from "@/server/access/actor";
 import { authorize } from "@/server/access/policy";
 import { appUrl } from "@/server/auth/urls";

@@ -70,5 +70,6 @@ Node ne tourne que dans Docker.
 | `src/server/auth/`, `src/server/email/` | Parcours d'authentification, interface email unique |
 | `src/server/classes/` | Classes : validation, lien et code d'invitation (dérivés, jamais stockés), essais limités, retrait et réadmission |
 | `src/config/provisional.ts` | Valeurs non décidées, marquées provisoires |
+| `src/config/decisions.ts` | Valeurs décidées [D] (Q7 : lien et code de classe valables 1 heure) |
 | `drizzle/`, `scripts/` | Migrations SQL, script du premier administrateur |
 | `tests/`, `e2e/` | Vitest (unitaires, intégration), Playwright |

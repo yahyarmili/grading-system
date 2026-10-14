@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { z } from "zod";
 import { LoadingState } from "@/components/loading";
 import { BackLink, PageHeader } from "@/components/shell/shell-parts";
-import { CLASS_INVITE_TTL } from "@/config/provisional";
+import { CLASS_INVITE_TTL } from "@/config/decisions";
 import { formatDuration } from "@/lib/duration";
 import { getActor } from "@/server/auth/session";
 import { getClass } from "@/server/data/classes/classes";
@@ -20,11 +20,8 @@ export const metadata: Metadata = { title: "Class" };
 // streaming, which would fix the status at 200: the page blocks on it.
 export const instant = false;
 
-// [Q7 open] No automatic expiry for now; the text follows the provisional value.
-const validity =
-  CLASS_INVITE_TTL === null
-    ? "They work until you disable them or generate new ones."
-    : `They work for ${formatDuration(CLASS_INVITE_TTL)} after they are generated, unless you disable them first.`;
+// Q7 [D]: the link and code expire a fixed time after they are generated.
+const validity = `They work for ${formatDuration(CLASS_INVITE_TTL)} after they are generated, unless you disable them first.`;
 
 export default async function Page({ params }: PageProps<"/teacher/classes/[classId]">) {
   const { classId } = await params;
