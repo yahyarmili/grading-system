@@ -309,7 +309,7 @@ Le professeur peut obtenir, pour chaque classe, un lien et un code d'invitation 
 - **R1** [D] Le professeur invite en partageant un lien ou un code ; aucune étape d'approbation (D2).
 - **R2** [P] Le lien et le code ouvrent la même classe, ne sont pas devinables et ne donnent accès à aucune donnée avant le rattachement.
 - **R3** [P] Désactiver ou renouveler rend l'ancien lien et l'ancien code inopérants ; les élèves déjà rattachés restent. Essais de saisie limités.
-- **R4** [D, 2026-10-14] Le lien et le code expirent automatiquement après 1 heure (Q7). [P] L'heure court depuis leur génération ou leur renouvellement ; pour inviter de nouveau, le professeur les renouvelle.
+- **R4** [D, 2026-10-14] Le lien et le code expirent automatiquement 1 heure après la création du lien (Q7) ; un renouvellement crée un nouveau lien, valable 1 heure. Pour inviter de nouveau, le professeur les renouvelle.
 - **CA1** Lien et code affichés ; ils ne servent que cette classe.
 - **CA2** Code renouvelé : l'ancien est refusé, les élèves déjà rattachés restent.
 - **CA3** Code désactivé, expiré ou inconnu : rattachement refusé sans révéler l'existence de classes.
@@ -797,7 +797,7 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 - **Pourquoi.** Sans approbation (D2), toute personne qui obtient le lien ou le code peut rejoindre la classe et voir les devoirs ; les contrôles sont le renouvellement (CLS-02), le retrait et le refus de rattachement (CLS-03, CLS-04).
 - **Options.** Pas d'expiration automatique, désactivation et renouvellement manuels ; expiration automatique après une durée à définir ; usage unique par élève.
 - **Recommandation** (non retenue). Pas d'expiration automatique dans le MVP ; ajouter une expiration (durée à définir) si l'usage montre des rattachements indésirables. **Échéance** : avant E2.
-- **Décision** [D, 2026-10-14]. Expiration automatique après 1 heure ; désactivation et renouvellement manuels restent possibles. Point de départ [P] : génération ou renouvellement (CLS-02 R4).
+- **Décision** [D, 2026-10-14]. Expiration automatique 1 heure après la création du lien ; désactivation et renouvellement manuels restent possibles (CLS-02 R4).
 
 ### Q8 — Que voit l'élève quand le professeur modifie une évaluation déjà publiée ?
 - **Pourquoi.** D6 sépare validation et publication mais ne dit rien d'une correction après coup ; cela fixe les transitions de la machine à états et ce que l'élève peut avoir déjà vu.

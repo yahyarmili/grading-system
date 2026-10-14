@@ -61,7 +61,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 
 **Classes (E2)** :
 - Le lien et le code ne sont jamais stockés. Ils sont dérivés du `invite_nonce` de la classe avec une clé tirée de `BETTER_AUTH_SECRET` (`src/server/classes/invite-codes.ts`) ; seules leurs empreintes sont en base. Changer ce secret change tous les liens et codes.
-- **Q7 [D, 2026-10-14]** : le lien et le code expirent après 1 heure (CLS-02 R4) ; point de départ [P] : génération ou renouvellement (`invite_issued_at`). Le code n'est pas encore aligné : `CLASS_INVITE_TTL` vaut toujours `null`.
+- **Q7 [D, 2026-10-14]** : le lien et le code expirent 1 heure après la création du lien, un renouvellement en créant un nouveau (CLS-02 R4 ; date `invite_issued_at`). Le code n'est pas encore aligné : `CLASS_INVITE_TTL` vaut toujours `null`.
 - Toute saisie d'un code ou d'un lien passe par `tryInvite` (`src/server/classes/attempts.ts`) : verrou après N échecs par élève, refus unique, pas de remise à zéro sur succès.
 
 **Règle 3, email (E1)** : `src/server/email/`.
