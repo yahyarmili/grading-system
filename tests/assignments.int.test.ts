@@ -11,14 +11,21 @@ import {
   editTeacherAssignment,
 } from "@/server/assignments/assignments";
 import { ASSIGNMENT_ERRORS } from "@/server/assignments/schemas";
-import { getTeacherAssignment, listTeacherAssignments, updateAssignment } from "@/server/data/assignments/assignments";
+import {
+  getTeacherAssignment,
+  listStudentAssignments,
+  listTeacherAssignments,
+  updateAssignment,
+} from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
+import { readmitStudent, removeStudent } from "@/server/data/classes/roster";
 import { db } from "@/server/db/client";
-import { assignmentClasses, assignments, securityEvents, users } from "@/server/db/schema";
+import { assignmentClasses, assignments, classMemberships, securityEvents, users } from "@/server/db/schema";
 
 // ASG-01: create an assignment and choose its classes (R1 to R3, CA1 to CA3).
 // ASG-02: list one's assignments and open one (R1, R2, CA1).
 // ASG-03: edit or delete an assignment, locked by the first submission (R1, R2, CA1 to CA3).
+// SUB-01: the assignments a student received, each once, with the closed list of fields (CA1, CA3).
 
 let count = 0;
 async function createUser(role: "student" | "teacher" | "admin"): Promise<Actor & { kind: "user" }> {
@@ -423,5 +430,109 @@ describe("ASG-03: edit or delete an assignment", () => {
       expect(await stored(id)).toEqual(row);
       expect(await db.select().from(securityEvents).where(eq(securityEvents.actorUserId, actor.userId))).toHaveLength(2);
     });
+  });
+});
+
+describe("SUB-01: the student's received assignments", () => {
+  async function member(classId: string, student: Actor & { kind: "user" }) {
+    await db.insert(classMemberships).values({ classId, studentId: student.userId });
+  }
+
+  async function send(teacher: Actor, classIds: string[], overrides: Record<string, unknown> = {}) {
+    const state = await createTeacherAssignment(teacher, form(classIds, overrides));
+    if (state.status !== "done") throw new Error(JSON.stringify(state));
+    return state.assignmentId;
+  }
+
+  it("CA1: a student of C1 sees C1's assignment with the closed list of fields; C2's is absent", async () => {
+    const teacher = await createUser("teacher");
+    const [c1, c2] = [await newClass(teacher, "C1"), await newClass(teacher, "C2")];
+    const student = await createUser("student");
+    await member(c1, student);
+    const forC1 = await send(teacher, [c1], { title: "For C1", instructions: "" });
+    await send(teacher, [c2], { title: "For C2" });
+
+    const list = await listStudentAssignments(student);
+    expect(list).toHaveLength(1);
+    const [received] = list;
+    // Exactly these keys: no level, class, teacher, version or internal state.
+    expect(Object.keys(received).sort()).toEqual(
+      ["deadline", "deadlinePassed", "id", "instructions", "language", "status", "subject", "title"],
+    );
+    expect(received).toMatchObject({
+      id: forC1, title: "For C1", subject: "Describe your town in about 150 words.", language: "en",
+      instructions: null, deadlinePassed: false, status: "to_submit",
+    });
+  });
+
+  it("R5: an assignment sent to two of the student's classes appears once", async () => {
+    const teacher = await createUser("teacher");
+    const [c1, , c3] = [await newClass(teacher, "C1"), await newClass(teacher, "C2"), await newClass(teacher, "C3")];
+    const student = await createUser("student");
+    await member(c1, student);
+    await member(c3, student);
+    const both = await send(teacher, [c1, c3]);
+    expect((await listStudentAssignments(student)).map((a) => a.id)).toEqual([both]);
+  });
+
+  it("nearest deadline first; a past deadline is flagged, compared on the database clock", async () => {
+    const teacher = await createUser("teacher");
+    const c1 = await newClass(teacher, "C1");
+    const student = await createUser("student");
+    await member(c1, student);
+    const later = await send(teacher, [c1], { title: "Later" });
+    const passed = await send(teacher, [c1], { title: "Passed" });
+    await db.update(assignments).set({ deadline: sql`now() - interval '1 hour'` }).where(eq(assignments.id, passed));
+
+    const list = await listStudentAssignments(student);
+    expect(list.map((a) => [a.id, a.deadlinePassed, a.status])).toEqual([
+      [passed, true, "to_submit"],
+      [later, false, "to_submit"],
+    ]);
+  });
+
+  it("CA3: a student without a class has an empty list", async () => {
+    const teacher = await createUser("teacher");
+    await send(teacher, [await newClass(teacher, "C1")]);
+    expect(await listStudentAssignments(await createUser("student"))).toEqual([]);
+  });
+
+  it("received by derivation [D]: joining late shows earlier assignments; removed, none; readmitted, back (CLS-04 CA2)", async () => {
+    const teacher = await createUser("teacher");
+    const c1 = await newClass(teacher, "C1");
+    const student = await createUser("student");
+    const before = await send(teacher, [c1], { title: "Sent before joining" });
+    await member(c1, student);
+    expect((await listStudentAssignments(student)).map((a) => a.id)).toEqual([before]);
+
+    expect(await removeStudent(teacher, c1, student.userId)).toBe(true);
+    const during = await send(teacher, [c1], { title: "Sent while removed" });
+    expect(await listStudentAssignments(student)).toEqual([]);
+
+    expect(await readmitStudent(teacher, c1, student.userId)).toBe(true);
+    expect((await listStudentAssignments(student)).map((a) => a.id).sort()).toEqual([before, during].sort());
+  });
+
+  it("ASG-03 CA1 for the student: an edited subject shows at once; a deleted assignment disappears", async () => {
+    const teacher = await createUser("teacher");
+    const c1 = await newClass(teacher, "C1");
+    const student = await createUser("student");
+    await member(c1, student);
+    const id = await send(teacher, [c1]);
+    const [row] = await db.select().from(assignments).where(eq(assignments.id, id));
+
+    const edited = await editTeacherAssignment(teacher, id, {
+      title: row.title, level: row.level, subject: "Describe your village.", language: row.language,
+      deadline: instantToWallTime(row.deadline, DEADLINE_TIME_ZONE), instructions: row.instructions ?? "",
+    });
+    expect(edited.status).toBe("done");
+    expect((await listStudentAssignments(student))[0].subject).toBe("Describe your village.");
+
+    expect(await deleteTeacherAssignment(teacher, id)).toEqual({ ok: true });
+    expect(await listStudentAssignments(student)).toEqual([]);
+  });
+
+  it.each(["teacher", "admin"] as const)("refused to a %s: the student's view is not theirs", async (role) => {
+    await expect(listStudentAssignments(await createUser(role))).rejects.toBeInstanceOf(AccessDeniedError);
   });
 });

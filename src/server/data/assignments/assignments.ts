@@ -1,11 +1,12 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Actor } from "@/server/access/actor";
 import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
-import { assignmentClasses, assignments, classes } from "@/server/db/schema";
+import { assignmentClasses, assignments, classes, classMemberships } from "@/server/db/schema";
 import type { AssignmentLanguage, AssignmentLevel } from "@/lib/assignment";
 import { compareText } from "@/lib/collation";
+import { toStudentStatus, type StudentStatus } from "@/lib/submission-status";
 import { ownedBy } from "../access";
 
 // ASG-01: an assignment and the classes it is sent to (rows "assignment" and
@@ -61,8 +62,20 @@ export async function createAssignment(actor: Actor, input: NewAssignment): Prom
   });
 }
 
-/** The teacher side of the ownership; the student side (received by derivation) arrives with SUB-01. */
-const owners = { teacher: assignments.teacherId };
+/**
+ * The student side of the ownership: received by derivation [D], through an
+ * active membership in one of the recipient classes, whatever the date it was
+ * sent. An EXISTS, not a join: an assignment sent to two of the student's
+ * classes comes out once (R5). From E4, a submission of theirs also counts (SUB-01 R4).
+ */
+const receivedBy = (userId: string) =>
+  sql`exists (select 1 from ${assignmentClasses}
+    join ${classMemberships} on ${classMemberships.classId} = ${assignmentClasses.classId}
+    where ${assignmentClasses.assignmentId} = ${assignments.id}
+      and ${classMemberships.studentId} = ${userId}
+      and ${classMemberships.status} = 'active')`;
+
+const owners = { teacher: assignments.teacherId, student: receivedBy };
 
 /** ASG-02 R1: one row of the teacher's list. Counts stay 0 until submissions exist (E4, E7). */
 export type TeacherAssignmentItem = {
@@ -210,4 +223,47 @@ export async function deleteAssignment(actor: Actor, assignmentId: string): Prom
     .where(and(where, isNull(assignments.lockedAt)))
     .returning({ id: assignments.id });
   return deleted ? { ok: true } : lockedOrAbsent(where);
+}
+
+/**
+ * SUB-01 R2: what the student reads of a received assignment, a closed list.
+ * Neither the level (D4), nor the classes, nor the teacher, nor any internal
+ * state or version leaves the server.
+ */
+export type StudentAssignment = {
+  id: string;
+  title: string;
+  subject: string;
+  instructions: string | null;
+  language: AssignmentLanguage;
+  deadline: string;
+  /** Compared in SQL, against the database clock. */
+  deadlinePassed: boolean;
+  /** SUB-01 R3: the closed list of three, never the internal state. */
+  status: StudentStatus;
+};
+
+/** SUB-01 CA1: the student's received assignments, nearest deadline first. Refused to a teacher. */
+export async function listStudentAssignments(actor: Actor): Promise<StudentAssignment[]> {
+  const grant = authorize(actor, "assignment", "read");
+  authorize(actor, "ownSubmissionStatus", "read");
+  const rows = await db
+    .select({
+      id: assignments.id,
+      title: assignments.title,
+      subject: assignments.subject,
+      instructions: assignments.instructions,
+      language: assignments.language,
+      deadline: assignments.deadline,
+      deadlinePassed: sql<boolean>`${assignments.deadline} < now()`,
+    })
+    .from(assignments)
+    .where(ownedBy(grant, owners))
+    .orderBy(asc(assignments.deadline), assignments.id);
+  // Submissions arrive in E4: until then, every received assignment is to submit.
+  return rows.map(({ deadline, ...row }) => ({
+    ...row,
+    deadline: deadline.toISOString(),
+    status: toStudentStatus("to_submit"),
+  }));
 }

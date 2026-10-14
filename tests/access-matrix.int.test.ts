@@ -7,7 +7,7 @@ import { AccessDeniedError } from "@/server/access/errors";
 import { ACCESS_MATRIX, ACTIONS, COLUMNS, RESOURCES, type Action, type Column, type Resource } from "@/server/access/matrix";
 import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
-import { createAssignment, getTeacherAssignment, updateAssignment } from "@/server/data/assignments/assignments";
+import { createAssignment, getTeacherAssignment, listStudentAssignments, updateAssignment } from "@/server/data/assignments/assignments";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
 import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
@@ -177,10 +177,16 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     read: { run: (actor, { classId }) => listClassStudents(actor, classId) },
     write: { run: (actor, { classId }) => removeStudent(actor, classId, people.concernedStudent.userId) },
   },
+  // Reading: the teacher's page, or the student's list of received assignments (SUB-01).
   // Editing the owner's assignment (ASG-03): another teacher's edit finds nothing.
-  // The student's read of an assignment (received, without its classes) arrives with SUB-01 (E3.4).
   assignment: {
     setup: ownedAssignment,
+    read: {
+      run: (actor, { assignmentId }) =>
+        actor.kind === "user" && actor.role === "student"
+          ? receivedAssignment(actor, assignmentId)
+          : getTeacherAssignment(actor, assignmentId),
+    },
     write: { run: (actor, { assignmentId }) => updateAssignment(actor, assignmentId, { title: "Renamed", level: "B2" }) },
   },
   // Sending an assignment to the owner's class: the other teacher's request
@@ -191,7 +197,17 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     read: { run: (actor, { assignmentId }) => getTeacherAssignment(actor, assignmentId) },
     write: { run: sendAssignment },
   },
+  // The student's state of a received assignment; a teacher is refused (SUB-01 R3).
+  ownSubmissionStatus: {
+    setup: ownedAssignment,
+    read: { run: async (actor, { assignmentId }) => (await receivedAssignment(actor, assignmentId))?.status ?? null },
+  },
 };
+
+/** The fixture's assignment in the student's list; null when not received. */
+async function receivedAssignment(actor: Actor, assignmentId: string) {
+  return (await listStudentAssignments(actor)).find((a) => a.id === assignmentId) ?? null;
+}
 
 /** The owner's class with the concerned student, and an assignment sent to it. */
 async function ownedAssignment(): Promise<Fixture> {

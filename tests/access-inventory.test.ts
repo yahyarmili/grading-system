@@ -104,7 +104,8 @@ describe("every data function goes through authorize()", () => {
     const { problems, resources } = checkDataExports(dataSources());
     expect(problems).toEqual([]);
     expect([...resources].sort()).toEqual([
-      "assignment", "assignmentRecipients", "class", "classInvite", "classMembership", "classRoster", "teacherInvitation",
+      "assignment", "assignmentRecipients", "class", "classInvite", "classMembership", "classRoster",
+      "ownSubmissionStatus", "teacherInvitation",
     ]);
   });
 
