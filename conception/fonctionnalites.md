@@ -136,7 +136,7 @@ Toutes les mesures se font après construction (D10), valeurs cibles « à défi
 | F11 | Le professeur autorise la visibilité de la note dans l'espace de l'élève. | Fidèle ; publication distincte de la validation (D6) | Copie par copie dans le MVP, avec retrait. Après modification d'une évaluation publiée : Q8. | PUB-01, REV-05 |
 | F12 | Le professeur ajoute un devoir : sujet, niveau, langue, délai, instructions facultatives. | Fidèle, précisée par D4 et D8 | Niveau = étiquette non transmise à l'IA. Les instructions ne peuvent pas modifier la rubrique. Modification et suppression avant la première remise ajoutées. | ASG-01, ASG-02, ASG-03, SUB-04, EVL-02 |
 | F13 | Le professeur consulte les soumissions en cliquant sur le nom d'un élève, triées par note, date ou ordre alphabétique. | Décomposée : liste triable, ouverture de la copie | D9 : nom, prénom, email, classe, copie du devoir ; pas d'historique (halo). Tri par note : note du professeur, sinon note proposée « provisoire ». | ASG-02, REV-01, REV-02, AUTH-04 |
-| F14 | Un professeur a plusieurs classes, chacune avec plusieurs élèves, et leur envoie un devoir. | Décomposée : classes (ici) et envoi (avec F15) | Lien ou code sans approbation (D2) : le retrait devient le seul contrôle. Durée de validité du lien : Q7. | CLS-01 à CLS-04, ASG-01 |
+| F14 | Un professeur a plusieurs classes, chacune avec plusieurs élèves, et leur envoie un devoir. | Décomposée : classes (ici) et envoi (avec F15) | Lien ou code sans approbation (D2) : le retrait devient le seul contrôle. Lien et code valables 1 heure [D, 2026-10-14] (Q7). | CLS-01 à CLS-04, ASG-01 |
 | F15 | À la création d'un devoir, le professeur choisit les classes destinataires. | Fidèle, fusionnée avec la création | Une seule étiquette de niveau pour des classes différentes. Ajout de classe ensuite : V2. Élève dans deux classes : un seul devoir. | ASG-01 |
 
 ---
@@ -308,10 +308,11 @@ Le professeur peut obtenir, pour chaque classe, un lien et un code d'invitation 
 *Acteur : Professeur · Origine et statut : D2 [D] · Dépend de : CLS-01 · Problèmes : — · Tests : unitaire, intégration*
 - **R1** [D] Le professeur invite en partageant un lien ou un code ; aucune étape d'approbation (D2).
 - **R2** [P] Le lien et le code ouvrent la même classe, ne sont pas devinables et ne donnent accès à aucune donnée avant le rattachement.
-- **R3** [P] Désactiver ou renouveler rend l'ancien lien et l'ancien code inopérants ; les élèves déjà rattachés restent. Essais de saisie limités. Durée de validité : Q7.
+- **R3** [P] Désactiver ou renouveler rend l'ancien lien et l'ancien code inopérants ; les élèves déjà rattachés restent. Essais de saisie limités.
+- **R4** [D, 2026-10-14] Le lien et le code expirent automatiquement après 1 heure (Q7). [P] L'heure court depuis leur génération ou leur renouvellement ; pour inviter de nouveau, le professeur les renouvelle.
 - **CA1** Lien et code affichés ; ils ne servent que cette classe.
 - **CA2** Code renouvelé : l'ancien est refusé, les élèves déjà rattachés restent.
-- **CA3** Code désactivé ou inconnu : rattachement refusé sans révéler l'existence de classes.
+- **CA3** Code désactivé, expiré ou inconnu : rattachement refusé sans révéler l'existence de classes.
 - **CA4** Après N saisies échouées (N à définir) : toute saisie est refusée pendant une durée à définir.
 
 #### CLS-03 — Rejoindre une classe par lien ou code
@@ -639,7 +640,7 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 
 #### E2 — Classes et invitation par lien ou code
 **Objectif.** Le professeur crée ses classes et partage un lien ou un code ; l'élève rejoint immédiatement une ou plusieurs classes ; le professeur consulte, retire et réadmet. **Fonctionnalités.** CLS-01 à CLS-04. **Dépend de.** E1
-- **Conception.** Classe et Appartenance (statut active ou retirée) ; nom unique par professeur ; élève dans plusieurs classes, une classe un professeur. Lien et code non devinables, désactivation et renouvellement, essais limités, validité selon Q7. Un lien ouvert sans session survit à la connexion ou l'inscription et à la confirmation, sans rattacher un compte non confirmé. Rattachement immédiat et idempotent (D2) ; retrait = statut « retirée », refus neutre à la nouvelle tentative, réadmission par le professeur. Matrice étendue à Classe, Appartenance, liste d'élèves.
+- **Conception.** Classe et Appartenance (statut active ou retirée) ; nom unique par professeur ; élève dans plusieurs classes, une classe un professeur. Lien et code non devinables, désactivation et renouvellement, essais limités, validité 1 heure (Q7 [D]). Un lien ouvert sans session survit à la connexion ou l'inscription et à la confirmation, sans rattacher un compte non confirmé. Rattachement immédiat et idempotent (D2) ; retrait = statut « retirée », refus neutre à la nouvelle tentative, réadmission par le professeur. Matrice étendue à Classe, Appartenance, liste d'élèves.
 - **Implémentation.** Création et liste des classes ; génération, affichage, désactivation, renouvellement du lien et du code ; écran « Rejoindre une classe » ; liste des élèves, retrait, réadmission.
 - **Tests.** Unitaires : unicité du nom, validité du code, idempotence. Intégration : critères de CLS-01 à CLS-04 (code renouvelé, désactivé, essais limités, deux classes, retiré refusé, réadmis) ; un second professeur n'accède à rien. E2E : le professeur partage le code, l'élève s'inscrit via le lien, confirme, apparaît dans la liste, est retiré puis refusé.
 - **Critères de sortie.** Critères de CLS-01 à CLS-04 passés, hors ceux rejoués (table 8.3) ; démonstration à deux professeurs et une élève rattachée aux deux, chacun ne voyant que sa classe ; matrice étendue avec tests négatifs ; Q7 tranchée ou recommandation provisoire.
@@ -795,7 +796,8 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 ### Q7 — Le lien et le code d'invitation d'une classe expirent-ils, et quand ?
 - **Pourquoi.** Sans approbation (D2), toute personne qui obtient le lien ou le code peut rejoindre la classe et voir les devoirs ; les contrôles sont le renouvellement (CLS-02), le retrait et le refus de rattachement (CLS-03, CLS-04).
 - **Options.** Pas d'expiration automatique, désactivation et renouvellement manuels ; expiration automatique après une durée à définir ; usage unique par élève.
-- **Recommandation.** Pas d'expiration automatique dans le MVP ; ajouter une expiration (durée à définir) si l'usage montre des rattachements indésirables. **Échéance** : avant E2.
+- **Recommandation** (non retenue). Pas d'expiration automatique dans le MVP ; ajouter une expiration (durée à définir) si l'usage montre des rattachements indésirables. **Échéance** : avant E2.
+- **Décision** [D, 2026-10-14]. Expiration automatique après 1 heure ; désactivation et renouvellement manuels restent possibles. Point de départ [P] : génération ou renouvellement (CLS-02 R4).
 
 ### Q8 — Que voit l'élève quand le professeur modifie une évaluation déjà publiée ?
 - **Pourquoi.** D6 sépare validation et publication mais ne dit rien d'une correction après coup ; cela fixe les transitions de la machine à états et ce que l'élève peut avoir déjà vu.

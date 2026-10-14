@@ -353,6 +353,7 @@ Puis **T1**, et **T5** pour Q7.
 
 ## 4. Points ouverts qui touchent ces prompts
 
-- Q1 (note sur 20), Q2 (premier administrateur), Q3, Q4, Q6, Q7, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
+- Q1 (note sur 20), Q2 (premier administrateur), Q3, Q4, Q6, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
+- Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure (CLS-02 R4). Le code d'E2 applique encore l'ancienne recommandation (pas d'expiration) : à aligner sur demande.
 - Q5 : langue des remarques de l'IA. L'interface est en anglais, mais pour une copie en français la question reste ouverte.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.
