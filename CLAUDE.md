@@ -29,7 +29,6 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
   - la preview publique [D] ;
   - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
 - **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0004`.
-- **Test instable connu** : deux tests de `tests/sign-in.int.test.ts` vieillissent une session de 1 s avec l'horloge de Neon ; un décalage avec l'horloge du conteneur les fait échouer. Une tâche séparée a été proposée.
 
 ## Environnement
 
@@ -82,6 +81,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 - **Seul `src/server/data/**` importe `@/server/db`** (règle ESLint). Chaque fonction reçoit l'`Actor` (`src/server/access/actor.ts`) en premier argument, appelle d'abord `authorize()`, filtre la propriété dans la requête (`ownedBy`) et renvoie un DTO minimal. Une exception sans `Actor` (lien à usage unique, outil interne) est listée avec sa raison dans `inventory.ts`.
 - Nommage : camelCase en TypeScript, snake_case en SQL (`casing: "snake_case"`, jamais de nom de colonne écrit à la main) ; tables au pluriel ; `id uuid default gen_random_uuid()` ; `<entité>_id` ; `created_at`/`updated_at` en `timestamptz` ; états et rôles en `pgEnum`.
 - Migrations : `npm run db:generate -- --name=<verbe_objet>`, relire le SQL de `drizzle/`, le commiter ; `npm run db:migrate` sur dev. Jamais `drizzle-kit push` ; une migration commitée ne se modifie plus.
+- **Deux horloges** : celle du conteneur peut différer de celle de Neon d'une seconde ou plus (Docker sous Windows dérive). Une date écrite par `now()` se compare dans SQL. Better Auth compare l'expiration d'une session à l'horloge Node : un test qui expire une session la vieillit d'un jour, pas d'une seconde.
 - Tests : `npm test` (projets `unit` et `integration`). Les `*.int.test.ts` tournent en séquence sur `DATABASE_URL_TEST`, remise à zéro puis migrée à chaque exécution, tables vidées avant chaque test (`truncateAll`).
 - Intégration et E2E partagent `DATABASE_URL_TEST` : ne les lance jamais en même temps. Neon est en `us-east-2` : environ 175 ms par requête depuis le poste, d'où des tests lents.
 - Les variables arrivent dans le conteneur par `env_file` (`compose.yaml`) : après modification de `.env.local`, `docker compose up -d`.

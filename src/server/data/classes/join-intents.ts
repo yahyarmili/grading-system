@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { CLASS_INVITE_INTENT_TTL, CLASS_INVITE_TTL } from "@/config/provisional";
 import { isInviteUsable, LINK_TOKEN_PATTERN, linkDigest } from "@/server/classes/invite-codes";
 import type { db } from "@/server/db/client";
@@ -26,8 +26,12 @@ export async function joinFromIntents(tx: Tx, userId: string): Promise<void> {
   const intents = await tx
     .delete(classJoinIntents)
     .where(eq(classJoinIntents.userId, userId))
-    .returning({ linkDigest: classJoinIntents.linkDigest, createdAt: classJoinIntents.createdAt });
-  const fresh = intents.filter((i) => Date.now() - i.createdAt.getTime() < CLASS_INVITE_INTENT_TTL * 1000);
+    .returning({
+      linkDigest: classJoinIntents.linkDigest,
+      // Aged with the database clock, the one that wrote created_at.
+      fresh: sql<boolean>`${classJoinIntents.createdAt} > now() - make_interval(secs => ${CLASS_INVITE_INTENT_TTL})`,
+    });
+  const fresh = intents.filter((i) => i.fresh);
   if (fresh.length === 0) return;
 
   const targets = await tx

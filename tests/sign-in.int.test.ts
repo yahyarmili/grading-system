@@ -137,6 +137,13 @@ describe(`CA3: after ${SIGN_IN_MAX_FAILURES} failures, sign-in is paused (provis
   });
 });
 
+/**
+ * Expires every session. Better Auth compares the expiry with the Node clock,
+ * not the database one, and the two can differ by a second or more (Docker on
+ * Windows drifts): a session a day old is expired for both.
+ */
+const expireSessions = () => db.update(sessions).set({ expiresAt: sql`now() - interval '1 day'` });
+
 describe("CA4: sign-out, expiry and unconfirmed accounts", () => {
   it("gives no session to an unconfirmed account and says how to confirm (R3)", async () => {
     await createUser("sam@example.test", "student", false);
@@ -160,7 +167,7 @@ describe("CA4: sign-out, expiry and unconfirmed accounts", () => {
   it("ignores an expired session", async () => {
     await createUser("sam@example.test", "student");
     const cookie = await sessionCookie("sam@example.test");
-    await db.update(sessions).set({ expiresAt: sql`now() - interval '1 second'` });
+    await expireSessions();
     expect(await sessionFor(cookie)).toBeNull();
   });
 });
@@ -208,7 +215,7 @@ describe("role spaces (src/proxy.ts)", () => {
   it("an expired session leads to sign-in", async () => {
     await createUser("sam@example.test", "student");
     const cookie = await sessionCookie("sam@example.test");
-    await db.update(sessions).set({ expiresAt: sql`now() - interval '1 second'` });
+    await expireSessions();
     expect((await visit("/student/assignments", cookie)).status).toBe(307);
   });
 });
