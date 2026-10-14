@@ -347,7 +347,7 @@ Le professeur peut créer un devoir (sujet, niveau, langue, date limite, instruc
 - **R2** [D] Le niveau est une étiquette de la liste fermée A1, A2, B1, B2, C1, non transmise à l'IA (D4). La date limite n'empêche pas la remise (D8, SUB-04).
 - **R3** [D] Les classes sont choisies à la création (F14, F15) : au moins une, parmi les siennes ; la classe d'un autre professeur est refusée sans création partielle.
 - **R4** [P] Sujet et instructions servent à juger l'adéquation à la tâche ; ils ne peuvent ni ajouter, ni retirer, ni repondérer un critère. Avertissement affiché : pas de nom d'élève, ni de mention du niveau ou de la classe, dans ces champs transmis à l'IA (EVL-02).
-- **R5** [P] Un élève présent dans plusieurs classes destinataires voit un seul devoir et n'a qu'une remise possible. Fuseau horaire de la date limite : à définir.
+- **R5** [P] Un élève présent dans plusieurs classes destinataires voit un seul devoir et n'a qu'une remise possible. Fuseau horaire de la date limite : `Africa/Casablanca` [D, 2026-10-14].
 - **CA1** Professeur à trois classes qui choisit C1 et C3 : le devoir est envoyé à C1 et C3 uniquement.
 - **CA2** Champ obligatoire manquant, langue hors français et anglais, niveau hors liste, aucune classe : création refusée avec un message par champ, aucun devoir partiel.
 - **CA3** Devoir sans instructions : création valide, aucun bloc vide chez l'élève. Élève membre de C1 et C3 : un seul devoir.
@@ -408,7 +408,7 @@ L'élève peut déposer une ou plusieurs images scannées de sa production manus
 Le système accepte une remise déposée après la date limite et la marque « en retard », visible du professeur et de l'élève.
 *Acteur : Système · Origine et statut : D8 [D] · Dépend de : SUB-02 · Problèmes : — · Tests : unitaire, intégration*
 - **R1** [D] La date limite n'empêche pas la remise ; le retard est accepté et marqué (D8).
-- **R2** [P] Est en retard la première remise horodatée strictement après la date limite (horodatage du serveur, fuseau unique à définir). L'indicateur suit la date de première remise : un remplacement (SUB-05) ne le crée ni ne le retire ; le professeur voit aussi la date de la version active. Limite assumée : déposer à l'heure puis remplacer après la date limite n'est pas marqué.
+- **R2** [P] Est en retard la première remise horodatée strictement après la date limite (horodatage du serveur, fuseau unique `Africa/Casablanca` [D, 2026-10-14]). L'indicateur suit la date de première remise : un remplacement (SUB-05) ne le crée ni ne le retire ; le professeur voit aussi la date de la version active. Limite assumée : déposer à l'heure puis remplacer après la date limite n'est pas marqué.
 - **R3** [P] Le retard n'entre pas dans la requête à l'IA et n'a aucun effet sur la note proposée ; aucune pénalité automatique, la décision revient au professeur.
 - **CA1** Remise strictement après la date limite : créée et marquée « en retard ». Remise avant ou exactement à la date limite : non marquée.
 - **CA2** Remise à l'heure puis remplacée après la date limite : non marquée ; le professeur voit les deux dates.

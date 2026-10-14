@@ -114,6 +114,8 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 
 Contenu de l'application en anglais (interface, emails, messages) ; code et identifiants en anglais ; échanges, prompts et documents de conception en français.
 
+**Fuseau [D, 2026-10-14]** : `Africa/Casablanca`, pour saisir et afficher la date limite, avec son nom affiché, identique pour l'élève et le professeur (NFR-USA-02). Valeur dans `src/config/decisions.ts`, ajoutée en E3. Les écrans formatés aujourd'hui en UTC passent à ce fuseau au fil d'E3.
+
 ## Travail sur la conception
 
 - Quand une décision change, mets à jour la section concernée de `conception/` (marquée [D] avec la date), les prompts à venir et ce fichier si la règle est durable (prompt T5). Pour un nouveau sujet de conception, l'utilisateur s'exprime d'abord ; tu reformules et analyses avant de proposer un brouillon, et tu n'enregistres qu'à sa demande ou après sa validation.

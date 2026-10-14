@@ -336,14 +336,14 @@ Puis **T1**, et **T5** pour Q7.
 
 ## E3 — Devoirs et espace élève (ASG-01 à ASG-03, SUB-01)
 
-Préalable : trancher le **fuseau horaire** de la date limite (NFR-USA-02, « à définir, probablement celui du Maroc »), par T5. Sinon, `Africa/Casablanca` est codé comme valeur provisoire [P].
+Fuseau de la date limite : `Africa/Casablanca` [D, 2026-10-14] (NFR-USA-02). La valeur va dans `src/config/decisions.ts`.
 
 #### E3.0 — Planifier · Plan
 ```
 Inspecte l'application (matrice src/server/access/matrix.ts, inventory.ts, couche src/server/data/, maquettes de /teacher/assignments) et planifie les devoirs et l'espace élève : ASG-01 à ASG-03 et SUB-01 (conception/fonctionnalites.md §6 et §8.2 E3, états du devoir en §5.5).
 Il faut :
 - Devoir (title, subject, level A1 à C1, language en ou fr, deadline, instructions facultatives, créateur) et Envoi (devoir × classe) ; création en une seule transaction, au moins une classe parmi les siennes, aucune création partielle ;
-- un fuseau unique pour saisir et afficher la date limite, affiché explicitement, dans un module unique (décision ou valeur provisoire) ; remplacer les formats de date en UTC des écrans concernés ;
+- un fuseau unique pour saisir et afficher la date limite, affiché explicitement, lu depuis `src/config/decisions.ts` (`Africa/Casablanca`, [D]) ; remplacer les formats de date en UTC des écrans concernés ;
 - verrouillage : le plan dit comment le devoir saura qu'il a reçu une remise en E4 (colonne posée dans la transaction de la première remise, ou autre), et comment une modification et une première remise simultanées sont arbitrées (une seule l'emporte) ;
 - propriété indirecte côté élève : un élève lit un devoir par ses appartenances actives, ou parce qu'il a une remise (cas d'un élève retiré, prévu dès maintenant pour E4) ; dis comment ownedBy le gère ;
 - l'état d'une remise vu par l'élève : quelle ligne de la matrice le couvre, sachant que l'élève n'a pas de lecture sur « Submission » ; projection à liste fermée (toStudentStatus) ;
@@ -393,7 +393,7 @@ Rejoue CLS-04 CA2 : un élève retiré ne reçoit pas un devoir créé après so
 Vérifie que la matrice étendue passe (assignment, envoi, vue élève) et qu'un second professeur n'accède à rien.
 Écris le parcours E2E d'E3 : le professeur crée un devoir pour C1 et C3, l'élève des deux classes le voit une fois ; un élève sans classe voit l'état vide.
 ```
-Puis **T1**, et **T5** pour le fuseau et les nouvelles valeurs provisoires.
+Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 
 ---
 
@@ -447,7 +447,7 @@ La lecture est enregistrée (compte, date, version du texte) ; la première remi
 ```
 Implémente le marquage « late » (SUB-04) selon le plan : calculé en SQL sur la date de première remise, strictement après la date limite, sans effet sur ce qui ira à l'IA.
 Affiche « Late » à l'élève à côté de « Submitted, being marked » ; le professeur le verra dans sa liste en E7 (SUB-04 CA3 rejoué).
-Tests de frontière : une seconde avant, exactement à la date limite, une seconde après ; date limite un jour de changement d'heure dans le fuseau retenu. Couvre CA1 ; CA2 est testé avec E4.5.
+Tests de frontière : une seconde avant, exactement à la date limite, une seconde après ; date limite pendant un changement d'heure d'`Africa/Casablanca` (passage à GMT+0 pendant le ramadan). Couvre CA1 ; CA2 est testé avec E4.5.
 ```
 **Vous validez :** une remise après la date limite est marquée « Late », une remise à l'heure exacte ne l'est pas.
 
@@ -488,7 +488,7 @@ Puis **T1**, et **T5** pour Q3, Q10, la longueur maximale et les nouvelles valeu
 ## 4. Points ouverts qui touchent ces prompts
 
 - Q1 (note sur 20), Q2 (premier administrateur), Q3, Q4, Q6, Q9, Q10 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9). Q3 et Q10 sont dues avant E4.
-- Fuseau de la date limite (NFR-USA-02) : à trancher avant E3. Longueur maximale d'un texte (NFR-TRT-02) : avant E4.
+- Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`. Longueur maximale d'un texte (NFR-TRT-02) : avant E4.
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
 - Q5 : langue des remarques de l'IA. L'interface est en anglais, mais pour une copie en français la question reste ouverte.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.
