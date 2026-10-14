@@ -104,12 +104,13 @@ export function DataTable<Row>({
         </div>
       )}
 
-      {/* Focusable so keyboard users can scroll it horizontally. */}
+      {/* Focusable so keyboard users can scroll it horizontally. Relative: the
+          sr-only texts (absolute) stay clipped here instead of widening the page. */}
       <div
         role="region"
         aria-label={label}
         tabIndex={0}
-        className="overflow-x-auto focus-visible:outline-offset-[-2px]"
+        className="relative overflow-x-auto focus-visible:outline-offset-[-2px]"
       >
         <table className="w-full border-collapse text-left">
           <caption className="sr-only">{label}</caption>

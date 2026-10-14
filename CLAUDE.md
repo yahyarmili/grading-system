@@ -18,17 +18,17 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 ## État (2026-10-14)
 
-- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02) et E2.3 (CLS-03) faites ; E2.3 est commitée sur `preview`, pas poussée. **Prochain prompt : E2.4** (élèves, retrait, réadmission), puis E2.5. Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
+- **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 en cours** : E2.0 (plan), E2.1 (CLS-01), E2.2 (CLS-02), E2.3 (CLS-03) et E2.4 (CLS-04) faites, commitées sur `preview`, pas poussées. **Prochain prompt : E2.5** (E2E, démonstration, T1, T5). Plan approuvé d'E2 : `~/.claude/plans/pasted-content-id-af4b-inspecte-l-appli-noble-horizon.md` (rejoindre, intention d'invitation, matrice `classMembership` et `classRoster`).
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
   - Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D] ;
   - Q7 : recommandation appliquée (`CLASS_INVITE_TTL = null`, pas d'expiration), non décidée ;
-  - les lignes de matrice [P] : `teacherInvitation`, `classInvite`, `classMembership` ;
+  - les lignes de matrice [P] : `teacherInvitation`, `classInvite`, `classMembership`, `classRoster` ; événements de sécurité `class_member_removed` et `class_member_readmitted` [P] ;
   - `CLASS_INVITE_INTENT_TTL` (7 jours, [P] arbitraire) : durée du cookie et de l'intention liée au compte ;
   - format du code de classe [P] : 8 symboles Crockford Base32, affiché `XXXX-XXXX` ; pas de réactivation après désactivation (on renouvelle) ;
   - la preview publique [D] ;
   - Vercel Hobby sans carte bancaire, Neon en `us-east-2`.
-- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0004`.
+- **Base dev** : un administrateur, un professeur et un élève, créés en E1.8 par les acteurs. Migrations à jour jusqu'à `0005`.
 
 ## Environnement
 
@@ -36,7 +36,7 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 - Next.js 16 diffère de versions plus anciennes (`proxy.ts` au lieu de `middleware.ts`, `cacheComponents` activé) : consulte `node_modules/next/dist/docs/` avant d'utiliser une API (voir `AGENTS.md`).
 - Secrets : l'utilisateur crée comptes et secrets ; le code lit `process.env`. Ne lis jamais `.env*`.
 - **Shell** : PowerShell 5.1 casse les guillemets de `sh -c`. Passe par l'outil Bash avec `docker compose exec -T web …`, et ajoute `MSYS_NO_PATHCONV=1` pour un chemin du conteneur (`/tmp/…`).
-- **E2E** : `docker compose run --rm e2e` (image Playwright). Ce service lance son propre serveur Next (port 3100) sur `DATABASE_URL_TEST`, avec `EMAIL_TRANSPORT=capture`.
+- **E2E** : `docker compose run --rm e2e` (image Playwright). Ce service lance son propre serveur Next (port 3100) sur `DATABASE_URL_TEST`, avec `EMAIL_TRANSPORT=capture`. Après une modification du code, le premier test peut dépasser 15 s (`next dev` recompile à la première requête) : relancer avant de chercher un bug.
 - **Build** : ne lance pas `next build` dans `web` ; fais-le dans le conteneur `e2e`, qui a son propre `.next`. Le build réécrit ensuite `next-env.d.ts` : redémarre `web` après (`docker compose restart web`).
 - **Premier administrateur** : `npm run admin:create -- --email … --first-name … --last-name …`.
 

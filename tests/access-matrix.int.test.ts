@@ -11,6 +11,7 @@ import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/a
 import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
+import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
 import { db } from "@/server/db/client";
 import { classes, classMemberships, users } from "@/server/db/schema";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
@@ -169,6 +170,11 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   classMembership: {
     // Joining makes the actor's own membership; an unknown code is refused, nothing joined.
     write: { run: (actor) => joinClass(actor, { code: "ZZZZ-9999" }), creates: true },
+  },
+  classRoster: {
+    setup: ownedClass,
+    read: { run: (actor, { classId }) => listClassStudents(actor, classId) },
+    write: { run: (actor, { classId }) => removeStudent(actor, classId, people.concernedStudent.userId) },
   },
 };
 

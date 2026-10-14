@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { type Browser } from "@playwright/test";
-import { createStudent, createTeacher, PASSWORD, signIn, sql, uniqueEmail, waitForLink } from "./support/helpers";
+import { createStudent, createTeacher, expectNotFound, PASSWORD, signIn, uniqueEmail, waitForLink } from "./support/helpers";
 
 // CLS-01: a teacher creates and lists their classes (CA1 to CA3).
 
@@ -177,8 +177,8 @@ test("a new student joins through the link: sign up, confirm elsewhere, sign in"
   await expect(student.getByRole("heading", { name: "Grade 10 — A" })).toHaveCount(1);
 });
 
-// CLS-03 CA1 to CA4: an existing student joins by link (sign-in first), then by code;
-// once removed, the same code gets the neutral refusal.
+// CLS-03 CA1 to CA4, CLS-04 CA1 and CA4: an existing student joins by link (sign-in first), then by code;
+// removed by the teacher, the same code gets the neutral refusal; readmitted, the class is back.
 test("an existing student joins by link and by code; removed, the code is refused", async ({ browser }) => {
   const first = await teacherWithClass(browser, "Grade 10 — A");
   const second = await teacherWithClass(browser, "French — Group 2");
@@ -208,13 +208,30 @@ test("an existing student joins by link and by code; removed, the code is refuse
   await expect(student.getByText("You are already in this class")).toBeVisible();
   await expect(student.getByRole("heading", { name: "French — Group 2" })).toHaveCount(1);
 
-  // CA4: removed (the screen arrives with CLS-04), the active code is refused like an unknown one.
-  await sql(
-    `UPDATE class_memberships SET status = 'removed', removed_at = now()
-     WHERE student_id = (SELECT id FROM users WHERE email = $1)
-       AND class_id = (SELECT id FROM classes WHERE name = 'French — Group 2')`,
-    [email],
-  );
+  // CA4: removed by the teacher (CLS-04), the active code is refused like an unknown one.
+  const teacher = second.page;
+  const roster = teacher.locator("section").filter({ has: teacher.getByRole("heading", { name: "Students", exact: true }) });
+  await teacher.reload();
+  const row = () => roster.getByRole("row").filter({ hasText: email });
+  await expect(row()).toContainText("Adam");
+  await expect(row()).toContainText("Rami");
+  await teacher.screenshot({ path: "test-results/class-roster-desktop.png", fullPage: true });
+  await row().getByRole("button", { name: "Remove Adam Rami" }).click();
+  const confirmRemove = teacher.getByRole("dialog", { name: "Remove Adam Rami from the class?" });
+  await confirmRemove.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(confirmRemove).toBeHidden();
+  await expect(roster.getByText(/Student removed/)).toBeVisible();
+  await expect(roster.getByRole("tab", { name: "Active (0)" })).toBeVisible();
+  await expect(roster.getByText("No students yet")).toBeVisible();
+  await roster.getByRole("tab", { name: "Removed (1)" }).click();
+  await expect(row()).toBeVisible();
+  await teacher.screenshot({ path: "test-results/class-roster-removed-desktop.png", fullPage: true });
+  await teacher.setViewportSize({ width: 375, height: 812 });
+  await teacher.screenshot({ path: "test-results/class-roster-removed-phone.png", fullPage: true });
+  // The table scrolls inside its frame, never the page.
+  expect(await teacher.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  await teacher.setViewportSize({ width: 1280, height: 800 });
+
   await student.reload();
   await expect(student.getByRole("heading", { name: "French — Group 2" })).toHaveCount(0);
   await form.getByLabel("Class code").fill(second.code);
@@ -225,6 +242,20 @@ test("an existing student joins by link and by code; removed, the code is refuse
   await form.getByRole("button", { name: "Join the class" }).click();
   await expect(student.getByText("This link or code doesn't work. Check it with your teacher.")).toBeVisible();
   await expect(student.getByRole("heading", { name: "French — Group 2" })).toHaveCount(0);
+
+  // CLS-04 R2, CA4: readmitted by the teacher, no code needed: the class is back.
+  await row().getByRole("button", { name: "Readmit Adam Rami" }).click();
+  await teacher.getByRole("dialog", { name: "Readmit Adam Rami?" }).getByRole("button", { name: "Readmit" }).click();
+  await expect(roster.getByText(/Student readmitted/)).toBeVisible();
+  await expect(roster.getByRole("tab", { name: "Removed (0)" })).toBeVisible();
+  await roster.getByRole("tab", { name: "Active (1)" }).click();
+  await expect(row()).toBeVisible();
+  await student.reload();
+  await expect(student.getByRole("heading", { name: "French — Group 2" })).toHaveCount(1);
+
+  // CA4: another teacher reaches neither the class nor its students.
+  await expectNotFound(first.page, new URL(teacher.url()).pathname);
+  await expect(first.page.getByText(email)).toHaveCount(0);
 
   // A teacher opening a class link cannot join.
   await first.page.goto(second.link);

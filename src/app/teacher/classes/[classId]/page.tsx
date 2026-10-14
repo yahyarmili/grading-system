@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { z } from "zod";
+import { LoadingState } from "@/components/loading";
 import { BackLink, PageHeader } from "@/components/shell/shell-parts";
 import { CLASS_INVITE_TTL } from "@/config/provisional";
 import { formatDuration } from "@/lib/duration";
 import { getActor } from "@/server/auth/session";
 import { getClass } from "@/server/data/classes/classes";
 import { getClassInvite } from "@/server/data/classes/invites";
+import { listClassStudents } from "@/server/data/classes/roster";
 import { InviteCard } from "./invite-card";
+import { Roster } from "./roster";
 
 export const metadata: Metadata = { title: "Class" };
 
@@ -33,9 +37,22 @@ export default async function Page({ params }: PageProps<"/teacher/classes/[clas
     <>
       <BackLink href="/teacher/classes">Classes</BackLink>
       <PageHeader title={found.name} />
-      <div className="flex max-w-3xl flex-col gap-6">
-        <InviteCard classId={found.id} invite={invite} validity={validity} />
+      <div className="flex flex-col gap-8">
+        <div className="max-w-3xl">
+          <InviteCard classId={found.id} invite={invite} validity={validity} />
+        </div>
+        {/* The class is the teacher's: the list of students may stream. */}
+        <Suspense fallback={<LoadingState label="Loading students…" />}>
+          <ClassStudents classId={found.id} />
+        </Suspense>
       </div>
     </>
   );
+}
+
+async function ClassStudents({ classId }: { classId: string }) {
+  const roster = await listClassStudents(await getActor(), classId);
+  // Gone between the check above and now: nothing to show.
+  if (!roster) return null;
+  return <Roster classId={classId} roster={roster} />;
 }

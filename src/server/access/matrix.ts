@@ -62,6 +62,12 @@ export const ACCESS_MATRIX = {
     label: "Own class membership (join)",
     concernedStudent: W, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
   },
+  classRoster: {
+    // [P] Detail of "list of students": first name, last name and email of the
+    // class's students (invariant 9); writing removes and readmits (CLS-04).
+    label: "Class list of students",
+    concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
+  },
   assignment: {
     label: "Assignment",
     // Student: assignments of their classes, or with a submission. Teacher: writes per locking (ASG-03).

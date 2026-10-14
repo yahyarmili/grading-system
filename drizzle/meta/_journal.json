@@ -36,6 +36,13 @@
       "when": 1791980587737,
       "tag": "0004_create_class_join_intents",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791983135377,
+      "tag": "0005_add_class_member_events",
+      "breakpoints": true
     }
   ]
 }

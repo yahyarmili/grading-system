@@ -18,7 +18,7 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   auth_throttles: { internal: "attempt counters (AUTH-02 R2, AUTH-05 R3)" },
   security_events: { internal: "security log (DON-05), read by no screen in the MVP" },
   classes: ["class", "classInvite"],
-  class_memberships: ["class", "classMembership"],
+  class_memberships: ["class", "classMembership", "classRoster"],
   class_join_intents: { internal: "digests of class links opened before confirmation (CLS-03 R3), used once confirmed" },
 };
 
@@ -47,6 +47,8 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/classes/actions.ts#createClassAction": { resource: "class", action: "write" },
   "src/app/teacher/classes/actions.ts#renewInviteAction": { resource: "classInvite", action: "write" },
   "src/app/teacher/classes/actions.ts#disableInviteAction": { resource: "classInvite", action: "write" },
+  "src/app/teacher/classes/actions.ts#removeStudentAction": { resource: "classRoster", action: "write" },
+  "src/app/teacher/classes/actions.ts#readmitStudentAction": { resource: "classRoster", action: "write" },
 };
 
 /**

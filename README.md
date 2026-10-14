@@ -13,7 +13,7 @@ Preview Vercel publique (protection désactivée pour la démonstration), relié
 | Étape | Contenu | État |
 |---|---|---|
 | E1 | Comptes, rôles, accès (AUTH-01 à AUTH-05) | Livrée |
-| E2 | Classes et invitation (CLS-01 à CLS-04) | En cours : créer et lister ses classes (CLS-01), lien et code d'invitation (CLS-02) livrés ; rejoindre, retrait et réadmission à venir |
+| E2 | Classes et invitation (CLS-01 à CLS-04) | En cours : créer et lister ses classes (CLS-01), lien et code d'invitation (CLS-02), rejoindre par lien ou code (CLS-03), liste des élèves, retrait et réadmission (CLS-04) livrés ; E2E de démonstration et T5 à venir (E2.5) |
 
 Suivi prompt par prompt : [`conception/prompts-implementation.md`](conception/prompts-implementation.md).
 
@@ -68,7 +68,7 @@ Node ne tourne que dans Docker.
 | `src/server/access/` | Matrice d'accès en données, contrôle unique `authorize()`, inventaire |
 | `src/server/data/` | Seul code qui accède à la base ; applique la matrice |
 | `src/server/auth/`, `src/server/email/` | Parcours d'authentification, interface email unique |
-| `src/server/classes/` | Classes : validation, lien et code d'invitation (dérivés, jamais stockés), essais limités |
+| `src/server/classes/` | Classes : validation, lien et code d'invitation (dérivés, jamais stockés), essais limités, retrait et réadmission |
 | `src/config/provisional.ts` | Valeurs non décidées, marquées provisoires |
 | `drizzle/`, `scripts/` | Migrations SQL, script du premier administrateur |
 | `tests/`, `e2e/` | Vitest (unitaires, intégration), Playwright |
