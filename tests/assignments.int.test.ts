@@ -536,3 +536,71 @@ describe("SUB-01: the student's received assignments", () => {
     await expect(listStudentAssignments(await createUser(role))).rejects.toBeInstanceOf(AccessDeniedError);
   });
 });
+
+// E3.5: the replays of the step (fonctionnalites.md §8.3).
+describe("E3 replays", () => {
+  async function send(teacher: Actor, classIds: string[], title: string) {
+    const state = await createTeacherAssignment(teacher, form(classIds, { title }));
+    if (state.status !== "done") throw new Error(JSON.stringify(state));
+    return state.assignmentId;
+  }
+  const received = async (student: Actor) => (await listStudentAssignments(student)).map((a) => a.title).sort();
+
+  it("CLS-04 CA2: removed, the student does not receive an assignment created after; readmitted, receives the next ones", async () => {
+    const teacher = await createUser("teacher");
+    const c1 = await newClass(teacher, "C1");
+    const student = await createUser("student");
+    await db.insert(classMemberships).values({ classId: c1, studentId: student.userId });
+
+    expect(await removeStudent(teacher, c1, student.userId)).toBe(true);
+    await send(teacher, [c1], "After removal");
+    expect(await received(student)).toEqual([]);
+    // The teacher's list still has it: sent to the class, not to the removed student.
+    expect((await listTeacherAssignments(teacher)).map((a) => a.title)).toEqual(["After removal"]);
+
+    expect(await readmitStudent(teacher, c1, student.userId)).toBe(true);
+    await send(teacher, [c1], "After readmission");
+    // Received by derivation [D]: the one sent while removed comes back with the readmission.
+    expect(await received(student)).toEqual(["After readmission", "After removal"]);
+  });
+
+  it("removed from C1 but still in C3: an assignment sent to both still arrives, once; one for C1 alone does not", async () => {
+    const teacher = await createUser("teacher");
+    const [c1, c3] = [await newClass(teacher, "C1"), await newClass(teacher, "C3")];
+    const student = await createUser("student");
+    await db.insert(classMemberships).values([
+      { classId: c1, studentId: student.userId },
+      { classId: c3, studentId: student.userId },
+    ]);
+    expect(await removeStudent(teacher, c1, student.userId)).toBe(true);
+    await send(teacher, [c1, c3], "Both classes");
+    await send(teacher, [c1], "C1 only");
+    expect(await received(student)).toEqual(["Both classes"]);
+  });
+
+  it("a second teacher reaches nothing of the first one's assignments, and nothing changes", async () => {
+    const sarah = await createUser("teacher");
+    const [c1, c3] = [await newClass(sarah, "C1"), await newClass(sarah, "C3")];
+    const id = await send(sarah, [c1, c3], "Sarah's");
+    const before = await db.select().from(assignments);
+    const karim = await createUser("teacher");
+
+    // List, page, edit form and deletion: as if the assignment did not exist.
+    expect(await listTeacherAssignments(karim)).toEqual([]);
+    expect(await getTeacherAssignment(karim, id)).toBeNull();
+    expect(await editTeacherAssignment(karim, id, { title: "Karim's", level: "A1" })).toMatchObject({
+      status: "error", message: ASSIGNMENT_MESSAGES.notFound,
+    });
+    expect(await updateAssignment(karim, id, { title: "Karim's", level: "A1" })).toBeNull();
+    expect(await deleteTeacherAssignment(karim, id)).toEqual({ ok: false, message: ASSIGNMENT_MESSAGES.notFound });
+    // Sending to Sarah's class: refused like a missing class, nothing created.
+    expect(await createTeacherAssignment(karim, form([c1]))).toMatchObject({
+      status: "invalid", fieldErrors: { classIds: ASSIGNMENT_ERRORS.classNotFound },
+    });
+    // The student's view is not a teacher's.
+    await expect(listStudentAssignments(karim)).rejects.toBeInstanceOf(AccessDeniedError);
+
+    expect(await db.select().from(assignments)).toEqual(before);
+    expect(await recipientsOf(id)).toEqual([c1, c3].sort());
+  });
+});
