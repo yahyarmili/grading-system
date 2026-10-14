@@ -45,7 +45,8 @@ const NOTICES: Record<JoinNotice, { tone: "info" | "error"; title: string; text:
 /** After a class link (/join, sign-in): what happened. */
 async function LinkNotice({ searchParams }: Pick<PageProps<"/student/classes">, "searchParams">) {
   const { join } = await searchParams;
-  const notice = typeof join === "string" && join in NOTICES ? NOTICES[join as JoinNotice] : null;
+  // Own keys only: "constructor" or "toString" in the URL is not a notice.
+  const notice = typeof join === "string" && Object.hasOwn(NOTICES, join) ? NOTICES[join as JoinNotice] : null;
   if (!notice) return null;
   return (
     <Alert tone={notice.tone} title={notice.title} live>
