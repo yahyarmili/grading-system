@@ -127,6 +127,11 @@ describe("the notice text (Q10, QNF-1)", () => {
     expect(all).toContain("if you write your name in it, your name is sent too");
   });
 
+  it("says the training opt-out is set, never that the AI service may train on the text", () => {
+    expect(all).toContain("is set so that what it receives is not used to train its models");
+    expect(all).not.toMatch(/may (use|train)|improve its models/i);
+  });
+
   it("says it is a demonstration with fictitious data, and leaves the undecided to be defined", () => {
     expect(STUDENT_NOTICE.demonstration).toContain("demonstration with fictitious data");
     const controller = STUDENT_NOTICE.sections.find((s) => s.heading === "Who is responsible for your data");

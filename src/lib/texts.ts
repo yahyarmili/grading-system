@@ -53,12 +53,16 @@ export const TO_BE_DEFINED = "To be defined.";
 /**
  * NFR-DON-04 [P]: what the student reads before their first submission.
  * Its reading is recorded with `version`: change the text, raise the version,
- * and every student reads it again. No promise that their name is not sent
+ * and every student reads it again before their next first submission (a
+ * replacement does not ask again). No promise that their name is not sent
  * (Q10 [D]): a name written in the text goes with it. The data controller,
  * retention and contact wait for QNF-1 and QNF-4.
+ * Version 2: the Mistral training opt-out is done and Labs models stay off
+ * (stack-technologique.md §3). If either setting changes, change the sentence
+ * and raise the version.
  */
 export const STUDENT_NOTICE = {
-  version: 1,
+  version: 2,
   title: "Before your first submission: your data",
   demonstration:
     "This is a demonstration with fictitious data. Do not submit real personal information or a real student's work.",
@@ -73,7 +77,7 @@ export const STUDENT_NOTICE = {
       body: [
         "Your text, the assignment's subject, instructions and language, and the marking rubric are sent to Mistral AI, an outside AI service based outside Morocco.",
         "The app does not add your name, email or class. But everything written in your text is sent as it is: if you write your name in it, your name is sent too.",
-        "The AI service may use what it receives to improve its models.",
+        "The app's account with this service is set so that what it receives is not used to train its models.",
       ],
     },
     {

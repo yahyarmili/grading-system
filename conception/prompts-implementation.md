@@ -478,10 +478,17 @@ Préalables :
   - créez une clé API Mistral (offre gratuite) et ajoutez `MISTRAL_API_KEY` dans `.env.local`, puis `docker compose up -d` ;
   - limites de débit relevées le 2026-10-15 (`stack-technologique.md` §3) ;
   - refus d'entraînement fait le 2026-10-15 (QNF-5, `stack-technologique.md` §3) ;
+  - avant E6, relevez dans la console la ligne de `mistral-medium-3-5` (seul l'alias `mistral-medium-latest` est relevé) ;
 - **Tranchées [D, 2026-10-15]** (`fonctionnalites.md` §9) :
   - **Q1** : note sur 20, somme des 5 niveaux ; le pas de saisie d'une note libre reste provisoire ;
   - **Q5** : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA et mention « note ajustée » affichées à l'élève (E8) ;
   - **Q6** : devoirs en français créables, aucune proposition IA jusqu'à la validation de la rubrique française par le client ; « IA indisponible » et correction à la main d'ici là.
+- **Tranchés après l'enquête E5.0 [D, 2026-10-15]** (le modèle par vous ; les quatre autres points délégués à Claude) :
+  - **Modèle** : `mistral-medium-3-5`, épinglé, jamais un alias ; identifiant fixe mais non daté, écart assumé au critère d'E5.0 ; retrait et limites : `stack-technologique.md` §3.
+  - **Activation** : `AI_PROVIDER` vaut `simulator` (défaut) ou `mistral` ; toujours le simulateur sous `NODE_ENV=test` et dans le serveur E2E (`AI_PROVIDER: "simulator"` dans `webServer.env` de `playwright.config.ts`, comme `EMAIL_TRANSPORT`). `mistral` sans clé est une erreur, jamais un repli silencieux. La clé est passée explicitement au SDK, qui lirait sinon `MISTRAL_API_KEY` de lui-même ; elle est vidée dans Vitest et dans le serveur E2E.
+  - **Proposition courante** : un pointeur dans `submissions`, posé par la transition 5 via `applyTransition` et remis à vide par la transition 11 dans `replaceText`. C'est une modification d'E4, à retester.
+  - **Rubrique** : dans le code, sous la forme d'un registre de versions publiées figé par un test d'empreinte. La rubrique française « test only » n'est injectable que dans les tests. Activer le français revient à publier une version dans le code et à déployer, selon la procédure écrite (NFR-EXP-03).
+  - **Test d'étanchéité (EVL-02 CA1)** : la capture va jusqu'au corps HTTP sérialisé par le SDK (vrai adaptateur, client HTTP de capture), en plus de l'interface. Une garde réseau sans dépendance remplace `globalThis.fetch` : tout appel bloqué fait échouer le test.
 - **Données** : textes fictifs seulement (NFR-DON-02). Aucune copie réelle n'est envoyée à Mistral.
 
 #### E5.0 — Enquête par sous-agents
@@ -500,12 +507,13 @@ Chacun renvoie : comportement actuel, fichiers concernés, risques, recommandati
 Il faut :
 - une rubrique versionnée en lecture seule (version anglaise publiée ; pas de version française avant sa validation par le client, Q6 [D]), dont la version est enregistrée avec chaque proposition ; le français s'active par la publication d'une nouvelle version, sans écran, selon une procédure écrite (NFR-EXP-03) ;
 - une note calculée par le système, sur 20, somme des 5 niveaux (Q1 [D]), jamais par l'IA ; GRADE_SCALE et la règle passent de provisional.ts à decisions.ts ;
-- une interface unique d'évaluation, deux implémentations : Mistral (SDK officiel, modèle daté épinglé) et un simulateur à pannes injectables (erreur, délai dépassé, sortie non conforme, citation introuvable). Le simulateur est le défaut ; Mistral seulement si une variable l'active explicitement ; chaque envoi réel est inscrit au journal de sécurité, sans contenu (DON-05) ;
+- une interface unique d'évaluation, deux implémentations : Mistral (SDK officiel, `mistral-medium-3-5` épinglé) et un simulateur à pannes injectables (erreur, délai dépassé, sortie non conforme, citation introuvable). Le simulateur est le défaut ; Mistral seulement si `AI_PROVIDER=mistral` ; chaque envoi réel est inscrit au journal de sécurité, sans contenu (DON-05) ;
 - une requête construite en un point unique depuis une liste blanche : texte de la version évaluée, sujet, instructions, langue, rubrique. Ni identité, ni niveau, ni identifiant, ni retard (EVL-02, SUB-04 R3). Texte et instructions encadrés comme des données, jamais comme des consignes ;
 - un contrat de sortie strict (5 niveaux entiers de 0 à 4, 5 justifications non vides avec citations, commentaire général, pistes ; remarques dans la langue du devoir, Q5 [D]), validé côté serveur ; tentatives bornées ; tolérance de correspondance des citations ;
 - une proposition immuable liée à la version de remise évaluée, une seule courante par remise, avec modèle, version de consigne, version de rubrique, durée, tentatives et usage ;
 - des alertes bloquantes (aucun contenu évaluable ; devoir en français sans rubrique française validée) qui mènent à « not assessable » avec sa cause, et des alertes d'information (copie très courte, autre langue, hors sujet, texte adressé au correcteur), jamais vues de l'élève ;
 - les transitions 2 et 5 seulement, déclenchées par une commande interne ; l'enchaînement automatique est pour E6.
+Déjà tranchés (préalables d'E5) : le modèle, AI_PROVIDER, le pointeur de proposition courante, la rubrique dans le code, la capture jusqu'au corps HTTP.
 Valeurs non décidées (tentatives, tolérance des citations, seuil de copie courte, écart maximal du jeu adverse) : provisional.ts.
 Montre : tables et contraintes (dont l'immuabilité), interface et simulateur, constructeur de requête, validateur, lignes de matrice et d'inventaire, commande interne, et la vérification.
 ```
@@ -520,8 +528,8 @@ Couvre CA1 (aucune écriture, par l'interface ou par requête directe), CA2 (5 c
 #### E5.3 — Interface d'évaluation, simulateur, adaptateur Mistral
 ```
 Implémente l'interface unique d'évaluation, le simulateur à pannes injectables et l'adaptateur Mistral selon le plan, sans les brancher aux remises.
-Le simulateur est le défaut partout ; aucun test ne touche le réseau. L'adaptateur épingle un modèle daté, borne la durée de chaque appel et inscrit chaque envoi réel au journal de sécurité, sans contenu ni identité.
-Ajoute un essai manuel (script) qui envoie un texte fictif à Mistral et affiche la réponse, pour vérifier la clé et le format.
+Le simulateur est le défaut partout ; aucun test ne touche le réseau. L'adaptateur épingle `mistral-medium-3-5`, borne la durée de chaque appel et inscrit chaque envoi réel au journal de sécurité, sans contenu ni identité.
+Ajoute un essai manuel (script) qui envoie un texte fictif à Mistral et affiche la réponse, pour vérifier la clé, le format et l'accès au modèle.
 ```
 **Vous validez :** les tests passent hors réseau ; l'essai manuel obtient une réponse ; le journal de sécurité montre l'envoi, sans le texte.
 
@@ -604,7 +612,7 @@ Utilise le sous-agent feature-reviewer pour relire de façon indépendante l'év
 Points : étanchéité de la requête (identité, niveau, identifiants, retard), texte traité comme une donnée, contrat de sortie, immuabilité et proposition courante unique, transitions, matrice aiProposal, journal de sécurité sans contenu, aucun appel réseau dans les tests, valeurs provisoires marquées comme telles.
 Ne modifie rien. Renvoie d'abord la revue.
 ```
-Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour le modèle retenu et les nouvelles valeurs provisoires.
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les nouvelles valeurs provisoires.
 
 ---
 
@@ -695,7 +703,7 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs 
 
 - Q2 (premier administrateur), Q4, Q8, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
 - Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`.
-- Q3, Q10 et longueur maximale d'un texte tranchées [D, 2026-10-15] : 2 remplacements au plus jusqu'au premier acte du professeur, sans avertissement d'image illisible ; consigne « pas de nom » seule ; 4000 caractères. À coder dans `src/config/decisions.ts` en E4.
+- Q3, Q10 et longueur maximale d'un texte tranchées [D, 2026-10-15] : 2 remplacements au plus jusqu'au premier acte du professeur, sans avertissement d'image illisible ; consigne « pas de nom » seule ; 4000 caractères. Codées dans `src/config/decisions.ts` (E4).
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
 - Q1, Q5, Q6 tranchées [D, 2026-10-15] : note sur 20, somme des niveaux ; remarques dans la langue du devoir, mentions de l'IA et de la note ajustée affichées ; français sans proposition IA jusqu'à la validation de sa rubrique.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.
