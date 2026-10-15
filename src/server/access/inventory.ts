@@ -22,6 +22,10 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   class_join_intents: { internal: "digests of class links opened before confirmation (CLS-03 R3), used once confirmed" },
   assignments: ["assignment"],
   assignment_classes: ["assignmentRecipients"],
+  // The student writes their own (submits, replaces) and reads only its status
+  // in the closed list; never a version (A3). The owner teacher reads (E7).
+  submissions: ["submission", "ownSubmissionStatus"],
+  submission_versions: ["submission"],
 };
 
 /**
@@ -82,4 +86,6 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/classes/invites.ts#findClassByInvite": "the code or link is the proof; only behind the attempt limit (CLS-02 CA4)",
   "src/server/data/classes/join-intents.ts#recordJoinIntent": "internal: inside the public sign-up transaction (CLS-03 R3)",
   "src/server/data/classes/join-intents.ts#joinFromIntents": "internal: inside the one-time link transaction that confirms the address (CLS-03 R3)",
+  "src/server/data/submissions/transitions.ts#insertReceived": "internal: transition 1, inside a submission transaction that has authorized the actor",
+  "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor",
 };
