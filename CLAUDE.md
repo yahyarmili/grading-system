@@ -20,6 +20,7 @@ Trois acteurs : administrateur (crée les comptes professeur), professeur, élè
 
 - **E1 livrée** (E1.0 à E1.8, T1 fait). **E2 livrée** (E2.0 à E2.5, T1 fait ; T5 pour Q7 fait).
 - **E3 en cours** : E3.0 (plan), E3.1 (ASG-01 : création, `/teacher/assignments/new`), E3.2 (ASG-02 : liste réelle, page d’un devoir avec 404 réel ; maquettes 1.4 et 1.5 sous `/dev/mockups`, en développement seulement) et E3.3 (ASG-03 : modification `/teacher/assignments/[id]/edit` et suppression avec confirmation ; garde `locked_at IS NULL` dans la requête d’écriture, tâche renvoyée inchangée acceptée même verrouillée ; CA2 testé en posant le verrou dans le test, rejoué en E4) et E3.4 (SUB-01 : `/student/assignments` réel, `listStudentAssignments` renvoie un DTO fermé, réception par `EXISTS` dans `receivedBy`, état vide qui renvoie vers Join a class) et E3.5 (rejeux : CLS-04 CA2, second professeur, matrice étendue ; parcours `e2e/e3-journey.spec.ts`) faits. Plan approuvé d'E3 : `~/.claude/plans/pasted-content-id-faad-inspecte-l-appli-typed-meerkat.md` (verrou `locked_at` et `content_version`, propriété dérivée côté élève, lignes `assignmentRecipients` et `ownSubmissionStatus`, fuseau).
+- **Préalables d'E4 [D, 2026-10-15]** (T5 fait) : Q3, remplacement jusqu'à la première modification ou validation du professeur, 2 remplacements au plus (3 versions), aucun avertissement d'image illisible ; Q10, consigne « pas de nom » seule (aucune notice ne promet que le nom n'est pas transmis) ; texte remis de 4000 caractères au plus. Valeurs à coder dans `src/config/decisions.ts`.
 - **Réception dérivée [D, 2026-10-14]** : un élève voit les devoirs des classes où son appartenance est active, quelle que soit la date d'envoi (réadmis ou arrivé tard, il voit aussi les devoirs déjà envoyés). Pas de table de destinataires par élève.
 - **T5 non faits** ; à consigner dans `conception/` quand l'utilisateur le demande :
   - les valeurs de `src/config/provisional.ts` (E1 et E2) ;
@@ -111,7 +112,7 @@ Ces règles sont des propositions validées avec la pile ; leur emplacement exac
 
 ## Valeurs provisoires
 
-`fonctionnalites.md` n'a pas été validé explicitement : les recommandations de Q1 à Q10 ne sont pas des décisions (par exemple Q1 note sur 20, Q3 remplacement d'une remise, Q4 correction de la transcription, Q6 rubrique française). Toute valeur non décidée (format de la note, durée d'un lien, nombre d'essais…) est codée comme valeur provisoire, marquée comme telle, dans un fichier de configuration unique (`src/config/provisional.ts`) ; une valeur décidée [D] passe dans `src/config/decisions.ts`. Signale-la ; ne la présente pas comme décidée et n'invente aucun chiffre.
+`fonctionnalites.md` n'a pas été validé explicitement : les recommandations de Q1 à Q10 ne sont pas des décisions (par exemple Q1 note sur 20, Q4 correction de la transcription, Q6 rubrique française ; Q3, Q7 et Q10 sont tranchées). Toute valeur non décidée (format de la note, durée d'un lien, nombre d'essais…) est codée comme valeur provisoire, marquée comme telle, dans un fichier de configuration unique (`src/config/provisional.ts`) ; une valeur décidée [D] passe dans `src/config/decisions.ts`. Signale-la ; ne la présente pas comme décidée et n'invente aucun chiffre.
 
 ## Langue
 

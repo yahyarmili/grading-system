@@ -399,7 +399,7 @@ Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 
 ## E4 — Remise de texte, retard, remplacement (SUB-02, SUB-04, SUB-05)
 
-Préalables, par T5, sinon les recommandations sont codées comme valeurs provisoires : **Q3** (jusqu'à quand remplacer, plafond) et **Q10** (consigne « pas de nom » seule) ont leur échéance « avant E4 » ; la **longueur maximale d'un texte** est « à définir » (NFR-TRT-02).
+Préalables tranchés [D, 2026-10-15], valeurs dans `src/config/decisions.ts` : **Q3** remplacement jusqu'à la première modification ou validation, 2 remplacements au plus, aucun avertissement d'image illisible ; **Q10** consigne « pas de nom » seule ; **longueur maximale d'un texte** 4000 caractères (NFR-TRT-02).
 
 #### E4.0 — Planifier la remise et la machine d'états · Plan
 ```
@@ -410,7 +410,8 @@ Il faut :
 - création atomique et idempotente (double clic, nouvel essai après coupure : une seule remise) ;
 - horodatage par l'horloge de la base, retard calculé en SQL, strictement après la date limite, sur la date de première remise (voir « Deux horloges » dans CLAUDE.md) ;
 - verrouillage du devoir posé dans la transaction de la première remise (mécanisme d'E3) ;
-- remplacement : versions archivées ; un indicateur « le professeur a commencé » (modifié ou validé), alimenté en E7 et E8, arbitré de façon atomique avec le remplacement (le premier arrivé l'emporte) ; plafond selon Q3 ;
+- remplacement : versions archivées ; un indicateur « le professeur a commencé » (modifié ou validé), alimenté en E7 et E8, arbitré de façon atomique avec le remplacement (le premier arrivé l'emporte) ; 2 remplacements au plus (Q3 [D]), compte sûr sous concurrence ;
+- texte de 4000 caractères au plus [D] : unité de comptage à fixer dans le plan (caractères affichés ou unités UTF-16), identique dans le navigateur et le serveur ;
 - contrôles : compte confirmé, membre actif d'une classe destinataire, devoir lié ; élève retiré : remise refusée, devoir déjà remis gardé en lecture seule ;
 - l'élève ne relit jamais son texte (A3) : aucune lecture de la Version côté élève ;
 - module unique des textes décisionnels (consigne « no name », notice) s'il n'existe pas encore.
@@ -429,9 +430,9 @@ Pas encore d'écran. Inscris les tables dans inventory.ts.
 #### E4.2 — Remettre un texte (SUB-02)
 ```
 /build-ui Implémente la remise d'un texte collé (SUB-02) : écran de remise depuis My assignments, sur téléphone d'abord.
-Consigne « Do not write your name in your text » affichée avant l'envoi (Q10), depuis le module des textes ; zone de texte sans correction automatique (autocorrect, spellcheck, autocapitalize désactivés, NFR-TRT-02) ; limite de longueur annoncée avant l'envoi et appliquée par le serveur, jamais de troncature.
+Consigne « Do not write your name in your text » affichée avant l'envoi (Q10 [D] : consigne seule, ni alerte ni masquage), depuis le module des textes ; zone de texte sans correction automatique (autocorrect, spellcheck, autocapitalize désactivés, NFR-TRT-02) ; limite de 4000 caractères [D] annoncée avant l'envoi et appliquée par le serveur, jamais de troncature.
 Confirmation datée après l'envoi, puis état « Submitted, being marked ». Le devoir se verrouille à la première remise.
-Tests : texte conservé à l'identique (fautes, accents, apostrophes typographiques, retours à la ligne, Unicode non normalisé), texte vide ou fait d'espaces refusé, limite dépassée refusée, double envoi = une remise, élève non membre ou retiré refusé. Inscris les fonctions réelles dans REAL. Couvre CA1 à CA3.
+Tests : texte conservé à l'identique (fautes, accents, apostrophes typographiques, retours à la ligne, Unicode non normalisé), texte vide ou fait d'espaces refusé, 4000 caractères acceptés et 4001 refusés, double envoi = une remise, élève non membre ou retiré refusé. Inscris les fonctions réelles dans REAL. Couvre CA1 à CA3.
 ```
 **Vous validez :** sur téléphone, vous collez un texte plein de fautes et le recevez tel quel en base ; un double clic ne crée qu'une remise ; le devoir devient non supprimable.
 
@@ -453,10 +454,10 @@ Tests de frontière : une seconde avant, exactement à la date limite, une secon
 
 #### E4.5 — Remplacer sa remise (SUB-05)
 ```
-/build-ui Implémente le remplacement de la remise (SUB-05) : action « Replace my submission » tant que le professeur n'a ni modifié ni validé, nouvelle version active, ancienne archivée et horodatée, plafond selon Q3 (valeur provisoire si non tranché).
+/build-ui Implémente le remplacement de la remise (SUB-05) : action « Replace my submission » tant que le professeur n'a ni modifié ni validé, nouvelle version active, ancienne archivée et horodatée, 2 remplacements au plus (Q3 [D]) : le nombre restant est affiché, le troisième est refusé avec un message explicite.
 Le retard reste celui de la première remise (SUB-04 CA2).
 La garde « le professeur a commencé » est dans la requête d'écriture ; en attendant E7 et E8, pose-la directement dans les tests.
-Couvre CA1, CA3 et CA4 (remplacement et premier acte simultanés : un seul aboutit, l'autre reçoit un refus explicite). CA2 est rejoué en E6.
+Couvre CA1 (dont le troisième remplacement refusé, et deux remplacements simultanés qui ne dépassent pas le plafond), CA3 et CA4 (remplacement et premier acte simultanés : un seul aboutit, l'autre reçoit un refus explicite). CA2 est rejoué en E6.
 ```
 **Vous validez :** vous remplacez un texte, l'ancien est archivé ; une remise faite à l'heure puis remplacée après la date limite n'est pas marquée « Late ».
 
@@ -466,7 +467,7 @@ Rejoue sur de vraies remises : ASG-03 CA2 (devoir verrouillé, suppression refus
 Vérifie que la matrice passe pour « Submission » : l'élève écrit la sienne sans jamais la relire, un autre élève et un autre professeur n'obtiennent rien, et aucune réponse envoyée à l'élève ne contient son texte ni un état interne.
 Écris le parcours E2E d'E4 : remise avant la date limite, remise après, remplacement, double clic.
 ```
-Puis **T1**, et **T5** pour Q3, Q10, la longueur maximale et les nouvelles valeurs provisoires.
+Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 
 ---
 
@@ -487,8 +488,9 @@ Puis **T1**, et **T5** pour Q3, Q10, la longueur maximale et les nouvelles valeu
 
 ## 4. Points ouverts qui touchent ces prompts
 
-- Q1 (note sur 20), Q2 (premier administrateur), Q3, Q4, Q6, Q9, Q10 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9). Q3 et Q10 sont dues avant E4.
-- Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`. Longueur maximale d'un texte (NFR-TRT-02) : avant E4.
+- Q1 (note sur 20), Q2 (premier administrateur), Q4, Q6, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
+- Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`.
+- Q3, Q10 et longueur maximale d'un texte tranchées [D, 2026-10-15] : 2 remplacements au plus jusqu'au premier acte du professeur, sans avertissement d'image illisible ; consigne « pas de nom » seule ; 4000 caractères. À coder dans `src/config/decisions.ts` en E4.
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
 - Q5 : langue des remarques de l'IA. L'interface est en anglais, mais pour une copie en français la question reste ouverte.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.

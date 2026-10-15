@@ -127,7 +127,7 @@ Toutes les mesures se font après construction (D10), valeurs cibles « à défi
 | F2 | L'utilisateur se connecte avec son compte. | Fidèle, précisée (tous les rôles) | Rôle non dit. Messages identiques, temporisation, session et récupération d'accès ajoutés. | AUTH-02, AUTH-03, AUTH-04, AUTH-05 |
 | F3 | Chaque élève a son espace de remise, dont le travail va vers son professeur. | Décomposée | « Son professeur » = créateur du devoir ; un élève peut en avoir plusieurs. Lien ou code sans approbation (D2). Remise liée à un devoir (D3). Trois états visibles de l'élève. | SUB-01, CLS-02, CLS-03, CLS-04, AUTH-04 |
 | F4 | L'élève dépose une ou plusieurs images scannées de sa production manuscrite. | Fidèle, précisée | Le scan est à la charge de l'élève (dépôt par le professeur : V2). Formats, poids, pages : à définir. Un nom écrit sur la copie peut atteindre l'IA (Q10). Photo défectueuse : remplacement (Q3). | SUB-03, SUB-04, SUB-05, EVL-02 |
-| F5 | L'élève colle sa production sous forme de texte. | Fidèle | Forme exacte et longueur à définir. Authenticité non vérifiable ; l'autocorrection de l'éditeur peut modifier Mechanics. Limites assumées. | SUB-02, SUB-04, SUB-05 |
+| F5 | L'élève colle sa production sous forme de texte. | Fidèle | Forme exacte à définir ; 4000 caractères au plus [D, 2026-10-15]. Authenticité non vérifiable ; l'autocorrection de l'éditeur peut modifier Mechanics. Limites assumées. | SUB-02, SUB-04, SUB-05 |
 | F6 | L'élève consulte sa note et le résultat une fois validé et rendu visible par le professeur. | Fidèle ; D6 et D7 précisent les actes et le contenu | Rien d'exposé avant publication, par aucune voie. Langue des remarques, mention de l'IA, note ajustée : Q5. | PUB-02, PUB-01, REV-05, SUB-01, AUTH-04 |
 | F7 | Si une image est remise, son texte est extrait pour le professeur. | Fidèle, étendue à la fidélité (étape 2) | Le texte extrait est aussi l'entrée de l'IA : une erreur de lecture devient une erreur de note. Correction par le professeur : Q4. | TRX-01, REV-02, PRC-01, PRC-02, EVL-04 |
 | F8 | Chaque remise est évaluée par un LLM selon la rubrique. | Décomposée, sens conservé | Fiabilité non acquise : mesurée après construction (D10). Un nom écrit dans la copie peut passer. Rubrique française à valider (Q6). Repli manuel si l'IA échoue. | EVL-01 à EVL-04, PRC-01, PRC-02, REV-06 |
@@ -219,7 +219,7 @@ L = lecture, É = écriture, — = refus (test négatif exécutable). « Propri�
 | 8 | À valider -> Validée | Le professeur valide (REV-05). |
 | 9 | Validée -> Publiée | Le professeur publie (PUB-01). « Valider et publier » enchaîne 8 et 9 en une action (D6). |
 | 10 | Publiée -> Validée ; Validée ou Publiée -> À valider | Retrait de la publication (PUB-01) ; modification de l'évaluation (REV-03, Q8). |
-| 11 | Remise reçue ... À valider -> Remise reçue | L'élève remplace sa remise (SUB-05) tant que le professeur n'a ni modifié ni validé (Q3). Un traitement lancé sur une version devenue non active produit un résultat conservé mais non courant. |
+| 11 | Remise reçue ... À valider -> Remise reçue | L'élève remplace sa remise (SUB-05) tant que le professeur n'a ni modifié ni validé, 2 fois au plus (Q3 [D]). Un traitement lancé sur une version devenue non active produit un résultat conservé mais non courant. |
 
 Règles transverses :
 - Aucune remise ne reste indéfiniment « en cours » ; l'échec d'une remise ne bloque aucune autre.
@@ -385,10 +385,10 @@ L'élève dispose d'un espace qui liste les devoirs reçus de ses classes et l'�
 #### SUB-02 — Remettre une production en texte collé
 L'élève peut coller ou saisir le texte de sa production pour un devoir, afin de la remettre à son professeur.
 *Acteur : Élève · Origine et statut : F5, D3 [D] · Dépend de : SUB-01 · Problèmes : P1, P3 · Tests : unitaire, intégration, E2E*
-- **R1** [D] La production est remise sous forme de texte, rattachée à un devoir (F5, D3). [P] Texte brut non vide ; limite de longueur à définir, refus explicite au-delà, jamais de troncature silencieuse.
+- **R1** [D] La production est remise sous forme de texte, rattachée à un devoir (F5, D3). [P] Texte brut non vide ; refus explicite au-delà de la limite, jamais de troncature silencieuse. [D, 2026-10-15] Limite : 4000 caractères.
 - **R2** [P] Fautes d'orthographe, de ponctuation et de majuscules conservées telles quelles jusqu'à l'IA : aucune correction automatique.
 - **R3** [P] Une version de remise est faite de texte OU d'images, jamais des deux ; le mode est enregistré et visible du professeur.
-- **R4** [P] Consigne affichée avant l'envoi : ne pas écrire son nom dans la production (Q10). Limite assumée : l'application ne sait pas si le texte a été écrit par l'élève, copié ou généré.
+- **R4** [D, 2026-10-15] Consigne seule, affichée avant l'envoi : ne pas écrire son nom dans la production ; pas d'alerte ni de masquage dans le MVP (Q10). [P] Limite assumée : l'application ne sait pas si le texte a été écrit par l'élève, copié ou généré.
 - **CA1** Devoir et texte non vide : une remise est créée avec ce texte à l'identique et une confirmation datée s'affiche.
 - **CA2** Texte vide, fait d'espaces ou au-delà de la limite : remise refusée avec un message explicite.
 - **CA3** Texte contenant des fautes : elles sont conservées inchangées dans le texte transmis à l'évaluation. Compte non confirmé ou élève retiré : remise refusée.
@@ -419,8 +419,8 @@ L'élève peut remplacer sa remise tant que le professeur n'a ni modifié ni val
 *Acteur : Élève · Origine et statut : F4, F5 (complément) [P] · Dépend de : SUB-02 · Problèmes : — · Tests : intégration, E2E*
 - **R1** [P] Une seule remise active par couple (devoir, élève) ; les anciennes versions sont conservées et horodatées.
 - **R2** [P] Un remplacement relance le traitement ; la proposition précédente n'est plus courante mais reste conservée. Le résultat d'un traitement lancé sur une version non active est conservé, non courant, et ne fait pas passer la remise à « À valider ».
-- **R3** [P] Refus dès que le professeur a modifié ou validé l'évaluation ; remplacement et premier acte du professeur sont arbitrés de façon atomique, le premier arrivé l'emporte. Jusqu'à quand, plafond, avertissement de l'élève en cas d'image illisible : Q3.
-- **CA1** Remise ni modifiée ni validée : le remplacement est accepté et l'ancienne version archivée.
+- **R3** [P] Refus dès que le professeur a modifié ou validé l'évaluation ; remplacement et premier acte du professeur sont arbitrés de façon atomique, le premier arrivé l'emporte. [D, 2026-10-15] (Q3) Remplacement possible jusqu'à la première modification ou validation du professeur ; 2 remplacements au plus (3 versions) ; aucun avertissement d'image illisible.
+- **CA1** Remise ni modifiée ni validée : le remplacement est accepté et l'ancienne version archivée. Troisième remplacement : refusé avec un message explicite.
 - **CA2** Après un remplacement, la transcription (image) et l'évaluation sont relancées (rejoué en E6) ; le résultat de l'ancienne version, arrivé tard, n'est pas courant.
 - **CA3** Évaluation modifiée ou copie validée : remplacement refusé (rejoué en E7 et E8).
 - **CA4** Remplacement et modification simultanés : un seul aboutit, l'autre reçoit un refus explicite.
@@ -656,10 +656,10 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 
 #### E4 — Remise de texte, retard et remplacement
 **Objectif.** L'élève remet un texte collé pour un devoir ; la remise est datée, marquée « en retard » le cas échéant, conservée à l'identique, remplaçable tant que le professeur n'a pas commencé. **Fonctionnalités.** SUB-02, SUB-04, SUB-05. **Dépend de.** E3
-- **Conception.** Remise (une seule active par couple) et Version (texte OU pages-images, jamais les deux) ; le modèle accueille déjà les images, sans migration de fond en E9. Table centrale des transitions d'état (5.5) : toute transition hors table est refusée ; tous les états sont déclarés dès maintenant. Texte brut non vide, limite à définir, refus explicite, aucune correction. Consigne « pas de nom » (Q10). Retard calculé sur la date de première remise (SUB-04), sans effet sur l'IA. Remplacement : versions archivées ; refus après modification ou validation, via un indicateur alimenté en E7 et E8 ; arbitrage atomique entre remplacement et premier acte du professeur ; plafond selon Q3.
+- **Conception.** Remise (une seule active par couple) et Version (texte OU pages-images, jamais les deux) ; le modèle accueille déjà les images, sans migration de fond en E9. Table centrale des transitions d'état (5.5) : toute transition hors table est refusée ; tous les états sont déclarés dès maintenant. Texte brut non vide, 4000 caractères au plus [D], refus explicite, aucune correction. Consigne « pas de nom » seule (Q10 [D]). Retard calculé sur la date de première remise (SUB-04), sans effet sur l'IA. Remplacement : versions archivées ; refus après modification ou validation, via un indicateur alimenté en E7 et E8 ; arbitrage atomique entre remplacement et premier acte du professeur ; 2 remplacements au plus (Q3 [D]).
 - **Implémentation.** Écran de remise avec confirmation datée ; contrôles (compte confirmé, membre actif d'une classe destinataire, devoir lié) ; création atomique et idempotente (double clic) ; marquage du retard ; remplacement avec archivage ; état « Remis, en cours de correction » ; verrouillage du devoir à la première remise.
 - **Tests.** Unitaires : texte vide ou d'espaces, longueur, conservation à l'identique (fautes, accents, retours à la ligne), frontière exacte de la date limite et fuseau. Intégration : critères de SUB-02, SUB-04 et SUB-05 (branche texte) ; ASG-03 rejoué après première remise ; élève non confirmé ou retiré refusé ; élève A ne remet pas pour une classe non rejointe. E2E : remise avant puis après la date limite, remplacement.
-- **Critères de sortie.** Critères de SUB-02, SUB-04, SUB-05 passés pour le texte, hors ceux rejoués (table 8.3) ; verrouillage d'ASG-03 vérifié sur des remises réelles ; texte stocké strictement identique au texte saisi ; aucun état technique chez l'élève ; Q3 et Q10 tranchées ou recommandations provisoires.
+- **Critères de sortie.** Critères de SUB-02, SUB-04, SUB-05 passés pour le texte, hors ceux rejoués (table 8.3) ; verrouillage d'ASG-03 vérifié sur des remises réelles ; texte stocké strictement identique au texte saisi ; aucun état technique chez l'élève ; décisions Q3 et Q10 appliquées.
 - **Risques.** L'autocorrection de l'éditeur de l'élève altère Mechanics avant la remise ; authenticité non vérifiable ; remplacement après la date limite non marqué (limite assumée de SUB-04, les deux dates sont visibles) ; fuseau horaire ; texte volumineux ou adressé au correcteur (E5).
 
 #### E5 — Rubrique fixe et proposition d'évaluation par l'IA
@@ -777,6 +777,7 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 - **Pourquoi.** Un remplacement relance les traitements et peut rendre caduc le travail du professeur. Avec trois états visibles, l'élève ne sait jamais que sa photo est illisible (alerte de qualité : V2) et n'a aucun déclencheur pour remplacer. Le retard suit la date de première remise (SUB-04).
 - **Options.** Jusqu'à la première modification ou validation du professeur (SUB-05) ; jusqu'à la validation, avec avertissement du professeur ; jusqu'à la date limite ; plafond de remplacements (à définir). Image illisible : aucun avertissement (le professeur contacte l'élève hors application) ou un 4e état élève « À revoir ».
 - **Recommandation.** Jusqu'à la première modification ou validation, versions conservées, plafond à définir ; pas d'avertissement dans le MVP, état « À revoir » en V2 avec l'alerte de qualité. Limite connue : l'élève ne peut plus corriger une photo une fois le professeur à l'œuvre. **Échéance** : avant E4.
+- **Décision** [D, 2026-10-15]. Jusqu'à la première modification ou validation du professeur ; 2 remplacements au plus (3 versions) ; aucun avertissement d'image illisible dans le MVP.
 
 ### Q4 — Le professeur peut-il corriger la transcription d'une copie image, avec relance de l'évaluation ?
 - **Pourquoi.** Sans correction, une erreur de lecture devient une erreur de note et le professeur ne peut qu'ajuster niveaux et note ; avec correction, il peut normaliser les fautes de l'élève, ce qui fausse Mechanics. La réponse change l'écran de copie, le journal et l'entité Transcription.
@@ -813,3 +814,4 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 - **Pourquoi.** Sur une copie manuscrite le nom figure souvent en tête ; il est transcrit puis transmis à l'IA, ce qui affaiblit le principe validé « l'identité n'est pas transmise ». La consigne ne suffira pas toujours ; l'absence d'identité ne rend de toute façon pas l'IA neutre.
 - **Options.** Consigne seule, affichée avant l'envoi (SUB-02, SUB-03) ; consigne et alerte au professeur en revue quand un nom semble présent ; masquage automatique dans le MVP.
 - **Recommandation.** Consigne seule dans le MVP, taux de présence mesuré en E10 (O3), masquage automatique en V2 si le taux est significatif. **Échéance** : avant E4.
+- **Décision** [D, 2026-10-15]. Consigne seule dans le MVP, affichée avant l'envoi (SUB-02, SUB-03).
