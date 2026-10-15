@@ -19,9 +19,11 @@ import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
+import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
-import { assignmentClasses, assignments, classes, classMemberships, users } from "@/server/db/schema";
+import { assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, users } from "@/server/db/schema";
+import { STUDENT_NOTICE } from "@/lib/texts";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
 
 // AUTH-04: every cell of the matrix (fonctionnalites.md §5.4) is replayed.
@@ -215,14 +217,28 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   // Submitting to the owner's assignment (SUB-02): the student who received it
   // writes their own; another student finds nothing; a teacher is refused.
   // Never read back by the student (A3): no read operation on this side.
+  // The student's own reading of the notice (NFR-DON-04): reading it makes it theirs.
+  noticeAcknowledgement: {
+    setup: noticeRead,
+    read: { run: (actor) => getNoticeAcknowledgement(actor) },
+    write: { run: (actor) => acknowledgeNotice(actor, STUDENT_NOTICE.version), creates: true },
+  },
   submission: {
-    setup: ownedAssignment,
+    setup: async () => ({ ...(await ownedAssignment()), ...(await noticeRead()) }),
     write: {
       run: (actor, { assignmentId }) =>
         submitText(actor, { assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small." }),
     },
   },
 };
+
+/** The concerned student read the notice in force. */
+async function noticeRead(): Promise<Fixture> {
+  await db.insert(noticeAcknowledgements).values({
+    userId: people.concernedStudent.userId, notice: "student_submission", version: STUDENT_NOTICE.version,
+  });
+  return {};
+}
 
 /** The fixture's assignment in the student's list; null when not received. */
 async function receivedAssignment(actor: Actor, assignmentId: string) {

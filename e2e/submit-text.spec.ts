@@ -24,6 +24,25 @@ test("a student submits a pasted text once, kept as written, then sees it being 
   await student.goto("/student/assignments");
   await student.getByRole("link", { name: "Write my text" }).click();
   await expect(student.getByRole("heading", { name: "My town", level: 1 })).toBeVisible();
+
+  // NFR-DON-04: the notice first, read once; the text box comes after.
+  await expect(student.getByRole("heading", { name: "Before your first submission: your data" })).toBeVisible();
+  await expect(student.getByText(/demonstration with fictitious data/)).toBeVisible();
+  await expect(student.getByText(/if you write your name in it, your name is sent too/)).toBeVisible();
+  await expect(student.getByRole("textbox", { name: /^Your text/ })).toHaveCount(0);
+  await student.waitForLoadState("networkidle");
+  await student.screenshot({ path: "test-results/e43-1-notice-phone.png", fullPage: true });
+  await student.setViewportSize({ width: 1280, height: 800 });
+  await student.screenshot({ path: "test-results/e43-2-notice-desktop.png", fullPage: true });
+  await student.setViewportSize(phone.viewport);
+  await student.getByRole("button", { name: "I have read this notice" }).click();
+  await expect(student.getByRole("heading", { name: "Before your first submission: your data" })).toHaveCount(0);
+  const recorded = await sql<{ version: number }>(
+    `SELECT n.version FROM notice_acknowledgements n JOIN users u ON u.id = n.user_id WHERE u.email = $1`,
+    [email],
+  );
+  expect(recorded).toEqual([{ version: 1 }]);
+
   await expect(student.getByText("Do not write your name in your text.")).toBeVisible();
   await expect(student.getByText("At most 4,000 characters. A longer text is refused, never cut.")).toBeVisible();
 

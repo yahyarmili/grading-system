@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
 import { SUBMISSION_TEXT_ERRORS } from "@/lib/submission-text";
+import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
 import {
   createAssignment,
@@ -13,6 +14,7 @@ import {
 } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { removeStudent } from "@/server/data/classes/roster";
+import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { db } from "@/server/db/client";
 import { assignments, classMemberships, submissions, submissionVersions, users } from "@/server/db/schema";
 import { SUBMISSION_MESSAGES, submitStudentText, type SubmitTextInput } from "@/server/submissions/submissions";
@@ -30,13 +32,14 @@ async function createUser(role: "student" | "teacher", emailVerified = true): Pr
   return { kind: "user", userId: user.id, role };
 }
 
-/** A teacher, a class with one member, and an assignment sent to it, due in a week. */
+/** A teacher, a class with one member who read the notice, and an assignment sent to it, due in a week. */
 async function setup() {
   const teacher = await createUser("teacher");
   const student = await createUser("student");
   const made = await createClass(teacher, { name: "Grade 10" });
   if (!made.ok) throw new Error("Class not created");
   await join(made.classId, student);
+  await acknowledgeNotice(student, STUDENT_NOTICE.version);
   const created = await createAssignment(teacher, {
     title: "My town", subject: "Describe your town.", level: "B1", language: "en",
     deadline: new Date(Date.now() + 7 * 24 * 3600 * 1000), instructions: null, classIds: [made.classId],

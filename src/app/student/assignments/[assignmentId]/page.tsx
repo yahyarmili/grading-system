@@ -9,6 +9,7 @@ import { languageLabels } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
 import { getActor } from "@/server/auth/session";
 import { getStudentAssignment } from "@/server/data/assignments/assignments";
+import { getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { SubmissionPanel } from "./submission-panel";
 
 export const metadata: Metadata = { title: "Assignment" };
@@ -22,8 +23,11 @@ export const instant = false;
 export default async function Page({ params }: PageProps<"/student/assignments/[assignmentId]">) {
   const { assignmentId } = await params;
   if (!z.uuid().safeParse(assignmentId).success) notFound();
-  const assignment = await getStudentAssignment(await getActor(), assignmentId);
+  const actor = await getActor();
+  const assignment = await getStudentAssignment(actor, assignmentId);
   if (!assignment) notFound();
+  // NFR-DON-04: before the first submission only.
+  const noticeRead = !assignment.canSubmit || (await getNoticeAcknowledgement(actor)) !== null;
 
   return (
     <>
@@ -64,6 +68,7 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
           status={assignment.status}
           submittedAt={assignment.submittedAt}
           canSubmit={assignment.canSubmit}
+          noticeRead={noticeRead}
         />
       </div>
     </>

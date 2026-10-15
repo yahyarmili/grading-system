@@ -89,6 +89,12 @@ export const ACCESS_MATRIX = {
     label: "Status of the own submission, closed list (SUB-01 R3)",
     concernedStudent: L, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
   },
+  noticeAcknowledgement: {
+    // [P] NFR-DON-04: the student's own reading of the notice before the
+    // first submission (account, date, version); written once read.
+    label: "Own reading of a notice (NFR-DON-04)",
+    concernedStudent: LW, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
+  },
   submission: {
     label: "Submission and images",
     // Student: replaces their own (SUB-05), never reads it back.

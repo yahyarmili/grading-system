@@ -22,6 +22,7 @@ import {
 } from "@/lib/texts";
 import type { SubmitTextState } from "@/server/submissions/submissions";
 import { submitTextAction } from "./actions";
+import { StudentNotice } from "./student-notice";
 
 // SUB-02: the text box before the first submission, the dated confirmation
 // after it. The text is never shown again once submitted (A3).
@@ -36,6 +37,7 @@ export function SubmissionPanel({
   status,
   submittedAt,
   canSubmit,
+  noticeRead,
 }: {
   assignmentId: string;
   language: AssignmentLanguage;
@@ -44,7 +46,11 @@ export function SubmissionPanel({
   status: StudentStatus;
   submittedAt: string | null;
   canSubmit: boolean;
+  /** NFR-DON-04: the notice in force was read; until then, it comes first. */
+  noticeRead: boolean;
 }) {
+  // Kept here: the text survives the notice shown again (a new version) and a refusal.
+  const [text, setText] = useState("");
   const [state, formAction, pending] = useActionState<SubmitTextState, FormData>(submitTextAction, {
     status: "idle",
   });
@@ -76,6 +82,21 @@ export function SubmissionPanel({
     );
   }
 
+  const refusal = state.status === "error" && (
+    <Alert tone={state.reason === "changed" || state.reason === "noticeNotRead" ? "warning" : "error"} title="Your text was not submitted" live>
+      {state.message}
+    </Alert>
+  );
+
+  if (!noticeRead) {
+    return (
+      <div className="flex flex-col gap-4">
+        {refusal}
+        <StudentNotice />
+      </div>
+    );
+  }
+
   return (
     <section aria-labelledby="your-text-title" className="card flex flex-col gap-4 p-4">
       <h2 id="your-text-title" className="text-base font-semibold">
@@ -88,17 +109,15 @@ export function SubmissionPanel({
         <p className="font-semibold">{NO_NAME_INSTRUCTION}</p>
       </div>
 
-      {state.status === "error" && (
-        <Alert tone={state.reason === "changed" ? "warning" : "error"} title="Your text was not submitted" live>
-          {state.message}
-        </Alert>
-      )}
+      {refusal}
 
       <form action={formAction} noValidate className="flex flex-col gap-4">
         <input type="hidden" name="assignmentId" value={assignmentId} />
         <input type="hidden" name="contentVersion" value={contentVersion} />
         <input type="hidden" name="requestId" value={requestId} />
         <TextField
+          text={text}
+          onText={setText}
           textRef={textRef}
           language={language}
           error={state.status === "invalid" ? state.error : undefined}
@@ -122,16 +141,19 @@ export function SubmissionPanel({
  * over the limit it is, and the server refuses it (SUB-02 R1).
  */
 function TextField({
+  text,
+  onText,
   textRef,
   language,
   error,
 }: {
+  text: string;
+  onText: (text: string) => void;
   textRef: React.RefObject<HTMLTextAreaElement | null>;
   language: AssignmentLanguage;
   error?: string;
 }) {
   // Controlled: React resets a form's fields after its action; a refused text must stay.
-  const [text, setText] = useState("");
   const count = countCharacters(normalizeLineEndings(text));
   const over = count - SUBMISSION_TEXT_MAX_LENGTH;
   return (
@@ -150,7 +172,7 @@ function TextField({
           spellCheck={false}
           data-gramm="false"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => onText(e.target.value)}
         />
       </FormField>
       <p className="flex items-center justify-end gap-1 text-sm tabular-nums">

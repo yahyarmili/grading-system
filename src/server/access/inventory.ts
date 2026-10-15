@@ -26,6 +26,7 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   // in the closed list; never a version (A3). The owner teacher reads (E7).
   submissions: ["submission", "ownSubmissionStatus"],
   submission_versions: ["submission"],
+  notice_acknowledgements: ["noticeAcknowledgement"],
 };
 
 /**
@@ -59,6 +60,7 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/assignments/actions.ts#editAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/actions.ts#deleteAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
+  "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
 };
 
 /**
@@ -89,6 +91,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/classes/join-intents.ts#joinFromIntents": "internal: inside the one-time link transaction that confirms the address (CLS-03 R3)",
   "src/server/data/assignments/received.ts#receivedBy": "helper of ownedBy(): the SQL predicate of a received assignment",
   "src/server/data/assignments/received.ts#visibleTo": "helper of ownedBy(): the SQL predicate of an assignment the student may read",
+  "src/server/data/notices/notices.ts#acknowledgedNotice": "helper of a guarded write: the SQL predicate of a notice read",
   "src/server/data/submissions/transitions.ts#insertReceived": "internal: transition 1, inside a submission transaction that has authorized the actor",
   "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor",
 };

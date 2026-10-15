@@ -46,3 +46,45 @@ export const NO_READ_BACK_NOTICE = "Once you submit, your text is not shown to y
 
 /** A3 [D]: said again after sending. */
 export const SUBMITTED_NO_READ_BACK_NOTICE = "Your text is not shown to you again.";
+
+/** Shown where a value depends on a decision not taken yet (QNF-1, QNF-4). */
+export const TO_BE_DEFINED = "To be defined.";
+
+/**
+ * NFR-DON-04 [P]: what the student reads before their first submission.
+ * Its reading is recorded with `version`: change the text, raise the version,
+ * and every student reads it again. No promise that their name is not sent
+ * (Q10 [D]): a name written in the text goes with it. The data controller,
+ * retention and contact wait for QNF-1 and QNF-4.
+ */
+export const STUDENT_NOTICE = {
+  version: 1,
+  title: "Before your first submission: your data",
+  demonstration:
+    "This is a demonstration with fictitious data. Do not submit real personal information or a real student's work.",
+  sections: [
+    { heading: "Who is responsible for your data", body: [TO_BE_DEFINED] },
+    {
+      heading: "Why it is used",
+      body: ["To let your teacher mark your writing. An AI suggests a marking; your teacher checks it, changes it if needed, and decides."],
+    },
+    {
+      heading: "What is sent to an AI",
+      body: [
+        "Your text, the assignment's subject, instructions and language, and the marking rubric are sent to Mistral AI, an outside AI service based outside Morocco.",
+        "The app does not add your name, email or class. But everything written in your text is sent as it is: if you write your name in it, your name is sent too.",
+        "The AI service may use what it receives to improve its models.",
+      ],
+    },
+    {
+      heading: "What your teacher sees",
+      body: ["Your first name, last name, email and class, your text, when you submitted it and whether it was late."],
+    },
+    { heading: "How long it is kept", body: [TO_BE_DEFINED] },
+    {
+      heading: "Your rights",
+      body: [`You can ask to see your data and to have it corrected. Who to contact: ${TO_BE_DEFINED.toLowerCase()}`],
+    },
+  ],
+  acknowledge: "I have read this notice",
+} as const;

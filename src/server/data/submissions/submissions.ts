@@ -6,6 +6,7 @@ import { authorize } from "@/server/access/policy";
 import { db } from "@/server/db/client";
 import { assignments, submissions, submissionVersions, users } from "@/server/db/schema";
 import { receivedBy } from "../assignments/received";
+import { acknowledgedNotice } from "../notices/notices";
 import { insertReceived } from "./transitions";
 
 // SUB-02, SUB-04: the first submission of a text. The student writes their
@@ -23,13 +24,13 @@ export type NewTextSubmission = {
 
 /**
  * Submitted (again, for the same request: idempotent), or refused: the task
- * changed since it was shown, or the student already submitted with another
- * form. Null when the assignment is absent, not received through an active
+ * changed since it was shown, the notice in force was not read (NFR-DON-04),
+ * or the student already submitted with another form. Null when the assignment is absent, not received through an active
  * membership, or the account is not confirmed (§5.5, transition 1).
  */
 export type SubmitTextResult =
   | { ok: true; submittedAt: string; late: boolean }
-  | { ok: false; reason: "changed" | "already_submitted" };
+  | { ok: false; reason: "changed" | "already_submitted" | "notice_not_read" };
 
 /** An account that confirmed its address; an unconfirmed one has no session, checked again here. */
 const confirmed = (userId: string) =>
@@ -53,11 +54,15 @@ export async function submitText(actor: Actor, input: NewTextSubmission): Promis
       .update(assignments)
       // updated_at stays: locking is not an edit of the assignment.
       .set({ lockedAt: sql`coalesce(${assignments.lockedAt}, now())`, updatedAt: sql`${assignments.updatedAt}` })
-      .where(and(allowed, eq(assignments.contentVersion, input.contentVersion)))
+      .where(and(allowed, eq(assignments.contentVersion, input.contentVersion), acknowledgedNotice(userId)))
       .returning({ teacherId: assignments.teacherId, late: sql<boolean>`now() > ${assignments.deadline}` });
     if (!assignment) {
-      const [shown] = await tx.select({ id: assignments.id }).from(assignments).where(allowed);
-      return shown ? ({ ok: false, reason: "changed" } as const) : null;
+      const [shown] = await tx
+        .select({ noticeRead: sql<boolean>`${acknowledgedNotice(userId)}` })
+        .from(assignments)
+        .where(allowed);
+      if (!shown) return null;
+      return { ok: false, reason: shown.noticeRead ? "changed" : "notice_not_read" } as const;
     }
 
     const created = await insertReceived(tx, {

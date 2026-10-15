@@ -14,6 +14,7 @@ export const SUBMISSION_MESSAGES = {
   changed:
     "Your teacher changed this assignment while you were writing. Read it again, then submit. Your text is still here.",
   alreadySubmitted: "You have already submitted this assignment. Nothing new was saved.",
+  noticeNotRead: "Read the notice about your data before your first submission. Your text was not submitted.",
 } as const;
 
 export type SubmitTextInput = { assignmentId?: unknown; contentVersion?: unknown; requestId?: unknown; text?: unknown };
@@ -21,7 +22,11 @@ export type SubmitTextInput = { assignmentId?: unknown; contentVersion?: unknown
 export type SubmitTextState =
   | { status: "idle" }
   | { status: "invalid"; error: string }
-  | { status: "error"; reason: "changed" | "alreadySubmitted" | "unavailable" | "notAllowed"; message: string }
+  | {
+      status: "error";
+      reason: "changed" | "alreadySubmitted" | "noticeNotRead" | "unavailable" | "notAllowed";
+      message: string;
+    }
   | { status: "done"; submittedAt: string };
 
 const fieldsSchema = z.object({
@@ -36,7 +41,8 @@ const refused = (reason: Exclude<SubmitTextState, { status: "idle" | "invalid" |
 /**
  * CA1: the text is stored as written (line endings aside) and the date comes
  * back. CA2: empty, white space only or too long: refused, nothing stored.
- * CA3: unconfirmed, removed or not a member: refused.
+ * CA3: unconfirmed, removed or not a member: refused. NFR-DON-04: the notice
+ * in force is read before the first submission.
  */
 export async function submitStudentText(actor: Actor, raw: SubmitTextInput): Promise<SubmitTextState> {
   const text = normalizeLineEndings(typeof raw.text === "string" ? raw.text : "");
@@ -48,7 +54,10 @@ export async function submitStudentText(actor: Actor, raw: SubmitTextInput): Pro
   try {
     const result = await submitText(actor, { ...fields.data, text });
     if (!result) return refused("unavailable");
-    if (!result.ok) return refused(result.reason === "changed" ? "changed" : "alreadySubmitted");
+    if (!result.ok) {
+      const reasons = { changed: "changed", already_submitted: "alreadySubmitted", notice_not_read: "noticeNotRead" } as const;
+      return refused(reasons[result.reason]);
+    }
     return { status: "done", submittedAt: result.submittedAt };
   } catch (error) {
     if (!(error instanceof AccessDeniedError)) throw error;
