@@ -39,7 +39,11 @@ export function AssignmentActions({ id, title, locked }: { id: string; title: st
             onConfirm={async () => {
               const result = await deleteAssignmentAction(id);
               if (result.ok) router.replace("/teacher/assignments");
-              else setRefused(result.message);
+              else {
+                setRefused(result.message);
+                // The page then shows the lock, without Delete; the refusal stays.
+                router.refresh();
+              }
             }}
           />
         )}

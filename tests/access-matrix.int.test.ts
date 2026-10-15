@@ -20,7 +20,7 @@ import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites"
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
-import { submitText } from "@/server/data/submissions/submissions";
+import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, users } from "@/server/db/schema";
 import { STUDENT_NOTICE } from "@/lib/texts";
@@ -156,7 +156,8 @@ describe("a missing resource and another person's resource get the same answer (
 // an operation reaches it, or (`creates`) makes a new one for the actor.
 type Fixture = Record<string, string>;
 type Operation = { run: (actor: Actor, fixture: Fixture) => Promise<unknown>; creates?: boolean };
-type RealResource = { setup?: () => Promise<Fixture> } & Partial<Record<Action, Operation>>;
+/** One operation per action, or several when the action has more than one entry point. */
+type RealResource = { setup?: () => Promise<Fixture> } & Partial<Record<Action, Operation | Operation[]>>;
 
 const REAL: Partial<Record<Resource, RealResource>> = {
   teacherInvitation: {
@@ -214,21 +215,37 @@ const REAL: Partial<Record<Resource, RealResource>> = {
         (await receivedAssignment(actor, assignmentId)) && (await getStudentAssignment(actor, assignmentId))?.status,
     },
   },
-  // Submitting to the owner's assignment (SUB-02): the student who received it
-  // writes their own; another student finds nothing; a teacher is refused.
-  // Never read back by the student (A3): no read operation on this side.
   // The student's own reading of the notice (NFR-DON-04): reading it makes it theirs.
   noticeAcknowledgement: {
     setup: noticeRead,
     read: { run: (actor) => getNoticeAcknowledgement(actor) },
     write: { run: (actor) => acknowledgeNotice(actor, STUDENT_NOTICE.version), creates: true },
   },
+  // Submitting to the owner's assignment (SUB-02), and replacing the submission
+  // the concerned student already made to another (SUB-05): the student writes
+  // their own; another student finds nothing; a teacher is refused. Never read
+  // back by the student (A3): no read operation on this side. The owner
+  // teacher's reading comes with REV-01 (E7).
   submission: {
-    setup: async () => ({ ...(await ownedAssignment()), ...(await noticeRead()) }),
-    write: {
-      run: (actor, { assignmentId }) =>
-        submitText(actor, { assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small." }),
+    setup: async () => {
+      const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
+      const { assignmentId: submittedId } = await ownedAssignment(fixture.classId);
+      const first = await submitText(people.concernedStudent, {
+        assignmentId: submittedId, contentVersion: 1, requestId: randomUUID(), text: "My first text.",
+      });
+      if (!first?.ok) throw new Error("Not submitted");
+      return { ...fixture, submittedId };
     },
+    write: [
+      {
+        run: (actor, { assignmentId }) =>
+          submitText(actor, { assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small." }),
+      },
+      {
+        run: (actor, { submittedId }) =>
+          replaceText(actor, { assignmentId: submittedId, requestId: randomUUID(), text: "My new text." }),
+      },
+    ],
   },
 };
 
@@ -245,9 +262,9 @@ async function receivedAssignment(actor: Actor, assignmentId: string) {
   return (await listStudentAssignments(actor)).find((a) => a.id === assignmentId) ?? null;
 }
 
-/** The owner's class with the concerned student, and an assignment sent to it. */
-async function ownedAssignment(): Promise<Fixture> {
-  const fixture = await ownedClass();
+/** The owner's class with the concerned student (or the class given), and an assignment sent to it. */
+async function ownedAssignment(classId?: string): Promise<Fixture> {
+  const fixture = classId ? { classId } : await ownedClass();
   const [created] = await db
     .insert(assignments)
     .values({
@@ -324,11 +341,11 @@ describe("real data functions follow their row", () => {
     it.each(COLUMNS)(`${resource}: %s`, async (column) => {
       const fixture = (await real.setup?.()) ?? {};
       for (const action of ACTIONS) {
-        const operation = real[action];
-        if (!operation) continue;
-        expect(await outcome(operation.run(people[column], fixture)), action).toBe(
-          expected(resource, column, action, operation),
-        );
+        for (const [i, operation] of [real[action] ?? []].flat().entries()) {
+          expect(await outcome(operation.run(people[column], fixture)), `${action} #${i + 1}`).toBe(
+            expected(resource, column, action, operation),
+          );
+        }
       }
     });
   }
