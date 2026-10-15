@@ -1,14 +1,16 @@
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
+import { SUBMISSION_MAX_REPLACEMENTS } from "@/config/decisions";
+import { sourcesOf } from "@/lib/submission-status";
 import { checkSubmissionText } from "@/lib/submission-text";
 import type { Actor } from "@/server/access/actor";
 import { authorize } from "@/server/access/policy";
 import { db } from "@/server/db/client";
 import { assignments, submissions, submissionVersions, users } from "@/server/db/schema";
-import { receivedBy } from "../assignments/received";
+import { memberOfRecipients, receivedBy } from "../assignments/received";
 import { acknowledgedNotice } from "../notices/notices";
 import { isLate } from "./late";
-import { insertReceived } from "./transitions";
+import { applyTransition, insertReceived } from "./transitions";
 
 // SUB-02, SUB-04: the first submission of a text. The student writes their
 // own submission and never reads it back (A3): nothing here returns the text.
@@ -100,5 +102,93 @@ export async function submitText(actor: Actor, input: NewTextSubmission): Promis
       requestId: input.requestId,
     });
     return { ok: true, submittedAt: created.submittedAt.toISOString(), late: created.late } as const;
+  });
+}
+
+// SUB-05: replacing the submission with a new text version.
+
+/**
+ * Transition 11 is open on the student's submission: the teacher has neither
+ * changed nor validated it (E7, E8 set teacher_started_at), its state is one
+ * transition 11 leaves, fewer than SUBMISSION_MAX_REPLACEMENTS replacements
+ * (Q3 [D]), and the student is still an active member of a recipient class
+ * (SUB-01 R4). The write guard and the screen read the same predicate.
+ */
+export const replacementOpen = (userId: string) =>
+  and(
+    isNull(submissions.teacherStartedAt),
+    inArray(submissions.status, sourcesOf(11, "received")),
+    lte(submissions.currentVersion, SUBMISSION_MAX_REPLACEMENTS),
+    memberOfRecipients(userId, submissions.assignmentId),
+  );
+
+/** Replacements left once `currentVersion` versions exist: 2, 1, then 0. */
+const left = (currentVersion: number) => Math.max(0, SUBMISSION_MAX_REPLACEMENTS + 1 - currentVersion);
+
+export type ReplaceTextInput = Omit<NewTextSubmission, "contentVersion">;
+
+/**
+ * Replaced (again, for the same request: idempotent), or refused: the
+ * teacher started first, or no replacement is left. Null when the student has
+ * no submission for this assignment, or is no longer an active member.
+ */
+export type ReplaceTextResult =
+  | { ok: true; replacedAt: string; replacementsLeft: number }
+  | { ok: false; reason: "teacher_started" | "limit_reached" };
+
+/**
+ * One transaction. The submission row is locked first (FOR UPDATE): two
+ * replacements, or a replacement and the teacher's first act (E7, E8: an
+ * update of this row that names the version seen), run one after the other,
+ * and the first one wins. The guard is in the write statement itself.
+ * submitted_at and late stay those of the first submission (SUB-04 R2).
+ */
+export async function replaceText(actor: Actor, input: ReplaceTextInput): Promise<ReplaceTextResult | null> {
+  const { userId } = authorize(actor, "submission", "write");
+  if (checkSubmissionText(input.text)) throw new Error("replaceText: the text was not checked");
+
+  return db.transaction(async (tx) => {
+    const [submission] = await tx
+      .select({
+        id: submissions.id,
+        currentVersion: submissions.currentVersion,
+        teacherStarted: sql<boolean>`${submissions.teacherStartedAt} is not null`,
+      })
+      .from(submissions)
+      .where(and(eq(submissions.assignmentId, input.assignmentId), eq(submissions.studentId, userId)))
+      .for("update");
+    if (!submission) return null;
+
+    // The same form sent again: the same answer, nothing counted twice.
+    const [same] = await tx
+      .select({ createdAt: submissionVersions.createdAt })
+      .from(submissionVersions)
+      .where(and(eq(submissionVersions.submissionId, submission.id), eq(submissionVersions.requestId, input.requestId)));
+    if (same) {
+      return { ok: true, replacedAt: same.createdAt.toISOString(), replacementsLeft: left(submission.currentVersion) } as const;
+    }
+
+    const replaced = await applyTransition(tx, submission.id, 11, "received", {
+      where: replacementOpen(userId),
+      set: { currentVersion: sql`${submissions.currentVersion} + 1` },
+    });
+    if (!replaced) {
+      if (submission.teacherStarted) return { ok: false, reason: "teacher_started" } as const;
+      if (left(submission.currentVersion) === 0) return { ok: false, reason: "limit_reached" } as const;
+      // Validated or published without the mark is impossible (check constraint): not a member.
+      return null;
+    }
+
+    const [version] = await tx
+      .insert(submissionVersions)
+      .values({
+        submissionId: submission.id,
+        number: replaced.currentVersion,
+        mode: "text",
+        text: input.text,
+        requestId: input.requestId,
+      })
+      .returning({ createdAt: submissionVersions.createdAt });
+    return { ok: true, replacedAt: version.createdAt.toISOString(), replacementsLeft: left(replaced.currentVersion) } as const;
   });
 }

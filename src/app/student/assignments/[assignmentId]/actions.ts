@@ -2,7 +2,12 @@
 
 import { refresh } from "next/cache";
 import { getActor } from "@/server/auth/session";
-import { submitStudentText, type SubmitTextState } from "@/server/submissions/submissions";
+import {
+  replaceStudentText,
+  submitStudentText,
+  type ReplaceTextState,
+  type SubmitTextState,
+} from "@/server/submissions/submissions";
 import { acknowledgeStudentNotice, type AcknowledgeNoticeState } from "@/server/notices/notices";
 
 // SUB-02: the student submits their own text; the data layer acts only on an
@@ -28,5 +33,17 @@ export async function acknowledgeNoticeAction(
 ): Promise<AcknowledgeNoticeState> {
   const state = await acknowledgeStudentNotice(await getActor(), { version: form.get("version") ?? undefined });
   if (state.status === "done" || (state.status === "error" && state.reason === "outdated")) refresh();
+  return state;
+}
+
+/** SUB-05: the student replaces their submission with a new text. */
+export async function replaceTextAction(_previous: ReplaceTextState, form: FormData): Promise<ReplaceTextState> {
+  const state = await replaceStudentText(await getActor(), {
+    assignmentId: form.get("assignmentId") ?? undefined,
+    requestId: form.get("requestId") ?? undefined,
+    text: form.get("text") ?? undefined,
+  });
+  // The page shows the new date and what is left, or why it is closed.
+  if (state.status === "done" || (state.status === "error" && state.reason !== "notAllowed")) refresh();
   return state;
 }

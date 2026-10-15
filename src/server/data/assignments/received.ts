@@ -1,21 +1,28 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { assignmentClasses, assignments, classMemberships, submissions } from "@/server/db/schema";
 
-// The student side of an assignment's ownership, as SQL predicates on
-// `assignments`. EXISTS, not joins: an assignment sent to two of the
-// student's classes comes out once (SUB-01 R5).
+// The student side of an assignment's ownership, as SQL predicates. EXISTS,
+// not joins: an assignment sent to two of the student's classes comes out
+// once (SUB-01 R5).
 
 /**
- * Received by derivation [D]: an active membership in one of the recipient
- * classes, whatever the date it was sent. What submitting requires (§5.5, 1).
+ * An active membership of the student in one of the classes the assignment
+ * (`assignmentId`, a column or value) was sent to, whatever the date it was sent.
  */
-export const receivedBy = (userId: string) =>
+export const memberOfRecipients = (userId: string, assignmentId: AnyPgColumn | SQL) =>
   sql`exists (select 1 from ${assignmentClasses}
     join ${classMemberships} on ${classMemberships.classId} = ${assignmentClasses.classId}
-    where ${assignmentClasses.assignmentId} = ${assignments.id}
+    where ${assignmentClasses.assignmentId} = ${assignmentId}
       and ${classMemberships.studentId} = ${userId}
       and ${classMemberships.status} = 'active')`;
+
+/**
+ * Received by derivation [D], on `assignments`: what submitting and replacing
+ * require (§5.5, 1 and 11).
+ */
+export const receivedBy = (userId: string) => memberOfRecipients(userId, assignments.id);
 
 /**
  * What the student may read: received, or submitted to. A removed student

@@ -65,9 +65,13 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
           contentVersion={assignment.contentVersion}
           // One per page shown: a double click or a resend after a network cut is the same submission.
           requestId={randomUUID()}
+          replaceRequestId={randomUUID()}
           status={assignment.status}
           submittedAt={assignment.submittedAt}
           late={assignment.late}
+          lastVersionAt={assignment.lastVersionAt}
+          replacementsLeft={assignment.replacementsLeft}
+          canReplace={assignment.canReplace}
           canSubmit={assignment.canSubmit}
           noticeRead={noticeRead}
         />

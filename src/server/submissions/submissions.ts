@@ -4,7 +4,8 @@ import { checkSubmissionText, normalizeLineEndings, SUBMISSION_TEXT_ERRORS } fro
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
 import { recordSecurityEvent } from "@/server/data/auth/security-events";
-import { submitText } from "@/server/data/submissions/submissions";
+import { SUBMISSION_MAX_REPLACEMENTS } from "@/config/decisions";
+import { replaceText, submitText } from "@/server/data/submissions/submissions";
 
 // SUB-02, without Next request APIs so integration tests can call it.
 
@@ -63,5 +64,50 @@ export async function submitStudentText(actor: Actor, raw: SubmitTextInput): Pro
     if (!(error instanceof AccessDeniedError)) throw error;
     await recordSecurityEvent("access_denied", { actorUserId: actor.kind === "user" ? actor.userId : null });
     return refused("notAllowed");
+  }
+}
+
+// SUB-05: replacing the submission.
+
+export const REPLACEMENT_MESSAGES = {
+  notAllowed: SUBMISSION_MESSAGES.notAllowed,
+  unavailable: "You can't replace this submission. You may no longer be in the class it was sent to.",
+  teacherStarted:
+    "Your teacher has started marking your submission: it can no longer be replaced. Your new text was not saved.",
+  limitReached: `You have already replaced this submission ${SUBMISSION_MAX_REPLACEMENTS} times, the most allowed. Your new text was not saved.`,
+} as const;
+
+export type ReplaceTextState =
+  | { status: "idle" }
+  | { status: "invalid"; error: string }
+  | { status: "error"; reason: keyof typeof REPLACEMENT_MESSAGES; message: string }
+  | { status: "done"; replacedAt: string; replacementsLeft: number };
+
+const replaceFields = z.object({ assignmentId: z.uuid(), requestId: z.uuid() });
+
+const notReplaced = (reason: keyof typeof REPLACEMENT_MESSAGES) =>
+  ({ status: "error", reason, message: REPLACEMENT_MESSAGES[reason] }) as const;
+
+/**
+ * CA1: a new active version, the previous one kept and dated; the third
+ * replacement refused. CA3: refused once the teacher changed or validated.
+ * The text is checked as for a first submission (SUB-02).
+ */
+export async function replaceStudentText(actor: Actor, raw: Omit<SubmitTextInput, "contentVersion">): Promise<ReplaceTextState> {
+  const text = normalizeLineEndings(typeof raw.text === "string" ? raw.text : "");
+  const problem = checkSubmissionText(text);
+  if (problem) return { status: "invalid", error: SUBMISSION_TEXT_ERRORS[problem] };
+  const fields = replaceFields.safeParse(raw);
+  if (!fields.success) return notReplaced("unavailable");
+
+  try {
+    const result = await replaceText(actor, { ...fields.data, text });
+    if (!result) return notReplaced("unavailable");
+    if (!result.ok) return notReplaced(result.reason === "teacher_started" ? "teacherStarted" : "limitReached");
+    return { status: "done", replacedAt: result.replacedAt, replacementsLeft: result.replacementsLeft };
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+    await recordSecurityEvent("access_denied", { actorUserId: actor.kind === "user" ? actor.userId : null });
+    return notReplaced("notAllowed");
   }
 }

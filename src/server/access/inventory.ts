@@ -60,6 +60,7 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/assignments/actions.ts#editAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/actions.ts#deleteAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
+  "src/app/student/assignments/[assignmentId]/actions.ts#replaceTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
 };
 
@@ -89,10 +90,12 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/classes/invites.ts#findClassByInvite": "the code or link is the proof; only behind the attempt limit (CLS-02 CA4)",
   "src/server/data/classes/join-intents.ts#recordJoinIntent": "internal: inside the public sign-up transaction (CLS-03 R3)",
   "src/server/data/classes/join-intents.ts#joinFromIntents": "internal: inside the one-time link transaction that confirms the address (CLS-03 R3)",
+  "src/server/data/assignments/received.ts#memberOfRecipients": "helper of ownedBy(): the SQL predicate of an active member of a recipient class",
   "src/server/data/assignments/received.ts#receivedBy": "helper of ownedBy(): the SQL predicate of a received assignment",
   "src/server/data/assignments/received.ts#visibleTo": "helper of ownedBy(): the SQL predicate of an assignment the student may read",
   "src/server/data/notices/notices.ts#acknowledgedNotice": "helper of a guarded write: the SQL predicate of a notice read",
   "src/server/data/submissions/late.ts#isLate": "helper of a guarded write: the SQL comparison of lateness (SUB-04 R2)",
+  "src/server/data/submissions/submissions.ts#replacementOpen": "helper of a guarded write: the SQL predicate of transition 11 (SUB-05)",
   "src/server/data/submissions/transitions.ts#insertReceived": "internal: transition 1, inside a submission transaction that has authorized the actor",
   "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor",
 };

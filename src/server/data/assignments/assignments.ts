@@ -3,12 +3,14 @@ import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-
 import type { Actor } from "@/server/access/actor";
 import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
-import { assignmentClasses, assignments, classes, submissions } from "@/server/db/schema";
+import { SUBMISSION_MAX_REPLACEMENTS } from "@/config/decisions";
+import { assignmentClasses, assignments, classes, submissions, submissionVersions } from "@/server/db/schema";
 import type { AssignmentLanguage, AssignmentLevel } from "@/lib/assignment";
 import { compareText } from "@/lib/collation";
 import { toStudentStatus, type StudentStatus } from "@/lib/submission-status";
 import { ownedBy } from "../access";
 import { receivedBy, visibleTo } from "./received";
+import { replacementOpen } from "../submissions/submissions";
 
 // ASG-01: an assignment and the classes it is sent to (rows "assignment" and
 // "assignmentRecipients" of the matrix). The teacher owns both; the database
@@ -242,6 +244,12 @@ export type StudentAssignmentDetail = StudentAssignment & {
   submittedAt: string | null;
   /** Not submitted yet, and still an active member of a recipient class (SUB-01 R4). */
   canSubmit: boolean;
+  /** Date of the active version: the last replacement, or the first submission (SUB-05 R1). */
+  lastVersionAt: string | null;
+  /** SUB-05, Q3 [D]: replacements the student has left, 2 at first. */
+  replacementsLeft: number;
+  /** The teacher has neither changed nor validated it, a replacement is left, still a member. */
+  canReplace: boolean;
 };
 
 /** The student's assignments with their own submission, if any: never another student's. */
@@ -259,10 +267,17 @@ function studentRows(userId: string, where: SQL | undefined) {
       submissionStatus: submissions.status,
       submittedAt: submissions.submittedAt,
       late: submissions.late,
+      currentVersion: submissions.currentVersion,
+      lastVersionAt: submissionVersions.createdAt,
       received: sql<boolean>`${receivedBy(userId)}`,
+      canReplace: sql<boolean>`coalesce(${replacementOpen(userId)}, false)`,
     })
     .from(assignments)
     .leftJoin(submissions, and(eq(submissions.assignmentId, assignments.id), eq(submissions.studentId, userId)))
+    .leftJoin(
+      submissionVersions,
+      and(eq(submissionVersions.submissionId, submissions.id), eq(submissionVersions.number, submissions.currentVersion)),
+    )
     .where(where)
     .orderBy(asc(assignments.deadline), assignments.id);
 }
@@ -302,5 +317,8 @@ export async function getStudentAssignment(actor: Actor, assignmentId: string): 
     contentVersion: row.contentVersion,
     submittedAt: row.submittedAt?.toISOString() ?? null,
     canSubmit: row.submittedAt === null && row.received,
+    lastVersionAt: row.lastVersionAt?.toISOString() ?? null,
+    replacementsLeft: Math.max(0, SUBMISSION_MAX_REPLACEMENTS + 1 - (row.currentVersion ?? 1)),
+    canReplace: row.canReplace,
   };
 }

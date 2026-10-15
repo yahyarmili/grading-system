@@ -128,6 +128,57 @@ test("SUB-04 CA1: a text submitted after the deadline is marked Late, beside its
   await student.screenshot({ path: "test-results/sub04-2-late-list-phone.png", fullPage: true });
 });
 
+test("SUB-05: a student replaces their text twice, then can no longer", async ({ browser }) => {
+  const teacher = await teacherWithClass(browser, "Grade 12", ["Nadia", "Berrada"]);
+  const student = await (await browser.newContext(phone)).newPage();
+  const email = await createStudent("Salma", "Tazi");
+  await signIn(student, email);
+  await expect(student).toHaveURL(/\/student\//);
+  await student.goto("/student/classes");
+  await student.getByLabel("Class code").fill(teacher.code);
+  await student.getByRole("button", { name: "Join the class" }).click();
+  await expect(student.getByText("You joined the class")).toBeVisible();
+  await createAssignment(teacher.page, "My school", "Grade 12");
+
+  await student.goto("/student/assignments");
+  await student.getByRole("link", { name: "Write my text" }).click();
+  await student.getByRole("button", { name: "I have read this notice" }).click();
+  await student.getByRole("textbox", { name: /^Your text/ }).fill("First text.");
+  await student.getByRole("button", { name: "Submit my text" }).click();
+
+  const section = student.getByRole("region", { name: "Replace my submission" });
+  await expect(section.getByText(/You can replace your text 2 more times/)).toBeVisible();
+  await student.waitForLoadState("networkidle");
+  await student.screenshot({ path: "test-results/sub05-1-can-replace-phone.png", fullPage: true });
+
+  for (const [text, left] of [["Second text.", "once more"], ["Third text.", null]] as const) {
+    await section.getByRole("button", { name: "Replace my submission" }).click();
+    const box = section.getByRole("textbox", { name: /^Your new text/ });
+    await expect(box).toBeFocused();
+    await expect(section.getByText("Do not write your name in your text.")).toBeVisible();
+    if (text === "Second text.") await student.screenshot({ path: "test-results/sub05-2-replace-form-phone.png", fullPage: true });
+    await box.fill(text);
+    await section.getByRole("button", { name: "Submit the new text" }).click();
+    await expect(section.getByText(/Your new text was submitted on .+ \(Casablanca time, GMT\+\d\)\./)).toBeVisible();
+    await expect(student.getByText(/Last replaced on /)).toBeVisible();
+    if (left) await expect(section.getByText(new RegExp(`replace your text ${left}`))).toBeVisible();
+  }
+
+  // No replacement left: said in words, no button.
+  await expect(section.getByText(/replaced this submission 2 times, the most allowed/)).toBeVisible();
+  await expect(section.getByRole("button", { name: "Replace my submission" })).toHaveCount(0);
+  await student.screenshot({ path: "test-results/sub05-3-no-replacement-left-phone.png", fullPage: true });
+
+  const rows = await sql<{ number: number; text: string }>(
+    `SELECT v.number, v.text FROM submission_versions v JOIN submissions s ON s.id = v.submission_id
+     JOIN users u ON u.id = s.student_id WHERE u.email = $1 ORDER BY v.number`,
+    [email],
+  );
+  expect(rows).toEqual([{ number: 1, text: "First text." }, { number: 2, text: "Second text." }, { number: 3, text: "Third text." }]);
+  // A3: never shown back.
+  expect(await student.content()).not.toContain("Third text.");
+});
+
 async function createAssignment(page: Page, title: string, className = "Grade 10") {
   await page.goto("/teacher/assignments/new");
   await page.getByLabel(/^Title/).fill(title);

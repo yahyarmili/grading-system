@@ -1,4 +1,4 @@
-import { SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
+import { SUBMISSION_MAX_REPLACEMENTS, SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
 
 // Texts that depend on a decision of conception/ (notices, AI mention, "no
 // name" instruction). One place, so that a change of decision changes them all.
@@ -88,3 +88,16 @@ export const STUDENT_NOTICE = {
   ],
   acknowledge: "I have read this notice",
 } as const;
+
+/** SUB-05, Q3 [D, 2026-10-15]: replacements left, until the teacher's first change or validation. */
+export const replacementsLeftNotice = (left: number) =>
+  `You can replace your text ${left === 1 ? "once more" : `${left} more times`}, until your teacher starts marking it. Your teacher marks the last text you sent.`;
+
+/** SUB-04 R2 [P]: a replacement keeps the first date and the late mark. */
+export const REPLACEMENT_KEEPS_DATE_NOTICE = "The date of your first submission stays, and so does a late mark.";
+
+/** Q3 [D]: no replacement left. */
+export const NO_REPLACEMENT_LEFT_NOTICE = `You have replaced this submission ${SUBMISSION_MAX_REPLACEMENTS} times, the most allowed. It can no longer be replaced.`;
+
+/** SUB-05 R3: the teacher started, or the student left the class. */
+export const REPLACEMENT_CLOSED_NOTICE = "This submission can no longer be replaced.";
