@@ -6,7 +6,7 @@ import { CircleAlert, CircleCheck, UserX } from "lucide-react";
 import { Alert } from "@/components/alert";
 import { FormField } from "@/components/form-field";
 import { Spinner } from "@/components/loading";
-import { StudentStatusTag } from "@/components/status-tag";
+import { LateTag, StudentStatusTag } from "@/components/status-tag";
 import { Button } from "@/components/ui/button";
 import { SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
 import type { AssignmentLanguage } from "@/lib/assignment";
@@ -36,6 +36,7 @@ export function SubmissionPanel({
   requestId,
   status,
   submittedAt,
+  late,
   canSubmit,
   noticeRead,
 }: {
@@ -45,6 +46,8 @@ export function SubmissionPanel({
   requestId: string;
   status: StudentStatus;
   submittedAt: string | null;
+  /** SUB-04: the first submission came after the deadline. */
+  late: boolean;
   canSubmit: boolean;
   /** NFR-DON-04: the notice in force was read; until then, it comes first. */
   noticeRead: boolean;
@@ -68,6 +71,7 @@ export function SubmissionPanel({
       <Submitted
         ref={doneRef}
         submittedAt={done}
+        late={state.status === "done" ? state.late : late}
         status={status === "to_submit" ? "being_marked" : status}
         announce={state.status === "done"}
       />
@@ -199,11 +203,13 @@ function TextField({
 function Submitted({
   ref,
   submittedAt,
+  late,
   status,
   announce,
 }: {
   ref: React.Ref<HTMLDivElement>;
   submittedAt: string;
+  late: boolean;
   status: StudentStatus;
   announce: boolean;
 }) {
@@ -226,6 +232,7 @@ function Submitted({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-fg-muted">State:</span>
         <StudentStatusTag status={status} />
+        {late && <LateTag />}
       </div>
       <p className="text-sm text-fg-muted">{SUBMITTED_NO_READ_BACK_NOTICE}</p>
       <Button variant="outline" asChild className="w-full sm:w-auto sm:self-start">

@@ -109,6 +109,8 @@ function AssignmentCard({ a }: { a: StudentAssignment }) {
           <div className="flex flex-wrap gap-1">
             {/* In its group, the heading already says the state. */}
             {a.status !== "to_submit" && <StudentStatusTag status={a.status} />}
+            {/* SUB-04: by the first submission, beside the state, in words. */}
+            {a.status !== "to_submit" && a.late && <LateTag />}
             {a.status === "to_submit" && a.deadlinePassed && <LateTag submitted={false} />}
           </div>
         </div>

@@ -27,7 +27,7 @@ export type SubmitTextState =
       reason: "changed" | "alreadySubmitted" | "noticeNotRead" | "unavailable" | "notAllowed";
       message: string;
     }
-  | { status: "done"; submittedAt: string };
+  | { status: "done"; submittedAt: string; late: boolean };
 
 const fieldsSchema = z.object({
   assignmentId: z.uuid(),
@@ -58,7 +58,7 @@ export async function submitStudentText(actor: Actor, raw: SubmitTextInput): Pro
       const reasons = { changed: "changed", already_submitted: "alreadySubmitted", notice_not_read: "noticeNotRead" } as const;
       return refused(reasons[result.reason]);
     }
-    return { status: "done", submittedAt: result.submittedAt };
+    return { status: "done", submittedAt: result.submittedAt, late: result.late };
   } catch (error) {
     if (!(error instanceof AccessDeniedError)) throw error;
     await recordSecurityEvent("access_denied", { actorUserId: actor.kind === "user" ? actor.userId : null });

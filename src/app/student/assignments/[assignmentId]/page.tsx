@@ -67,6 +67,7 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
           requestId={randomUUID()}
           status={assignment.status}
           submittedAt={assignment.submittedAt}
+          late={assignment.late}
           canSubmit={assignment.canSubmit}
           noticeRead={noticeRead}
         />

@@ -92,6 +92,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/assignments/received.ts#receivedBy": "helper of ownedBy(): the SQL predicate of a received assignment",
   "src/server/data/assignments/received.ts#visibleTo": "helper of ownedBy(): the SQL predicate of an assignment the student may read",
   "src/server/data/notices/notices.ts#acknowledgedNotice": "helper of a guarded write: the SQL predicate of a notice read",
+  "src/server/data/submissions/late.ts#isLate": "helper of a guarded write: the SQL comparison of lateness (SUB-04 R2)",
   "src/server/data/submissions/transitions.ts#insertReceived": "internal: transition 1, inside a submission transaction that has authorized the actor",
   "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor",
 };

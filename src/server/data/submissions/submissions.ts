@@ -7,6 +7,7 @@ import { db } from "@/server/db/client";
 import { assignments, submissions, submissionVersions, users } from "@/server/db/schema";
 import { receivedBy } from "../assignments/received";
 import { acknowledgedNotice } from "../notices/notices";
+import { isLate } from "./late";
 import { insertReceived } from "./transitions";
 
 // SUB-02, SUB-04: the first submission of a text. The student writes their
@@ -55,7 +56,8 @@ export async function submitText(actor: Actor, input: NewTextSubmission): Promis
       // updated_at stays: locking is not an edit of the assignment.
       .set({ lockedAt: sql`coalesce(${assignments.lockedAt}, now())`, updatedAt: sql`${assignments.updatedAt}` })
       .where(and(allowed, eq(assignments.contentVersion, input.contentVersion), acknowledgedNotice(userId)))
-      .returning({ teacherId: assignments.teacherId, late: sql<boolean>`now() > ${assignments.deadline}` });
+      // now() is the transaction's: the same instant as submitted_at.
+      .returning({ teacherId: assignments.teacherId, late: isLate(sql`now()`, assignments.deadline) });
     if (!assignment) {
       const [shown] = await tx
         .select({ noticeRead: sql<boolean>`${acknowledgedNotice(userId)}` })

@@ -230,6 +230,8 @@ export type StudentAssignment = {
   deadlinePassed: boolean;
   /** SUB-01 R3: the closed list of three, never the internal state. */
   status: StudentStatus;
+  /** SUB-04: the first submission came strictly after the deadline; false before any. */
+  late: boolean;
 };
 
 /** One assignment, with what the submission screen needs (SUB-02). */
@@ -256,6 +258,7 @@ function studentRows(userId: string, where: SQL | undefined) {
       contentVersion: assignments.contentVersion,
       submissionStatus: submissions.status,
       submittedAt: submissions.submittedAt,
+      late: submissions.late,
       received: sql<boolean>`${receivedBy(userId)}`,
     })
     .from(assignments)
@@ -275,6 +278,7 @@ const toStudentAssignment = (row: StudentRow): StudentAssignment => ({
   deadline: row.deadline.toISOString(),
   deadlinePassed: row.deadlinePassed,
   status: toStudentStatus(row.submissionStatus ?? "to_submit"),
+  late: row.late ?? false,
 });
 
 /** SUB-01 CA1: the student's assignments, nearest deadline first. Refused to a teacher. */
