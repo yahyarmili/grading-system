@@ -43,6 +43,7 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
   | `ministral-3b-2512` | 1 300 000 | 12,50 |
 
   `mistral-large-2512` figure sur cette page mais pas dans la liste des modèles de l'API (`/v1/models`) : son accès réel est à vérifier en E5.0.
+- **Refus d'entraînement fait le 2026-10-15** [D] : Admin Panel › Privacy (« Manage your privacy settings for our API »), « Allow the use of your API calls to train Mistral's AI models » désactivé ; vaut pour les nouvelles interactions. « Enable Labs models » reste désactivé : activer Labs autorise l'entraînement quel que soit ce réglage. Aucun modèle `labs-*` n'est donc utilisé.
 - **Vercel Hobby.** Gratuit, fonctions de 300 s. Usage réservé au non commercial ([règles](https://vercel.com/docs/limits/fair-use-guidelines)), compatible avec un projet académique. Un projet payant ou commercial exigerait le plan Pro.
 - **Neon.** Compute suspendu après 5 minutes d'inactivité, donc démarrage à froid à prévoir. Historique de restauration de 6 h seulement : d'où l'export périodique.
 - **Gmail SMTP.** Environ 500 destinataires par jour selon des blogs ([source secondaire](https://serversmtp.com/limits-of-gmail-smtp-server/)), validation en deux étapes requise. Suffisant pour la démonstration, pas pour un usage réel. Resend exige un domaine à vous ([doc](https://resend.com/docs/dashboard/domains/introduction)).
@@ -62,7 +63,7 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 **Tranché le 2026-10-12 [D]** (à confirmer dans le plan de chaque étape, voir [prompts-implementation.md](prompts-implementation.md)) : Better Auth pour l'authentification et les sessions, Zod pour la validation, Vitest et Playwright pour les tests, Nodemailer pour l'email, SDK TypeScript officiel pour Mistral. Interface de l'application en anglais.
 
 **À vérifier :**
-- refus d'entraînement en mode gratuit (votre console) ; limite mensuelle (les débits par minute et l'OCR sont relevés en §3) ;
+- limite mensuelle du mode gratuit (les débits par minute et l'OCR sont relevés en §3) ;
 - si Vercel exige une carte à l'inscription ;
 - région de la base Neon ;
 - limites de poids et de pages des images (TRT-02) ;

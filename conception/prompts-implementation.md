@@ -477,7 +477,7 @@ Préalables :
 - **Vous** :
   - créez une clé API Mistral (offre gratuite) et ajoutez `MISTRAL_API_KEY` dans `.env.local`, puis `docker compose up -d` ;
   - limites de débit relevées le 2026-10-15 (`stack-technologique.md` §3) ;
-  - réglez le refus d'entraînement (QNF-5) ;
+  - refus d'entraînement fait le 2026-10-15 (QNF-5, `stack-technologique.md` §3) ;
 - **À trancher par T5**, sinon les recommandations sont codées comme valeurs provisoires :
   - **Q1** : note sur 20, somme des niveaux, déjà codée en provisoire ;
   - **Q5** : remarques dans la langue du devoir ;
