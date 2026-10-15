@@ -478,10 +478,10 @@ Préalables :
   - créez une clé API Mistral (offre gratuite) et ajoutez `MISTRAL_API_KEY` dans `.env.local`, puis `docker compose up -d` ;
   - limites de débit relevées le 2026-10-15 (`stack-technologique.md` §3) ;
   - refus d'entraînement fait le 2026-10-15 (QNF-5, `stack-technologique.md` §3) ;
-- **À trancher par T5**, sinon les recommandations sont codées comme valeurs provisoires :
-  - **Q1** : note sur 20, somme des niveaux, déjà codée en provisoire ;
-  - **Q5** : remarques dans la langue du devoir ;
-  - **Q6** : devoirs en français créables, IA désactivée jusqu'à la validation de la rubrique française.
+- **Tranchées [D, 2026-10-15]** (`fonctionnalites.md` §9) :
+  - **Q1** : note sur 20, somme des 5 niveaux ; le pas de saisie d'une note libre reste provisoire ;
+  - **Q5** : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA et mention « note ajustée » affichées à l'élève (E8) ;
+  - **Q6** : devoirs en français créables, aucune proposition IA jusqu'à la validation de la rubrique française par le client ; « IA indisponible » et correction à la main d'ici là.
 - **Données** : textes fictifs seulement (NFR-DON-02). Aucune copie réelle n'est envoyée à Mistral.
 
 #### E5.0 — Enquête par sous-agents
@@ -498,11 +498,11 @@ Chacun renvoie : comportement actuel, fichiers concernés, risques, recommandati
 ```
 À partir de l'enquête, planifie la rubrique et la proposition d'évaluation (EVL-01 à EVL-04, conception/fonctionnalites.md §6 et §8.2 E5 ; NFR-QUA-02, NFR-EXP-04, NFR-DON-02, NFR-DON-05).
 Il faut :
-- une rubrique versionnée en lecture seule (version anglaise publiée ; pas de version française tant que Q6 n'est pas levée), dont la version est enregistrée avec chaque proposition ; le français s'active par la publication d'une nouvelle version, sans écran, selon une procédure écrite (NFR-EXP-03) ;
-- une note calculée par le système (calculateGrade, Q1 provisoire), jamais par l'IA ;
+- une rubrique versionnée en lecture seule (version anglaise publiée ; pas de version française avant sa validation par le client, Q6 [D]), dont la version est enregistrée avec chaque proposition ; le français s'active par la publication d'une nouvelle version, sans écran, selon une procédure écrite (NFR-EXP-03) ;
+- une note calculée par le système, sur 20, somme des 5 niveaux (Q1 [D]), jamais par l'IA ; GRADE_SCALE et la règle passent de provisional.ts à decisions.ts ;
 - une interface unique d'évaluation, deux implémentations : Mistral (SDK officiel, modèle daté épinglé) et un simulateur à pannes injectables (erreur, délai dépassé, sortie non conforme, citation introuvable). Le simulateur est le défaut ; Mistral seulement si une variable l'active explicitement ; chaque envoi réel est inscrit au journal de sécurité, sans contenu (DON-05) ;
 - une requête construite en un point unique depuis une liste blanche : texte de la version évaluée, sujet, instructions, langue, rubrique. Ni identité, ni niveau, ni identifiant, ni retard (EVL-02, SUB-04 R3). Texte et instructions encadrés comme des données, jamais comme des consignes ;
-- un contrat de sortie strict (5 niveaux entiers de 0 à 4, 5 justifications non vides avec citations, commentaire général, pistes ; langue des remarques selon Q5), validé côté serveur ; tentatives bornées ; tolérance de correspondance des citations ;
+- un contrat de sortie strict (5 niveaux entiers de 0 à 4, 5 justifications non vides avec citations, commentaire général, pistes ; remarques dans la langue du devoir, Q5 [D]), validé côté serveur ; tentatives bornées ; tolérance de correspondance des citations ;
 - une proposition immuable liée à la version de remise évaluée, une seule courante par remise, avec modèle, version de consigne, version de rubrique, durée, tentatives et usage ;
 - des alertes bloquantes (aucun contenu évaluable ; devoir en français sans rubrique française validée) qui mènent à « not assessable » avec sa cause, et des alertes d'information (copie très courte, autre langue, hors sujet, texte adressé au correcteur), jamais vues de l'élève ;
 - les transitions 2 et 5 seulement, déclenchées par une commande interne ; l'enchaînement automatique est pour E6.
@@ -512,7 +512,7 @@ Montre : tables et contraintes (dont l'immuabilité), interface et simulateur, c
 
 #### E5.2 — Rubrique versionnée et note (EVL-01)
 ```
-/build-ui Implémente la rubrique versionnée et la conversion en note selon le plan (EVL-01) : version anglaise publiée, lecture seule pour tous, aucune action d'écriture exposée ; note proposée calculée par le système. Écran Rubric en lecture seule pour le professeur et l'élève.
+/build-ui Implémente la rubrique versionnée et la conversion en note selon le plan (EVL-01 ; Q1 [D] : sur 20, somme des 5 niveaux, valeurs déplacées dans decisions.ts, mentions « Q1 open » retirées du code) : version anglaise publiée, lecture seule pour tous, aucune action d'écriture exposée ; note proposée calculée par le système. Écran Rubric en lecture seule pour le professeur et l'élève.
 Couvre CA1 (aucune écriture, par l'interface ou par requête directe), CA2 (5 critères à 20 %, niveaux entiers de 0 à 4) et CA3 (toutes les combinaisons de niveaux, bornes comprises).
 ```
 **Vous validez :** le professeur et l'élève lisent la rubrique, sans rien pouvoir modifier.
@@ -604,7 +604,7 @@ Utilise le sous-agent feature-reviewer pour relire de façon indépendante l'év
 Points : étanchéité de la requête (identité, niveau, identifiants, retard), texte traité comme une donnée, contrat de sortie, immuabilité et proposition courante unique, transitions, matrice aiProposal, journal de sécurité sans contenu, aucun appel réseau dans les tests, valeurs provisoires marquées comme telles.
 Ne modifie rien. Renvoie d'abord la revue.
 ```
-Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q1, Q5, Q6, le modèle retenu et les nouvelles valeurs provisoires.
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour le modèle retenu et les nouvelles valeurs provisoires.
 
 ---
 
@@ -693,9 +693,9 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs 
 
 ## 4. Points ouverts qui touchent ces prompts
 
-- Q1 (note sur 20), Q2 (premier administrateur), Q4, Q6, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9). Q1, Q5 et Q6 sont dues avant E5.
+- Q2 (premier administrateur), Q4, Q8, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
 - Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`.
 - Q3, Q10 et longueur maximale d'un texte tranchées [D, 2026-10-15] : 2 remplacements au plus jusqu'au premier acte du professeur, sans avertissement d'image illisible ; consigne « pas de nom » seule ; 4000 caractères. À coder dans `src/config/decisions.ts` en E4.
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
-- Q5 : langue des remarques de l'IA. L'interface est en anglais, mais pour une copie en français la question reste ouverte.
+- Q1, Q5, Q6 tranchées [D, 2026-10-15] : note sur 20, somme des niveaux ; remarques dans la langue du devoir, mentions de l'IA et de la note ajustée affichées ; français sans proposition IA jusqu'à la validation de sa rubrique.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.

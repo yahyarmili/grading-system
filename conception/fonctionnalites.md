@@ -445,8 +445,8 @@ Le système applique à toutes les évaluations une seule rubrique (5 critères 
 *Acteur : Système · Origine et statut : étape 2, F9 [D] · Dépend de : — · Problèmes : P2 · Tests : unitaire, intégration*
 - **R1** [D] Mêmes critères, niveaux et pondérations pour l'anglais et le français, tous niveaux et tous professeurs. Critères : Task Achievement / Content ; Organization & Cohesion ; Vocabulary Range & Accuracy ; Grammatical Range & Accuracy ; Mechanics.
 - **R2** [P] La version de la rubrique est enregistrée avec chaque évaluation ; la rubrique est consultable par le professeur et par l'élève.
-- **R3** [P] La note proposée est calculée par le système à partir des cinq niveaux, jamais produite par l'IA, et recalculée quand un niveau change. Format : Q1.
-- **R4** [P] Version française à valider (Q6). Tant qu'elle ne l'est pas, aucune proposition IA pour un devoir en français : la copie passe en « IA indisponible » (après transcription pour une image) et s'évalue manuellement (REV-06). L'activation se fait par publication d'une nouvelle version de la rubrique, sans écran d'administration ; la relance est proposée au professeur (PRC-02).
+- **R3** [P] La note proposée est calculée par le système à partir des cinq niveaux, jamais produite par l'IA, et recalculée quand un niveau change. Format [D, 2026-10-15, Q1] : sur 20, somme des 5 niveaux.
+- **R4** [D, 2026-10-15, Q6] Version française à valider par le client. Tant qu'elle ne l'est pas, aucune proposition IA pour un devoir en français : la copie passe en « IA indisponible » (après transcription pour une image) et s'évalue manuellement (REV-06). L'activation se fait par publication d'une nouvelle version de la rubrique, sans écran d'administration ; la relance est proposée au professeur (PRC-02).
 - **CA1** Professeur ou élève qui tente de modifier la rubrique, par l'interface ou par requête directe : refus.
 - **CA2** La rubrique comporte exactement 5 critères de 20 % et des niveaux entiers de 0 à 4.
 - **CA3** Toutes les combinaisons de niveaux donnent la note de la règle de conversion, dans ses bornes (tous à 0 : minimum ; tous à 4 : maximum).
@@ -767,6 +767,7 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 - **Pourquoi.** Point reporté de l'étape 2 ; fixe la règle d'EVL-01, les bornes de REV-03 et l'affichage de PUB-02.
 - **Options.** Sur 20 : somme des 5 niveaux (0 à 20), sans demi-point ; sur 100 : 5 fois la somme ; autre barème à définir.
 - **Recommandation.** Sur 20, somme des 5 niveaux : directe et lisible avec cinq critères à 20 % et des niveaux entiers de 0 à 4. **Échéance** : avant E5.
+- **Décision** [D, 2026-10-15]. Note sur 20, somme des 5 niveaux (0 à 20, entière). Le pas de saisie d'une note libre par le professeur (D5) n'est pas tranché : il reste une valeur provisoire.
 
 ### Q2 — Qui est l'administrateur, comment est créé le premier compte, la désactivation d'un professeur est-elle dans le MVP ?
 - **Pourquoi.** Acteur absent des 15 demandes mais requis par D1 : il décide qui accède aux copies et aux identités. Sans désactivation (V2), une adresse mal saisie ou un professeur parti garde son accès jusqu'à une intervention technique.
@@ -788,11 +789,13 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 - **Pourquoi.** Détermine le contrat de sortie de l'IA et PUB-02. Un jeune apprenant peut ne pas comprendre des remarques dans la langue apprise ; la mention de l'IA relève de la transparence et du cadre légal ; D5 permet une note différente des niveaux, que l'élève verra.
 - **Options.** Remarques en langue du devoir, en français, ou au choix du professeur avant publication. Mention « évaluation assistée par IA et validée par votre professeur » affichée ou non. Note différente des niveaux : aucune mention, ou « note ajustée par le professeur » sans justification.
 - **Recommandation.** Langue du devoir par défaut, modifiable avant publication ; mention de l'IA affichée (à confirmer avec le cadre légal, étape 5) ; mention « note ajustée » affichée sans justification. **Échéance** : avant E5 (contrat de sortie), confirmée avant E8.
+- **Décision** [D, 2026-10-15]. La recommandation : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA affichée à l'élève (formulation à confirmer avec le cadre légal) ; mention « note ajustée par le professeur » affichée sans justification quand la note diffère de la note calculée.
 
 ### Q6 — Quand la version française de la rubrique sera-t-elle adaptée et validée, et que fait-on des devoirs en français d'ici là ?
 - **Pourquoi.** F12 ouvre le français, mais l'IA n'a pas de standard approuvé pour cette langue tant que la version française n'est pas validée (Mechanics couvre accents et accords). C'est une donnée à fournir par le client, pas un jalon de mesure.
 - **Options.** Devoirs en français créables, proposition IA désactivée jusqu'à la validation, évaluation manuelle dans l'intervalle (EVL-01, REV-06) ; livraison par langue (anglais d'abord) ; rubrique française provisoire (contredit la rubrique unique et fixe).
 - **Recommandation.** La première option : tout est construit, l'IA est activée en français à la date de validation par le client (à définir). **Échéance** : avant E5.
+- **Décision** [D, 2026-10-15]. Première option : devoirs en français créables ; aucune proposition IA tant que la rubrique française n'est pas validée par le client (date à définir) ; la copie passe en « IA indisponible » et s'évalue à la main (REV-06) ; à l'activation, la relance est proposée au professeur (PRC-02 R4).
 
 ### Q7 — Le lien et le code d'invitation d'une classe expirent-ils, et quand ?
 - **Pourquoi.** Sans approbation (D2), toute personne qui obtient le lien ou le code peut rejoindre la classe et voir les devoirs ; les contrôles sont le renouvellement (CLS-02), le retrait et le refus de rattachement (CLS-03, CLS-04).
