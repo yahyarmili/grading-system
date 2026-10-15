@@ -455,13 +455,13 @@ describe("SUB-01: the student's received assignments", () => {
     const list = await listStudentAssignments(student);
     expect(list).toHaveLength(1);
     const [received] = list;
-    // Exactly these keys: no level, class, teacher, version or internal state.
+    // Exactly these keys: no level, class, teacher, version or internal state; late is SUB-04.
     expect(Object.keys(received).sort()).toEqual(
-      ["deadline", "deadlinePassed", "id", "instructions", "language", "status", "subject", "title"],
+      ["deadline", "deadlinePassed", "id", "instructions", "language", "late", "status", "subject", "title"],
     );
     expect(received).toMatchObject({
       id: forC1, title: "For C1", subject: "Describe your town in about 150 words.", language: "en",
-      instructions: null, deadlinePassed: false, status: "to_submit",
+      instructions: null, deadlinePassed: false, status: "to_submit", late: false,
     });
   });
 
