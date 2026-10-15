@@ -3,7 +3,7 @@
 > Étape 8 de la démarche d'ingénierie. Statut : **brouillon**. Structure validée par l'utilisateur le 2026-10-12 ; contenu des prompts à valider à l'usage.
 > S'appuie sur [fonctionnalites.md](fonctionnalites.md) (plan E1 à E11, identifiants AUTH-01…), [besoins-non-fonctionnels.md](besoins-non-fonctionnels.md), [acteurs.md](acteurs.md) et [stack-technologique.md](stack-technologique.md). Méthode reprise du guide « Complete Claude Code Course Flow » (PDF fourni par l'utilisateur).
 
-**En bref.** Une suite de prompts à copier dans Claude Code, un par sous-fonctionnalité, chacun suivi de ce que vous vérifiez avant de passer au suivant. Les phases 0 à 2 et les étapes E1 à E4 sont rédigées en entier ; E5 à E11 sont en squelette et seront rédigées à l'approche de chaque étape, à partir de la conception à jour.
+**En bref.** Une suite de prompts à copier dans Claude Code, un par sous-fonctionnalité, chacun suivi de ce que vous vérifiez avant de passer au suivant. Les phases 0 à 2 et les étapes E1 à E6 sont rédigées en entier ; E7 à E11 sont en squelette et seront rédigées à l'approche de chaque étape, à partir de la conception à jour.
 
 ---
 
@@ -471,14 +471,220 @@ Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 
 ---
 
-## E5 à E11 — Squelette
+## E5 — Rubrique et proposition d'évaluation par l'IA (EVL-01 à EVL-04)
+
+Préalables :
+- **Vous** :
+  - créez une clé API Mistral (offre gratuite) et ajoutez `MISTRAL_API_KEY` dans `.env.local`, puis `docker compose up -d` ;
+  - relevez dans la console les quotas et limites de débit du compte ;
+  - réglez le refus d'entraînement (QNF-5) ;
+  - notez ces chiffres, ils servent en E6.
+- **À trancher par T5**, sinon les recommandations sont codées comme valeurs provisoires :
+  - **Q1** : note sur 20, somme des niveaux, déjà codée en provisoire ;
+  - **Q5** : remarques dans la langue du devoir ;
+  - **Q6** : devoirs en français créables, IA désactivée jusqu'à la validation de la rubrique française.
+- **Données** : textes fictifs seulement (NFR-DON-02). Aucune copie réelle n'est envoyée à Mistral.
+
+#### E5.0 — Enquête par sous-agents
+```
+Avant de planifier l'évaluation par l'IA, enquête avec trois sous-agents séparés, sans rien implémenter :
+1. Mistral : SDK TypeScript officiel (version, appel de chat, sortie structurée par schéma JSON, durées, erreurs, limites de débit), modèles disponibles avec leurs identifiants datés et leurs dates de retrait (https://docs.mistral.ai/getting-started/models/models_overview/), ce que la documentation dit de l'offre gratuite. Sources officielles seulement, avec liens.
+2. L'application : machine d'états (src/lib/submission-status.ts, applyTransition), remises et versions, rubrique (src/lib/rubric.ts), note (src/lib/grade.ts), lignes aiProposal et rubric de la matrice, et où l'évaluation se branche sans casser E4.
+3. Les tests : comment intercepter toute requête sortante vers l'IA pour le test d'étanchéité (EVL-02 CA1), sur le modèle de la capture des emails, et garder les tests hors réseau.
+Chacun renvoie : comportement actuel, fichiers concernés, risques, recommandation. Fais-en ensuite une synthèse courte.
+```
+**Vous validez :** la synthèse est claire ; le modèle recommandé a un identifiant daté, pas un alias « latest » (NFR-QUA-02).
+
+#### E5.1 — Planifier · Plan
+```
+À partir de l'enquête, planifie la rubrique et la proposition d'évaluation (EVL-01 à EVL-04, conception/fonctionnalites.md §6 et §8.2 E5 ; NFR-QUA-02, NFR-EXP-04, NFR-DON-02, NFR-DON-05).
+Il faut :
+- une rubrique versionnée en lecture seule (version anglaise publiée ; pas de version française tant que Q6 n'est pas levée), dont la version est enregistrée avec chaque proposition ; le français s'active par la publication d'une nouvelle version, sans écran, selon une procédure écrite (NFR-EXP-03) ;
+- une note calculée par le système (calculateGrade, Q1 provisoire), jamais par l'IA ;
+- une interface unique d'évaluation, deux implémentations : Mistral (SDK officiel, modèle daté épinglé) et un simulateur à pannes injectables (erreur, délai dépassé, sortie non conforme, citation introuvable). Le simulateur est le défaut ; Mistral seulement si une variable l'active explicitement ; chaque envoi réel est inscrit au journal de sécurité, sans contenu (DON-05) ;
+- une requête construite en un point unique depuis une liste blanche : texte de la version évaluée, sujet, instructions, langue, rubrique. Ni identité, ni niveau, ni identifiant, ni retard (EVL-02, SUB-04 R3). Texte et instructions encadrés comme des données, jamais comme des consignes ;
+- un contrat de sortie strict (5 niveaux entiers de 0 à 4, 5 justifications non vides avec citations, commentaire général, pistes ; langue des remarques selon Q5), validé côté serveur ; tentatives bornées ; tolérance de correspondance des citations ;
+- une proposition immuable liée à la version de remise évaluée, une seule courante par remise, avec modèle, version de consigne, version de rubrique, durée, tentatives et usage ;
+- des alertes bloquantes (aucun contenu évaluable ; devoir en français sans rubrique française validée) qui mènent à « not assessable » avec sa cause, et des alertes d'information (copie très courte, autre langue, hors sujet, texte adressé au correcteur), jamais vues de l'élève ;
+- les transitions 2 et 5 seulement, déclenchées par une commande interne ; l'enchaînement automatique est pour E6.
+Valeurs non décidées (tentatives, tolérance des citations, seuil de copie courte, écart maximal du jeu adverse) : provisional.ts.
+Montre : tables et contraintes (dont l'immuabilité), interface et simulateur, constructeur de requête, validateur, lignes de matrice et d'inventaire, commande interne, et la vérification.
+```
+
+#### E5.2 — Rubrique versionnée et note (EVL-01)
+```
+/build-ui Implémente la rubrique versionnée et la conversion en note selon le plan (EVL-01) : version anglaise publiée, lecture seule pour tous, aucune action d'écriture exposée ; note proposée calculée par le système. Écran Rubric en lecture seule pour le professeur et l'élève.
+Couvre CA1 (aucune écriture, par l'interface ou par requête directe), CA2 (5 critères à 20 %, niveaux entiers de 0 à 4) et CA3 (toutes les combinaisons de niveaux, bornes comprises).
+```
+**Vous validez :** le professeur et l'élève lisent la rubrique, sans rien pouvoir modifier.
+
+#### E5.3 — Interface d'évaluation, simulateur, adaptateur Mistral
+```
+Implémente l'interface unique d'évaluation, le simulateur à pannes injectables et l'adaptateur Mistral selon le plan, sans les brancher aux remises.
+Le simulateur est le défaut partout ; aucun test ne touche le réseau. L'adaptateur épingle un modèle daté, borne la durée de chaque appel et inscrit chaque envoi réel au journal de sécurité, sans contenu ni identité.
+Ajoute un essai manuel (script) qui envoie un texte fictif à Mistral et affiche la réponse, pour vérifier la clé et le format.
+```
+**Vous validez :** les tests passent hors réseau ; l'essai manuel obtient une réponse ; le journal de sécurité montre l'envoi, sans le texte.
+
+#### E5.4 — Requête à liste blanche et test d'étanchéité (EVL-02)
+```
+Implémente le constructeur de requête unique depuis une liste blanche de champs (EVL-02).
+Écris le test d'étanchéité : comptes, classes et professeur avec des valeurs repérables, toutes les requêtes sortantes interceptées ; aucune de ces valeurs n'y figure, hors texte rédigé par l'élève (CA1). Deux devoirs identiques de niveaux A1 et C1, dont un remis en retard : requêtes identiques (CA2, SUB-04 CA3).
+Ce test tourne à chaque npm test (NFR-EXP-04).
+```
+**Vous validez :** le test passe ; ajouter un champ interdit à la requête le fait échouer.
+
+#### E5.5 — Contrat de sortie et proposition immuable (EVL-03)
+```
+Implémente le validateur du contrat de sortie, les tentatives bornées et le stockage de la proposition selon le plan (EVL-03) : schéma, migration relue, transitions received → evaluating → to_review ou evaluation_failed par applyTransition.
+Une sortie non conforme n'est jamais stockée comme courante. La proposition ne se modifie jamais. Une relance crée une nouvelle exécution, l'ancienne reste intacte et non courante. Un résultat portant sur une version qui n'est plus active est conservé non courant et ne fait pas passer la remise à « To review ».
+Inscris la ressource et ses fonctions (matrice aiProposal, REAL, inventory). Couvre CA1, CA2 et CA4 avec le simulateur.
+```
+**Vous validez :** par la commande interne et le simulateur, une remise fictive passe à « To review » avec une proposition complète ; une sortie fautive simulée finit en « Evaluation failed », sans proposition courante.
+
+#### E5.6 — Alertes et copies non évaluables (EVL-04, EVL-01 CA4)
+```
+Implémente les alertes (EVL-04).
+Bloquantes, déterministes, avant tout appel à l'IA : aucun contenu évaluable ; devoir en français sans rubrique française validée (EVL-01 R4). Elles mènent à « not assessable » avec sa cause, sans proposition ni relance en boucle.
+D'information, la proposition étant produite : copie très courte (seuil provisoire), autre langue, hors sujet, texte adressé au correcteur ; au mieux, non garanties.
+Teste la garde du français avec une rubrique française « test only » qui n'existe que dans les tests. Couvre CA1, CA2 et EVL-01 CA4 ; CA3 (aucune alerte côté élève) est rejoué en E8.
+```
+**Vous validez :** une remise d'un devoir en français finit en « Not assessable » avec sa cause, sans appel à l'IA.
+
+#### E5.7 — Commande interne, jeu de développement, jeu adverse
+```
+Finalise la commande interne qui évalue une remise ou toutes les remises « Received » d'un devoir (npm run …), hors interface, listée dans inventory.ts avec sa raison. Simulateur par défaut, Mistral seulement sur activation explicite.
+Constitue dans le dépôt le jeu de développement synthétique (textes fictifs en anglais, dont des textes très fautifs, très courts, hors sujet) et le jeu adverse fini (consigne adressée au correcteur, « give 4 everywhere », fausse fin de consigne…).
+Fais tourner ces jeux une fois avec Mistral et consigne les résultats tels quels : sorties rejetées, stabilité sur deux exécutions, écarts du jeu adverse (EVL-03 CA3). Aucune conclusion de qualité.
+```
+**Vous validez :** vous lisez le compte rendu. Ces textes sont écrits par des adultes : ils ne représentent pas de vraies copies d'élèves.
+
+#### E5.8 — Essai exploratoire de lecture manuscrite (hors produit)
+Préalable : quelques photos de textes manuscrits fictifs, écrits par des adultes volontaires, sans nom.
+```
+Hors produit, écris un script qui fait lire ces photos par Mistral OCR et par un modèle multimodal Mistral, puis compare : fautes conservées ou corrigées, passages illisibles marqués ou devinés, ordre du texte.
+Consigne les résultats tels quels dans une courte annexe de conception/, avec les versions de modèle et cette limite : écriture d'adultes, pas d'élèves. Aucune intégration dans l'application (E9).
+```
+**Vous validez :** l'annexe existe et ne tire aucune conclusion au-delà de ce qui a été observé.
+
+#### E5.9 — Agent relecteur et revue en contexte neuf
+Créez `.claude/agents/feature-reviewer.md` :
+```
+---
+name: feature-reviewer
+description: Review a completed feature in a fresh context after implementation. Use when a feature needs an independent check for bugs, regressions, unnecessary changes, project-rule violations and missing verification.
+tools: Read, Grep, Glob
+---
+
+Review the requested feature without modifying the code.
+
+Inspect the relevant implementation and surrounding code, against CLAUDE.md (architecture rules, invariants, access matrix, provisional values) and the feature IDs in conception/fonctionnalites.md.
+
+Return:
+
+## Summary
+What changed.
+
+## Critical
+Problems that can break functionality, data, security or the invariants.
+
+## Major
+Important regressions or architectural issues.
+
+## Minor
+Smaller issues worth fixing.
+
+## Verification
+What was checked and what still needs verification.
+
+If something cannot be verified, say so clearly.
+```
+Puis :
+```
+Utilise le sous-agent feature-reviewer pour relire de façon indépendante l'évaluation par l'IA.
+Points : étanchéité de la requête (identité, niveau, identifiants, retard), texte traité comme une donnée, contrat de sortie, immuabilité et proposition courante unique, transitions, matrice aiProposal, journal de sécurité sans contenu, aucun appel réseau dans les tests, valeurs provisoires marquées comme telles.
+Ne modifie rien. Renvoie d'abord la revue.
+```
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q1, Q5, Q6, le modèle retenu et les nouvelles valeurs provisoires.
+
+---
+
+## E6 — Traitement automatique par lots, échecs et relance (PRC-01, PRC-02)
+
+Préalables :
+- Quotas Mistral relevés en E5 : ils bornent le parallélisme. Le lot de référence fait 100 remises, et le quota gratuit peut être plus bas (NFR-TRT-01).
+- Tentatives, durée maximale par étape, parallélisme et plafond d'usage sont « à définir » : valeurs provisoires.
+
+#### E6.0 — Planifier · Plan
+```
+Planifie le traitement automatique par lots (PRC-01, PRC-02, conception/fonctionnalites.md §8.2 E6 ; NFR-TRT-01, NFR-FIA-01, NFR-EXP-01, NFR-EXP-02 ; règle 4 de CLAUDE.md) avec Vercel Workflows.
+Confie d'abord à un sous-agent la lecture de la documentation actuelle de Vercel Workflows : installation dans Next.js 16, déclenchement, étapes, nouvelles tentatives, reprise, exécution locale sous Docker et dans les tests, limites et événements du plan Hobby. Sources officielles, avec liens.
+Il faut :
+- un déclenchement après la validation de la transaction de remise ou de remplacement, jamais avant : la confirmation de l'élève ne dépend pas du traitement ;
+- un traitement par version de remise, idempotent : un double déclenchement donne un seul traitement actif et une seule proposition courante ; le traitement d'une version devenue non active ne produit rien de courant ;
+- des étapes qui ne portent que des identifiants ; la requête à l'IA reste construite par le constructeur d'E5 ;
+- un parallélisme borné selon les quotas relevés, des tentatives et une durée maximale par étape, une reprise après panne sans perte ni doublon ; aucune remise « en cours » au-delà d'une durée maximale (dis comment on le garantit) ;
+- un échec après les tentatives qui mène à « evaluation failed » ; la relance et le passage à l'évaluation manuelle exposés comme fonctions serveur (boutons en E7 et E8) ;
+- un plafond d'usage de l'IA par réglage (EXP-02) : au plafond, plus aucun appel, la remise passe à « not assessable », cause « AI unavailable », sans perte ;
+- la mesure par traitement (durées, tentatives, usage), sans identité ni contenu (EXP-01) ;
+- un point d'attache pour la transcription d'image (E9), non implémenté.
+Montre : flux, fichiers, étapes et leurs garanties, réglages provisoires, comportement en développement, en test et sur la preview, et la vérification sous pannes.
+```
+
+#### E6.1 — Déclenchement automatique (PRC-01 R2)
+```
+Installe et configure Vercel Workflows selon le plan, puis implémente le déclenchement : à la remise et au remplacement, une fois la transaction validée, pour la version active seulement. Une remise texte enchaîne received → evaluating → to_review sans action de quiconque.
+Couvre PRC-01 CA1 (texte) et CA2 (double déclenchement). Rejoue SUB-05 CA2 : un remplacement relance le traitement, et le résultat de l'ancienne version, arrivé tard, reste non courant.
+```
+**Vous validez :** vous remettez un texte comme élève, la base montre « To review » avec une proposition (simulateur) sans autre action ; l'élève voit toujours « Submitted, being marked ».
+
+#### E6.2 — Parallélisme, tentatives, reprise, plafond (PRC-01 R3, NFR-EXP-02)
+```
+Implémente le parallélisme borné, les tentatives, la durée maximale par étape, la reprise après panne et le plafond d'usage selon le plan, valeurs non décidées dans provisional.ts.
+Couvre avec le simulateur PRC-01 CA3 (lot déposé en parallèle par plusieurs comptes, un marqueur unique par texte : chaque proposition ne porte que sur sa copie) et CA4 (une remise en panne n'empêche pas les autres ; arrêt en cours de lot puis reprise : zéro perte, zéro doublon). Plafond atteint : les remises suivantes passent à « AI unavailable » sans appel.
+```
+**Vous validez :** sur un lot simulé de quelques dizaines de remises avec pannes injectées, chaque remise atteint un état final et aucune proposition ne cite un autre texte que le sien.
+
+#### E6.3 — Échecs et relance (PRC-02)
+```
+Implémente la gestion des échecs (PRC-02) : après les tentatives, « evaluation failed », visible du professeur en E7.
+Fonctions serveur, inscrites dans la matrice et inventory.ts :
+- relance d'un échec (transition 6) ;
+- liste des copies « AI unavailable » à relancer quand leur cause disparaît (rubrique française activée, plafond levé ; transition 7) : jamais automatiquement, jamais pour une copie évaluée à la main.
+Couvre CA1 à CA4 ; l'élève voit seulement « Submitted, being marked », quel que soit l'échec (SUB-01 CA2).
+```
+**Vous validez :** une panne simulée persistante donne « Evaluation failed » ; la relance ramène la remise à « To review ».
+
+#### E6.4 — Mesures d'usage et de délai (NFR-EXP-01)
+```
+Ajoute le script qui restitue, par devoir, le délai entre remise et « To review », l'usage d'IA par copie, les tentatives et le taux d'échec, sans identité ni contenu (EXP-01).
+Sur un lot de test, mesure aussi le nombre d'événements Workflows par copie et le délai du lot. Rapporte les chiffres tels quels, même au-dessus d'une cible, et déduis-en combien de copies par mois le plan Hobby permet.
+```
+**Vous validez :** le rapport donne des chiffres mesurés, sans cible inventée.
+
+#### E6.5 — Vérifier et démontrer
+```
+Écris le parcours E2E d'E6 : l'élève remet, la remise atteint « To review » (vérifié par la base de test ; l'écran du professeur arrive en E7), l'élève voit « Submitted, being marked » ; remplacement, puis nouveau traitement.
+Liste ensuite les variables à ajouter dans Vercel (Preview) pour Mistral et Workflows, sans lire .env.local. Une fois la preview poussée à ma demande, vérifie une remise traitée en ligne avec Mistral, sur un texte fictif.
+```
+**Vous validez :** sur la preview, une remise fictive atteint « To review » avec une proposition de Mistral.
+
+#### E6.6 — Revue en contexte neuf
+```
+Utilise le sous-agent feature-reviewer pour relire de façon indépendante le traitement par lots.
+Points : mélange entre copies (une note pour le mauvais élève), idempotence et doublons, reprise, remises bloquées « en cours », version non active, plafond, étanchéité de la requête, journaux sans contenu, matrice des nouvelles actions.
+Ne modifie rien. Renvoie d'abord la revue.
+```
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs provisoires et les mesures.
+
+---
+
+## E7 à E11 — Squelette
 
 À rédiger en détail à l'approche de chaque étape, à partir de la conception à jour. Chaque étape commence par un **Plan** et se termine par **T1**, puis T5 si une décision a changé.
 
 | Étape | Prompts prévus | Outils du guide introduits |
 |---|---|---|
-| **E5** Rubrique et IA | E5.0 enquête par sous-agents (SDK Mistral et modèles, machine d'états, outillage de tests) · E5.1 plan · E5.2 rubrique versionnée et conversion en note (Q1 provisoire) · E5.3 interface Mistral et simulateur à pannes · E5.4 requête à liste blanche et test d'étanchéité (EVL-02) · E5.5 contrat de sortie, tentatives bornées, proposition immuable (EVL-03) · E5.6 alertes, non évaluable, garde de la rubrique française (EVL-04, Q6) · E5.7 commande interne de déclenchement, jeu adverse · E5.8 création de l'agent `feature-reviewer` et revue en contexte neuf · T3 | Sous-agents, agent relecteur. Préalable : quotas et refus d'entraînement relevés dans la console Mistral (QNF-5) |
-| **E6** Traitement par lots | E6.0 plan Vercel Workflows · E6.1 déclenchement à la remise et au remplacement · E6.2 parallélisme borné, nouvelles tentatives, reprise (PRC-01) · E6.3 échecs et relance (PRC-02) · E6.4 tests de pannes, lot à marqueurs uniques · E6.5 mesure des événements par copie, revue | Revue en contexte neuf : mélange entre copies |
 | **E7** Revue par le professeur | E7.0 plan · E7.1 liste réelle à partir de la maquette 1.4 (REV-01) · E7.2 écran de copie à partir de la maquette 1.5 (REV-02) · E7.3 évaluation du professeur, recalcul, note fixée (REV-03) · E7.4 journal atomique et conflits (REV-04) · E7.5 relance depuis la liste, rejeux · revue | — |
 | **E8** Validation, publication | E8.0 plan · E8.1 valider, publier, retirer, raccourci (REV-05, PUB-01) · E8.2 évaluation manuelle (REV-06) · E8.3 vue de l'élève à liste blanche (PUB-02) · E8.4 balayage « rien avant publication » · E8.5 rejeux de la table 8.3 · E8.6 cycle complet en texte (E2E) · revue de la fuite | Revue en contexte neuf : fuite de résultats |
 | **E9** Canal image | E9.0 enquête par sous-agents (OCR ou modèle multimodal, limites de 4,5 Mo et de 1 Go) · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur, type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 moteur de lecture et contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · revue | Sous-agents, revue |
@@ -488,7 +694,7 @@ Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 
 ## 4. Points ouverts qui touchent ces prompts
 
-- Q1 (note sur 20), Q2 (premier administrateur), Q4, Q6, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
+- Q1 (note sur 20), Q2 (premier administrateur), Q4, Q6, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9). Q1, Q5 et Q6 sont dues avant E5.
 - Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`.
 - Q3, Q10 et longueur maximale d'un texte tranchées [D, 2026-10-15] : 2 remplacements au plus jusqu'au premier acte du professeur, sans avertissement d'image illisible ; consigne « pas de nom » seule ; 4000 caractères. À coder dans `src/config/decisions.ts` en E4.
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
