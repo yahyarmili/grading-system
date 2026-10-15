@@ -51,6 +51,8 @@ test("a student submits a pasted text once, kept as written, then sees it being 
     await expect(box).toHaveAttribute(name, value);
   }
   await expect(box).not.toHaveAttribute("maxlength");
+  // The limit and the counter are read with the field.
+  await expect(box).toHaveAccessibleDescription(/At most 4,000 characters.*0 \/ 4,000 characters/);
   await student.waitForLoadState("networkidle");
   await student.screenshot({ path: "test-results/sub02-1-form-phone.png", fullPage: true });
   await student.setViewportSize({ width: 1280, height: 800 });

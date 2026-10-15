@@ -62,11 +62,12 @@ export function TextField({
           autoCapitalize="off"
           spellCheck={false}
           data-gramm="false"
+          aria-describedby={`${id}-count`}
           value={text}
           onChange={(e) => onText(e.target.value)}
         />
       </FormField>
-      <p className="flex items-center justify-end gap-1 text-sm tabular-nums">
+      <p id={`${id}-count`} className="flex items-center justify-end gap-1 text-sm tabular-nums">
         {over > 0 ? (
           <span className="inline-flex items-center gap-1 font-semibold text-danger-fg">
             <CircleAlert aria-hidden="true" className="size-4" />

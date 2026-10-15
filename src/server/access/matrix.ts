@@ -86,7 +86,7 @@ export const ACCESS_MATRIX = {
     // [P] What the student reads of their own submission: its status in the
     // closed list of SUB-01 R3 (toStudentStatus), never the submission itself
     // (no read on "submission"). The teacher reads the internal status through "submission".
-    label: "Status of the own submission, closed list (SUB-01 R3)",
+    label: "Own submission: status in the closed list (SUB-01 R3), late flag, dates, replacements left; never the text",
     concernedStudent: L, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
   },
   noticeAcknowledgement: {

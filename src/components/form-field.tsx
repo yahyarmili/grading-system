@@ -34,7 +34,8 @@ export function FormField({
   const id = (isValidElement(children) && children.props.id) || autoId;
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
-  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
+  // A control may name more of its own (a counter), kept after the hint and the error.
+  const describedBy = [hintId, errorId, children.props["aria-describedby"]].filter(Boolean).join(" ") || undefined;
 
   const control = cloneElement(children, {
     id,

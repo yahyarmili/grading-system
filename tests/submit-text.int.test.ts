@@ -207,6 +207,17 @@ describe("one submission, however often it is sent", () => {
     expect(await storedTexts()).toHaveLength(1);
   });
 
+  it("makes two forms sent at once one submission: the other is told it is already submitted", async () => {
+    const { student, assignmentId } = await setup();
+    const results = await Promise.all([
+      submitStudentText(student, form(assignmentId, "From one tab.")),
+      submitStudentText(student, form(assignmentId, "From another tab.")),
+    ]);
+    expect(results.map((r) => (r.status === "error" ? r.reason : r.status)).sort()).toEqual(["alreadySubmitted", "done"]);
+    expect(await db.select().from(submissions)).toHaveLength(1);
+    expect(await storedTexts()).toHaveLength(1);
+  });
+
   it("refuses a second form: the student already submitted", async () => {
     const { student, assignmentId } = await setup();
     await submitStudentText(student, form(assignmentId, "First."));
@@ -236,4 +247,70 @@ describe("the first submission locks the assignment (ASG-03)", () => {
     // The page now shows version 2: the same text goes through.
     expect((await submitStudentText(student, form(assignmentId, "My town.", { contentVersion: "2" }))).status).toBe("done");
   });
+});
+
+describe("a first submission and a change of the task at the same time: one goes through", () => {
+  const newTask = { subject: "Describe your school.", language: "en" as const, deadline: new Date(Date.now() + 864e5), instructions: null };
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /**
+   * Holds the assignment row, then starts the two calls a little apart: both
+   * wait on the row, and are served in the order they came once it is free.
+   */
+  async function queued<A, B>(assignmentId: string, first: () => Promise<A>, second: () => Promise<B>) {
+    let results: Promise<[A, B]> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.select({ id: assignments.id }).from(assignments).where(eq(assignments.id, assignmentId)).for("update");
+      const a = first();
+      await wait(1500);
+      const b = second();
+      results = Promise.all([a, b]);
+      await wait(1500);
+    });
+    return results!;
+  }
+
+  it("submission first: the teacher's change waits, then is refused (locked)", async () => {
+    const { teacher, student, assignmentId } = await setup();
+    const [submitted, edited] = await queued(
+      assignmentId,
+      () => submitStudentText(student, form(assignmentId, "My town.")),
+      () => updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task: newTask }),
+    );
+    expect(submitted.status).toBe("done");
+    expect(edited).toEqual({ ok: false, reason: "locked" });
+    const [row] = await db.select().from(assignments);
+    expect(row).toMatchObject({ subject: "Describe your town.", contentVersion: 1 });
+    expect(row.lockedAt).not.toBeNull();
+  }, 60_000);
+
+  it("change first: the submission waits, then is refused (changed), nothing stored", async () => {
+    const { teacher, student, assignmentId } = await setup();
+    const [edited, submitted] = await queued(
+      assignmentId,
+      () => updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task: newTask }),
+      () => submitStudentText(student, form(assignmentId, "My town.")),
+    );
+    expect(edited).toEqual({ ok: true });
+    expect(submitted).toMatchObject({ status: "error", reason: "changed" });
+    expect(await db.select().from(submissions)).toEqual([]);
+    expect(await lockedAt(assignmentId)).toBeNull();
+  }, 60_000);
+
+  it("raced freely: exactly one of the two outcomes, never both", async () => {
+    const { teacher, student, assignmentId } = await setup();
+    const [submitted, edited] = await Promise.all([
+      submitStudentText(student, form(assignmentId, "My town.")),
+      updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task: newTask }),
+    ]);
+    const stored = await db.select().from(submissions);
+    if (submitted.status === "done") {
+      expect(edited).toEqual({ ok: false, reason: "locked" });
+      expect(stored).toHaveLength(1);
+    } else {
+      expect(submitted).toMatchObject({ reason: "changed" });
+      expect(edited).toEqual({ ok: true });
+      expect(stored).toEqual([]);
+    }
+  }, 60_000);
 });
