@@ -30,6 +30,19 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 - **Images dans la base.** Neon gratuit : 1 Go par projet, écritures bloquées au-delà ([Neon](https://neon.com/pricing)). Une fonction Vercel accepte 4,5 Mo au plus en requête et en réponse ([Vercel](https://vercel.com/docs/functions/limitations)). Conséquences [P] : chaque page est réduite dans le navigateur avant l'envoi, une page par requête ; la photo reste « sans retouche » du point de vue de l'élève (USA-01). Il faut garder assez de résolution pour lire l'écriture, ce qui se vérifie en E9. Formats, poids et nombre de pages : à définir (TRT-02), pour tenir dans 1 Go. Supprimer les images à la fin de la revue (DON-01) libère la place.
 - **Lots.** Workflows reprend après un plantage et relance les étapes en échec ([Vercel](https://vercel.com/docs/workflows)). Hobby inclut 50 000 événements par mois, une étape normale en produit 3, plus 1 par nouvelle tentative, et 1 Go de données écrites par mois ; l'état d'un traitement n'est conservé qu'un jour après sa fin ([tarifs](https://vercel.com/docs/workflows/pricing)). Le nombre d'étapes par copie est inconnu : à mesurer en E6. Le SDK multi-région est en bêta.
 - **Mistral gratuit.** Il peut utiliser les entrées et sorties pour entraîner ses modèles, avec un droit de refus à tout moment ([aide](https://help.mistral.ai/en/articles/347617-do-you-use-my-user-data-to-train-your-artificial-intelligence-models), [procédure](https://help.mistral.ai/en/articles/455207-can-i-opt-out-of-my-input-or-output-data-being-used-for-training)). D'où les données fictives. Les quotas ne sont pas publiés : à relever dans votre console. Les modèles sont retirés régulièrement (OCR 4.0 au 30/09/2026, Small 3.2, Medium 3.1 : [liste](https://docs.mistral.ai/getting-started/models/models_overview/)). La version utilisée est donc enregistrée avec chaque résultat. La précision de lecture de l'écriture manuscrite n'est pas vérifiée de façon indépendante : à mesurer en E5 et E9.
+- **Limites du compte gratuit, relevées le 2026-10-15** (Admin Panel › API › Limits, par espace de travail, toutes clés confondues). Aucune limite mensuelle affichée ; OCR non relevé.
+
+  | Modèle | Tokens par minute | Requêtes par seconde |
+  |---|---|---|
+  | `mistral-small-2603` | 20 000 | 1,00 |
+  | `mistral-medium-latest` | 20 000 | 1,00 |
+  | `mistral-large-2512` | 250 000 | 1,00 |
+  | `mistral-large-4` | 20 000 | 0,83 |
+  | `ministral-14b-2512` | 937 500 | 0,50 |
+  | `ministral-8b-2512` | 625 000 | 3,13 |
+  | `ministral-3b-2512` | 1 300 000 | 12,50 |
+
+  `mistral-large-2512` figure sur cette page mais pas dans la liste des modèles de l'API (`/v1/models`) : son accès réel est à vérifier en E5.0.
 - **Vercel Hobby.** Gratuit, fonctions de 300 s. Usage réservé au non commercial ([règles](https://vercel.com/docs/limits/fair-use-guidelines)), compatible avec un projet académique. Un projet payant ou commercial exigerait le plan Pro.
 - **Neon.** Compute suspendu après 5 minutes d'inactivité, donc démarrage à froid à prévoir. Historique de restauration de 6 h seulement : d'où l'export périodique.
 - **Gmail SMTP.** Environ 500 destinataires par jour selon des blogs ([source secondaire](https://serversmtp.com/limits-of-gmail-smtp-server/)), validation en deux étapes requise. Suffisant pour la démonstration, pas pour un usage réel. Resend exige un domaine à vous ([doc](https://resend.com/docs/dashboard/domains/introduction)).
@@ -49,7 +62,7 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 **Tranché le 2026-10-12 [D]** (à confirmer dans le plan de chaque étape, voir [prompts-implementation.md](prompts-implementation.md)) : Better Auth pour l'authentification et les sessions, Zod pour la validation, Vitest et Playwright pour les tests, Nodemailer pour l'email, SDK TypeScript officiel pour Mistral. Interface de l'application en anglais.
 
 **À vérifier :**
-- quotas du compte Mistral et refus d'entraînement en mode gratuit (votre console) ;
+- refus d'entraînement en mode gratuit (votre console) ; limite mensuelle et limites OCR (les débits par minute sont relevés en §3) ;
 - si Vercel exige une carte à l'inscription ;
 - région de la base Neon ;
 - limites de poids et de pages des images (TRT-02) ;

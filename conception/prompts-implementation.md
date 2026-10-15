@@ -476,9 +476,8 @@ Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 Préalables :
 - **Vous** :
   - créez une clé API Mistral (offre gratuite) et ajoutez `MISTRAL_API_KEY` dans `.env.local`, puis `docker compose up -d` ;
-  - relevez dans la console les quotas et limites de débit du compte ;
+  - limites de débit relevées le 2026-10-15 (`stack-technologique.md` §3) ;
   - réglez le refus d'entraînement (QNF-5) ;
-  - notez ces chiffres, ils servent en E6.
 - **À trancher par T5**, sinon les recommandations sont codées comme valeurs provisoires :
   - **Q1** : note sur 20, somme des niveaux, déjà codée en provisoire ;
   - **Q5** : remarques dans la langue du devoir ;
@@ -612,7 +611,7 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q1, Q5, Q6, 
 ## E6 — Traitement automatique par lots, échecs et relance (PRC-01, PRC-02)
 
 Préalables :
-- Quotas Mistral relevés en E5 : ils bornent le parallélisme. Le lot de référence fait 100 remises, et le quota gratuit peut être plus bas (NFR-TRT-01).
+- Limites de débit Mistral relevées (`stack-technologique.md` §3) : elles bornent le parallélisme. Le lot de référence fait 100 remises, et le quota gratuit peut être plus bas (NFR-TRT-01).
 - Tentatives, durée maximale par étape, parallélisme et plafond d'usage sont « à définir » : valeurs provisoires.
 
 #### E6.0 — Planifier · Plan
