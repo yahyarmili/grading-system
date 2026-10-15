@@ -131,6 +131,12 @@ function AssignmentCard({ a }: { a: StudentAssignment }) {
           <p className="break-words whitespace-pre-wrap">{a.instructions}</p>
         </div>
       )}
+      {/* SUB-02: to submit, the text box; after, the dated confirmation. */}
+      <Button asChild variant={a.status === "to_submit" ? "default" : "outline"} className="w-full sm:w-auto sm:self-start">
+        <Link href={`/student/assignments/${a.id}`} aria-describedby={titleId}>
+          {a.status === "to_submit" ? "Write my text" : "Open the assignment"}
+        </Link>
+      </Button>
     </li>
   );
 }

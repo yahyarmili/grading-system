@@ -7,12 +7,19 @@ import { AccessDeniedError } from "@/server/access/errors";
 import { ACCESS_MATRIX, ACTIONS, COLUMNS, RESOURCES, type Action, type Column, type Resource } from "@/server/access/matrix";
 import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
-import { createAssignment, getTeacherAssignment, listStudentAssignments, updateAssignment } from "@/server/data/assignments/assignments";
+import {
+  createAssignment,
+  getStudentAssignment,
+  getTeacherAssignment,
+  listStudentAssignments,
+  updateAssignment,
+} from "@/server/data/assignments/assignments";
 import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
 import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
+import { submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { assignmentClasses, assignments, classes, classMemberships, users } from "@/server/db/schema";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
@@ -184,7 +191,7 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     read: {
       run: (actor, { assignmentId }) =>
         actor.kind === "user" && actor.role === "student"
-          ? receivedAssignment(actor, assignmentId)
+          ? getStudentAssignment(actor, assignmentId)
           : getTeacherAssignment(actor, assignmentId),
     },
     write: { run: (actor, { assignmentId }) => updateAssignment(actor, assignmentId, { title: "Renamed", level: "B2" }) },
@@ -197,10 +204,23 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     read: { run: (actor, { assignmentId }) => getTeacherAssignment(actor, assignmentId) },
     write: { run: sendAssignment },
   },
-  // The student's state of a received assignment; a teacher is refused (SUB-01 R3).
+  // The student's state of a received assignment, in the list and on its page; a teacher is refused (SUB-01 R3).
   ownSubmissionStatus: {
     setup: ownedAssignment,
-    read: { run: async (actor, { assignmentId }) => (await receivedAssignment(actor, assignmentId))?.status ?? null },
+    read: {
+      run: async (actor, { assignmentId }) =>
+        (await receivedAssignment(actor, assignmentId)) && (await getStudentAssignment(actor, assignmentId))?.status,
+    },
+  },
+  // Submitting to the owner's assignment (SUB-02): the student who received it
+  // writes their own; another student finds nothing; a teacher is refused.
+  // Never read back by the student (A3): no read operation on this side.
+  submission: {
+    setup: ownedAssignment,
+    write: {
+      run: (actor, { assignmentId }) =>
+        submitText(actor, { assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small." }),
+    },
   },
 };
 

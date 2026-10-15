@@ -1,3 +1,5 @@
+import { SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
+
 // Texts that depend on a decision of conception/ (notices, AI mention, "no
 // name" instruction). One place, so that a change of decision changes them all.
 
@@ -29,3 +31,18 @@ export const ASSIGNMENT_NOT_DELETED_NOTICE = "An assignment with submissions can
 
 /** ASG-03 R1 [P]: an edit before the first submission reaches the students at once. */
 export const ASSIGNMENT_EDIT_VISIBLE_NOTICE = "Your students see the changes as soon as you save them.";
+
+/** Q10 [D, 2026-10-15]: the instruction alone, shown before sending; no alert, no masking. */
+export const NO_NAME_INSTRUCTION = "Do not write your name in your text.";
+
+/** SUB-02 R1 [D, 2026-10-15]: the limit, announced before sending. */
+export const SUBMISSION_TEXT_LIMIT_NOTICE = `At most ${SUBMISSION_TEXT_MAX_LENGTH.toLocaleString("en-US")} characters. A longer text is refused, never cut.`;
+
+/** SUB-02 R2 [P]: mistakes are part of what is marked. */
+export const TEXT_KEPT_AS_WRITTEN_NOTICE = "Your text is sent exactly as you wrote it: nothing is corrected.";
+
+/** A3 [D]: the student does not read their text again after sending it. */
+export const NO_READ_BACK_NOTICE = "Once you submit, your text is not shown to you again.";
+
+/** A3 [D]: said again after sending. */
+export const SUBMITTED_NO_READ_BACK_NOTICE = "Your text is not shown to you again.";

@@ -41,12 +41,12 @@ export async function waitForLink(to: string, kind: string, previous?: string): 
   return link!;
 }
 
-/** Runs one SQL statement on the test database (to age a link, for instance). */
-export async function sql(text: string, values: unknown[] = []): Promise<void> {
+/** Runs one SQL statement on the test database (to age a link, for instance); returns its rows. */
+export async function sql<Row = Record<string, unknown>>(text: string, values: unknown[] = []): Promise<Row[]> {
   const client = new Client({ connectionString: testDatabaseUrl() });
   await client.connect();
   try {
-    await client.query(text, values);
+    return (await client.query(text, values)).rows as Row[];
   } finally {
     await client.end();
   }

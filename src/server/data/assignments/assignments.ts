@@ -3,11 +3,12 @@ import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-
 import type { Actor } from "@/server/access/actor";
 import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
-import { assignmentClasses, assignments, classes, classMemberships } from "@/server/db/schema";
+import { assignmentClasses, assignments, classes, submissions } from "@/server/db/schema";
 import type { AssignmentLanguage, AssignmentLevel } from "@/lib/assignment";
 import { compareText } from "@/lib/collation";
 import { toStudentStatus, type StudentStatus } from "@/lib/submission-status";
 import { ownedBy } from "../access";
+import { receivedBy, visibleTo } from "./received";
 
 // ASG-01: an assignment and the classes it is sent to (rows "assignment" and
 // "assignmentRecipients" of the matrix). The teacher owns both; the database
@@ -62,20 +63,8 @@ export async function createAssignment(actor: Actor, input: NewAssignment): Prom
   });
 }
 
-/**
- * The student side of the ownership: received by derivation [D], through an
- * active membership in one of the recipient classes, whatever the date it was
- * sent. An EXISTS, not a join: an assignment sent to two of the student's
- * classes comes out once (R5). From E4, a submission of theirs also counts (SUB-01 R4).
- */
-const receivedBy = (userId: string) =>
-  sql`exists (select 1 from ${assignmentClasses}
-    join ${classMemberships} on ${classMemberships.classId} = ${assignmentClasses.classId}
-    where ${assignmentClasses.assignmentId} = ${assignments.id}
-      and ${classMemberships.studentId} = ${userId}
-      and ${classMemberships.status} = 'active')`;
-
-const owners = { teacher: assignments.teacherId, student: receivedBy };
+/** The student reads what they received or submitted to (received.ts). */
+const owners = { teacher: assignments.teacherId, student: visibleTo };
 
 /** ASG-02 R1: one row of the teacher's list. Counts stay 0 until submissions exist (E4, E7). */
 export type TeacherAssignmentItem = {
@@ -226,9 +215,9 @@ export async function deleteAssignment(actor: Actor, assignmentId: string): Prom
 }
 
 /**
- * SUB-01 R2: what the student reads of a received assignment, a closed list.
+ * SUB-01 R2: what the student reads of an assignment, a closed list.
  * Neither the level (D4), nor the classes, nor the teacher, nor any internal
- * state or version leaves the server.
+ * state, version or text leaves the server (A3).
  */
 export type StudentAssignment = {
   id: string;
@@ -243,11 +232,19 @@ export type StudentAssignment = {
   status: StudentStatus;
 };
 
-/** SUB-01 CA1: the student's received assignments, nearest deadline first. Refused to a teacher. */
-export async function listStudentAssignments(actor: Actor): Promise<StudentAssignment[]> {
-  const grant = authorize(actor, "assignment", "read");
-  authorize(actor, "ownSubmissionStatus", "read");
-  const rows = await db
+/** One assignment, with what the submission screen needs (SUB-02). */
+export type StudentAssignmentDetail = StudentAssignment & {
+  /** The task version shown: a submission names it (ASG-03). */
+  contentVersion: number;
+  /** Date of the first submission, by the database clock; null before. */
+  submittedAt: string | null;
+  /** Not submitted yet, and still an active member of a recipient class (SUB-01 R4). */
+  canSubmit: boolean;
+};
+
+/** The student's assignments with their own submission, if any: never another student's. */
+function studentRows(userId: string, where: SQL | undefined) {
+  return db
     .select({
       id: assignments.id,
       title: assignments.title,
@@ -256,14 +253,50 @@ export async function listStudentAssignments(actor: Actor): Promise<StudentAssig
       language: assignments.language,
       deadline: assignments.deadline,
       deadlinePassed: sql<boolean>`${assignments.deadline} < now()`,
+      contentVersion: assignments.contentVersion,
+      submissionStatus: submissions.status,
+      submittedAt: submissions.submittedAt,
+      received: sql<boolean>`${receivedBy(userId)}`,
     })
     .from(assignments)
-    .where(ownedBy(grant, owners))
+    .leftJoin(submissions, and(eq(submissions.assignmentId, assignments.id), eq(submissions.studentId, userId)))
+    .where(where)
     .orderBy(asc(assignments.deadline), assignments.id);
-  // Submissions arrive in E4: until then, every received assignment is to submit.
-  return rows.map(({ deadline, ...row }) => ({
-    ...row,
-    deadline: deadline.toISOString(),
-    status: toStudentStatus("to_submit"),
-  }));
+}
+
+type StudentRow = Awaited<ReturnType<typeof studentRows>>[number];
+
+const toStudentAssignment = (row: StudentRow): StudentAssignment => ({
+  id: row.id,
+  title: row.title,
+  subject: row.subject,
+  instructions: row.instructions,
+  language: row.language,
+  deadline: row.deadline.toISOString(),
+  deadlinePassed: row.deadlinePassed,
+  status: toStudentStatus(row.submissionStatus ?? "to_submit"),
+});
+
+/** SUB-01 CA1: the student's assignments, nearest deadline first. Refused to a teacher. */
+export async function listStudentAssignments(actor: Actor): Promise<StudentAssignment[]> {
+  const grant = authorize(actor, "assignment", "read");
+  authorize(actor, "ownSubmissionStatus", "read");
+  return (await studentRows(grant.userId, ownedBy(grant, owners))).map(toStudentAssignment);
+}
+
+/**
+ * One of the student's assignments, for the submission screen; null when it
+ * does not exist or is not theirs (AUTH-04 R3). Refused to a teacher.
+ */
+export async function getStudentAssignment(actor: Actor, assignmentId: string): Promise<StudentAssignmentDetail | null> {
+  const grant = authorize(actor, "assignment", "read");
+  authorize(actor, "ownSubmissionStatus", "read");
+  const [row] = await studentRows(grant.userId, and(eq(assignments.id, assignmentId), ownedBy(grant, owners)));
+  if (!row) return null;
+  return {
+    ...toStudentAssignment(row),
+    contentVersion: row.contentVersion,
+    submittedAt: row.submittedAt?.toISOString() ?? null,
+    canSubmit: row.submittedAt === null && row.received,
+  };
 }
