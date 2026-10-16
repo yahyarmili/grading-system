@@ -159,6 +159,10 @@ test("ASG-03: edit, then delete with confirmation; once locked, only the title a
   await page.waitForLoadState("networkidle");
   await page.screenshot({ path: "test-results/asg03-1-saved-desktop.png", fullPage: true });
   await page.getByRole("link", { name: "Open the assignment" }).click();
+  // The edit form's textarea also holds the subject: wait for the page itself,
+  // or the reload below cancels the client navigation still in flight.
+  await expect(page).toHaveURL(new RegExp(`${url}$`));
+  await expect(page.getByRole("heading", { name: "The task", level: 2 })).toBeVisible();
   await expect(page.getByText("Describe your village.").filter({ visible: true })).toBeVisible();
 
   // R2: locked as the first submission will lock it (E4): the task is read only, no Delete.
