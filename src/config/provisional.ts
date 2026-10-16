@@ -85,3 +85,19 @@ export const ASSIGNMENT_SUBJECT_MAX_LENGTH = 2000;
 
 /** [PROVISIONAL, [P] arbitrary] Maximum length of the instructions, sent to the AI (ASG-01 R4). */
 export const ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH = 4000;
+
+// ---------------------------------------------------------------------------
+// Evaluation by the AI (E5). PROVISIONAL, [P] arbitrary: to be confirmed on
+// the trial sets (E5.7). The model itself is decided (AI_MODEL, decisions.ts).
+
+/** [PROVISIONAL, [P] arbitrary] Longest wait for one call to the AI, answer read included; well under Vercel's 300 s. */
+export const AI_CALL_TIMEOUT_MS = 60_000;
+
+/** [PROVISIONAL, [P]] Sampling temperature: 0, for answers as stable as the model allows (EVL-03 CA3). */
+export const AI_TEMPERATURE = 0;
+
+/** [PROVISIONAL, [P] arbitrary] Most tokens of an answer: room for five justifications, a comment and next steps. */
+export const AI_MAX_OUTPUT_TOKENS = 2_000;
+
+/** [PROVISIONAL, [P]] No reasoning: the answer is the JSON alone, and the free quota is 20,000 tokens a minute. */
+export const AI_REASONING_EFFORT = "none" as const;

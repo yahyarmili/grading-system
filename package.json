@@ -16,9 +16,11 @@
     "test:unit": "vitest run --project unit",
     "test:int": "vitest run --project integration",
     "test:e2e": "playwright test",
-    "admin:create": "tsx --conditions=react-server scripts/create-admin.ts"
+    "admin:create": "tsx --conditions=react-server scripts/create-admin.ts",
+    "ai:trial": "tsx --conditions=react-server scripts/ai-trial.ts"
   },
   "dependencies": {
+    "@mistralai/mistralai": "2.7.0",
     "@vercel/functions": "3.9.11",
     "better-auth": "^1.7.7",
     "class-variance-authority": "^0.7.1",

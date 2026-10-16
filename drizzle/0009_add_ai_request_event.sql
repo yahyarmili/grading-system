@@ -1,0 +1,1 @@
+ALTER TYPE "public"."security_event_type" ADD VALUE 'ai_request_sent';

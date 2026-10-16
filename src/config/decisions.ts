@@ -41,3 +41,10 @@ export const SUBMISSION_MAX_REPLACEMENTS = 2;
  * (GRADE_STEP, provisional.ts).
  */
 export const GRADE_SCALE = 20;
+
+/**
+ * [D, 2026-10-15] The Mistral model, pinned: a fixed version, never an alias
+ * such as mistral-medium-latest (stack-technologique.md §3). A new model is a
+ * new decision. The model that answered is recorded with each result.
+ */
+export const AI_MODEL = "mistral-medium-3-5";

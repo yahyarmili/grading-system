@@ -35,6 +35,9 @@ export default defineConfig({
       BETTER_AUTH_URL: E2E_BASE_URL,
       EMAIL_TRANSPORT: "capture",
       MAIL_CAPTURE_DIR: E2E_MAIL_DIR,
+      // The journeys never reach Mistral, whatever .env.local says (E5).
+      AI_PROVIDER: "simulator",
+      MISTRAL_API_KEY: "",
     },
   },
 });

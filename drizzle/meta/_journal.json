@@ -64,6 +64,13 @@
       "when": 1792070032808,
       "tag": "0008_create_notice_acknowledgements",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792148642763,
+      "tag": "0009_add_ai_request_event",
+      "breakpoints": true
     }
   ]
 }
