@@ -160,9 +160,11 @@ function authorizeCalls(fn: ts.FunctionLikeDeclaration, actorName: string): (Aut
 export function checkDataExports(
   files: SourceFile[],
   unguarded: typeof UNGUARDED_DATA_EXPORTS = UNGUARDED_DATA_EXPORTS,
-): { problems: string[]; resources: Set<string> } {
+): { problems: string[]; resources: Set<string>; cells: Set<string> } {
   const problems: string[] = [];
   const resources = new Set<string>();
+  // "<resource>.<action>" authorized somewhere in the data layer.
+  const cells = new Set<string>();
   const seen: string[] = [];
   for (const file of files) {
     const source = parse(file);
@@ -187,14 +189,17 @@ export function checkDataExports(
         if (!call) problems.push(`${key}: authorize() must receive the actor parameter and literal resource and action`);
         else if (!(call.resource in ACCESS_MATRIX)) problems.push(`${key}: resource "${call.resource}" has no row in the access matrix`);
         else if (!(ACTIONS as readonly string[]).includes(call.action)) problems.push(`${key}: unknown action "${call.action}"`);
-        else resources.add(call.resource);
+        else {
+          resources.add(call.resource);
+          cells.add(`${call.resource}.${call.action}`);
+        }
       }
     }
   }
   for (const key of Object.keys(unguarded)) {
     if (!seen.includes(key)) problems.push(`${key}: listed in UNGUARDED_DATA_EXPORTS but no longer exists`);
   }
-  return { problems, resources };
+  return { problems, resources, cells };
 }
 
 export const appSources = () => readSources("src", () => true);

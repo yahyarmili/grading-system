@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { CalendarClock, Inbox, Languages, Users } from "lucide-react";
 import { LoadingState } from "@/components/loading";
 import { BackLink, PageHeader, PlaceholderNote } from "@/components/shell/shell-parts";
-import { GRADE_SCALE } from "@/config/provisional";
+import { GRADE_SCALE } from "@/config/decisions";
 import { findAssignment, mockAssignments, submissionsFor } from "@/mock/assignment-submissions";
 import { formatDate } from "@/lib/dates";
 import { SubmissionsList } from "./submissions-list";
@@ -29,7 +29,7 @@ export default function Page({ params }: PageProps<"/dev/mockups/assignments/[as
         <AssignmentSubmissions params={params} />
       </Suspense>
       <PlaceholderNote>
-        Fictitious data. Grades out of {GRADE_SCALE} are provisional (Q1 open).
+        Fictitious data. Calculated grades are the sum of the five levels, out of {GRADE_SCALE}.
       </PlaceholderNote>
     </>
   );

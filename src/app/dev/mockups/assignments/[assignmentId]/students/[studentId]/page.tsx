@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GRADE_SCALE } from "@/config/decisions";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CalendarClock, CircleDashed, FileText, Image as ImageIcon, Mail, TriangleAlert, Users, UserMinus } from "lucide-react";
@@ -42,8 +43,8 @@ export default function Page({ params }: Props) {
         <CopyScreen params={params} />
       </Suspense>
       <PlaceholderNote>
-        Fictitious data. Grade format and conversion are provisional (Q1 open). Validation and
-        publication arrive in E8.
+        Fictitious data. The calculated grade is the sum of the five levels, out of {GRADE_SCALE}; the step of a typed
+        grade is provisional. Validation and publication arrive in E8.
       </PlaceholderNote>
     </>
   );

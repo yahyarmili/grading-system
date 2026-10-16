@@ -123,7 +123,8 @@ export const ACCESS_MATRIX = {
   },
   rubric: {
     label: "Rubric",
-    // Read-only for everyone (invariant 8); not owned by anyone.
+    // Read-only for everyone (invariant 8); not owned by anyone. Its versions
+    // live in the code (src/lib/rubric.ts), in no table: nothing can write it.
     concernedStudent: L, otherStudent: L, ownerTeacher: L, otherTeacher: L, admin: L, visitor: NO,
   },
 } as const satisfies Record<string, MatrixRow>;

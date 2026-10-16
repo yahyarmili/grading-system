@@ -2,18 +2,14 @@
 // Each value below stands in for an open question of conception/fonctionnalites.md §9.
 // Change it here only; do not hard-code it elsewhere.
 
-/** [Q1 open] Grade format: out of 20 (recommendation, not decided). */
-export const GRADE_SCALE = 20;
+// The grade out of 20, the sum of the five levels, is decided (Q1):
+// src/config/decisions.ts. Only the step of a grade the teacher types stays open.
 
-/** [Q1 open] Grades are shown with at most one decimal. */
-export const GRADE_DECIMALS = 1;
-
-// [Q1 open] Conversion of the five levels into a grade: weighted share of the
-// maximum, on GRADE_SCALE (out of 20, the plain sum of the levels).
-// Implemented in calculateGrade, src/lib/grade.ts.
-
-/** [Q1 open] Step the teacher can type for a final grade. */
+/** [PROVISIONAL, [P]] Step the teacher can type for a final grade (REV-03). */
 export const GRADE_STEP = 0.5;
+
+/** [PROVISIONAL, [P]] Decimals shown for a final grade, to match GRADE_STEP; a calculated grade is whole. */
+export const GRADE_DECIMALS = 1;
 
 // ---------------------------------------------------------------------------
 // Authentication (E1). PROVISIONAL: to be defined at step 5 (NFR-SEC-02, NFR-SEC-03).

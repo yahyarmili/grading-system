@@ -4,13 +4,14 @@ import { useState, type ReactNode } from "react";
 import { Bot, Eye, PenLine, RotateCcw } from "lucide-react";
 import { Alert } from "@/components/alert";
 import { Tag } from "@/components/tag";
-import { GRADE_SCALE, GRADE_STEP } from "@/config/provisional";
+import { GRADE_SCALE } from "@/config/decisions";
+import { GRADE_STEP } from "@/config/provisional";
 import { calculateGrade, formatGrade } from "@/lib/grade";
 import { levelLabel, rubric, type Level } from "@/lib/rubric";
 import type { MockProposal } from "@/mock/copies";
 import { LevelPicker } from "./level-picker";
 
-/** Validated grade input: a number in [0, GRADE_SCALE] on the GRADE_STEP grid (provisional, Q1). */
+/** Validated grade input: a number in [0, GRADE_SCALE] on the GRADE_STEP grid (the step is provisional). */
 function parseGrade(text: string): { value: number } | { error: string } {
   const trimmed = text.trim().replace(",", ".");
   if (trimmed === "") return { error: "Enter a grade, or use the calculated grade." };
@@ -259,7 +260,7 @@ export function EvaluationForm({
               <>
                 <div className="field">
                   <label className="label" htmlFor="grade">
-                    Final grade <span className="font-normal text-fg-muted">(out of {GRADE_SCALE}, provisional format)</span>
+                    Final grade <span className="font-normal text-fg-muted">(out of {GRADE_SCALE})</span>
                   </label>
                   <div className="flex flex-wrap items-center gap-2">
                     <input

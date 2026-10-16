@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { getTableName, is } from "drizzle-orm";
 import { pgTable, PgTable, text, uuid } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+import type { Actor } from "@/server/access/actor";
+import { AccessDeniedError } from "@/server/access/errors";
 import { ENTRY_POINTS, TABLES } from "@/server/access/inventory";
 import { ACCESS_MATRIX, COLUMNS, RESOURCES } from "@/server/access/matrix";
+import { authorize } from "@/server/access/policy";
 import * as schema from "@/server/db/schema";
 import {
   appSources,
@@ -105,7 +109,7 @@ describe("every data function goes through authorize()", () => {
     expect(problems).toEqual([]);
     expect([...resources].sort()).toEqual([
       "assignment", "assignmentRecipients", "class", "classInvite", "classMembership", "classRoster",
-      "noticeAcknowledgement", "ownSubmissionStatus", "submission", "teacherInvitation",
+      "noticeAcknowledgement", "ownSubmissionStatus", "rubric", "submission", "teacherInvitation",
     ]);
   });
 
@@ -117,7 +121,8 @@ describe("every data function goes through authorize()", () => {
         `export async function listProbes() { return db.select().from(probes); }`,
         `export async function writeProbe(actor: Actor) { authorize(actor, "probe", "write"); }`,
         `export async function eraseProbe(actor: Actor, other: Actor) { authorize(other, "rubric", "read"); }`,
-        `export async function readRubric(actor: Actor) { authorize(actor, "rubric", "read"); }`,
+        // A resource no real data function reads yet: only the probe can bring it in.
+        `export async function readLog(actor: Actor) { authorize(actor, "reviewLog", "read"); }`,
       ].join("\n"),
     };
     const { problems, resources } = checkDataExports([...dataSources(), probe]);
@@ -127,6 +132,41 @@ describe("every data function goes through authorize()", () => {
       'src/server/data/probes.ts#writeProbe: resource "probe" has no row in the access matrix',
       "src/server/data/probes.ts#eraseProbe: authorize() must receive the actor parameter and literal resource and action",
     ]);
-    expect(resources.has("rubric")).toBe(true);
+    expect(resources.has("reviewLog")).toBe(true);
+    expect(checkDataExports(dataSources()).resources.has("reviewLog")).toBe(false);
+  });
+});
+
+describe("the rubric is read-only: no write path exists (EVL-01 CA1)", () => {
+  const actors: Actor[] = [
+    { kind: "user", userId: randomUUID(), role: "student" },
+    { kind: "user", userId: randomUUID(), role: "teacher" },
+    { kind: "user", userId: randomUUID(), role: "admin" },
+    { kind: "visitor" },
+  ];
+
+  it("grants writing to no column of the matrix, and authorize() refuses it to every role", () => {
+    for (const column of COLUMNS) expect(ACCESS_MATRIX.rubric[column], column).not.toContain("write");
+    for (const actor of actors) expect(() => authorize(actor, "rubric", "write")).toThrow(AccessDeniedError);
+  });
+
+  it("is held by no table, written by no server action or route, authorized for writing by no data function", () => {
+    for (const [table, entry] of Object.entries(TABLES)) {
+      if (Array.isArray(entry)) expect(entry, table).not.toContain("rubric");
+    }
+    for (const [key, entry] of Object.entries(ENTRY_POINTS)) {
+      if ("resource" in entry) expect(`${entry.resource}.${entry.action}`, key).not.toBe("rubric.write");
+    }
+    const { cells } = checkDataExports(dataSources());
+    expect(cells.has("rubric.read")).toBe(true);
+    expect(cells.has("rubric.write")).toBe(false);
+  });
+
+  it("would see a data function that writes it", () => {
+    const probe = {
+      path: "src/server/data/rubric/probe.ts",
+      text: `export async function editRubric(actor: Actor) { authorize(actor, "rubric", "write"); }`,
+    };
+    expect(checkDataExports([...dataSources(), probe]).cells.has("rubric.write")).toBe(true);
   });
 });

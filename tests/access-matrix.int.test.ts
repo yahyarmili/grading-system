@@ -20,6 +20,7 @@ import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites"
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
+import { getPublishedRubrics } from "@/server/data/rubric/rubric";
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, users } from "@/server/db/schema";
@@ -246,6 +247,11 @@ const REAL: Partial<Record<Resource, RealResource>> = {
           replaceText(actor, { assignmentId: submittedId, requestId: randomUUID(), text: "My new text." }),
       },
     ],
+  },
+  // EVL-01: every signed-in role reads the versions in force; a visitor is
+  // refused. No write operation: none exists (CA1, tests/access-inventory.test.ts).
+  rubric: {
+    read: { run: (actor) => getPublishedRubrics(actor) },
   },
 };
 

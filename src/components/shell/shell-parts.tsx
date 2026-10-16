@@ -7,7 +7,7 @@ export function Brand({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-2 rounded-lg font-semibold text-fg"
+      className="flex items-center gap-2 rounded-lg font-semibold whitespace-nowrap text-fg"
     >
       <GraduationCap aria-hidden="true" className="size-6 text-link" />
       <span>Grading system</span>

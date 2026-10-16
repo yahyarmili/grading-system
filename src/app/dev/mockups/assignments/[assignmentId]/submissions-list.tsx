@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GRADE_SCALE } from "@/config/provisional";
+import { GRADE_SCALE } from "@/config/decisions";
 import { compareText } from "@/lib/collation";
 import { formatGradeValue } from "@/lib/grade";
 import {

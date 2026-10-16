@@ -1,4 +1,4 @@
-import { SUBMISSION_MAX_REPLACEMENTS, SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
+import { GRADE_SCALE, SUBMISSION_MAX_REPLACEMENTS, SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
 
 // Texts that depend on a decision of conception/ (notices, AI mention, "no
 // name" instruction). One place, so that a change of decision changes them all.
@@ -105,3 +105,19 @@ export const NO_REPLACEMENT_LEFT_NOTICE = `You have replaced this submission ${S
 
 /** SUB-05 R3: the teacher started, or the student left the class. */
 export const REPLACEMENT_CLOSED_NOTICE = "This submission can no longer be replaced.";
+
+/** EVL-01 R1 [D], invariant 8: one rubric, the same for everyone, changed by nobody. */
+export const RUBRIC_FIXED_NOTICE =
+  "Every assignment is marked on these five criteria, by every teacher. Teachers and students cannot change this rubric.";
+
+/** Q1 [D, 2026-10-15], EVL-01 R3: the grade rule, shown with the rubric. */
+export const GRADE_RULE = {
+  title: `Grade out of ${GRADE_SCALE}`,
+  body: `Each criterion gets a level from 0 to 4. The grade is the sum of the five levels, from 0 (all at 0) to ${GRADE_SCALE} (all at 4), calculated by the app, never by the AI. The teacher may set a different final grade; it is then shown as adjusted.`,
+};
+
+/** Q6 [D, 2026-10-15], EVL-01 R4: no AI proposal in French until the French rubric is validated. */
+export const FRENCH_RUBRIC_PENDING_NOTICE = {
+  title: "French version not validated yet",
+  body: "French assignments use the same criteria, but their French wording is still to be validated. Until it is, the AI makes no proposal for a French assignment: the teacher marks it without one.",
+};

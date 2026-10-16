@@ -1,6 +1,7 @@
 import {
   BookOpen,
   ClipboardList,
+  ListChecks,
   School,
   Users,
   type LucideIcon,
@@ -15,10 +16,12 @@ export const navigation: Record<Role, NavItem[]> = {
   teacher: [
     { href: "/teacher/classes", label: "Classes", icon: School },
     { href: "/teacher/assignments", label: "Assignments", icon: ClipboardList },
+    { href: "/teacher/rubric", label: "Rubric", icon: ListChecks },
   ],
   student: [
     { href: "/student/assignments", label: "My assignments", icon: ClipboardList },
     { href: "/student/classes", label: "My classes", icon: BookOpen },
+    { href: "/student/rubric", label: "Rubric", icon: ListChecks },
   ],
   admin: [{ href: "/admin/teachers", label: "Teachers", icon: Users }],
 };

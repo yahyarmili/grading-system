@@ -32,3 +32,12 @@ export const SUBMISSION_TEXT_MAX_LENGTH = 4000;
  * change or validation: 2 at most, so 3 versions (SUB-05 R3).
  */
 export const SUBMISSION_MAX_REPLACEMENTS = 2;
+
+/**
+ * [D, 2026-10-15, Q1] The grade is out of 20: the sum of the five levels
+ * (0 to 4 each), a whole number from 0 (all at 0) to 20 (all at 4). The
+ * system calculates it, never the AI (EVL-01 R3): calculateGrade,
+ * src/lib/grade.ts. The step of a grade the teacher types stays open
+ * (GRADE_STEP, provisional.ts).
+ */
+export const GRADE_SCALE = 20;
