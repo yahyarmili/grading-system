@@ -1,0 +1,18 @@
+# T5 non faits : à consigner dans `conception/` quand l'utilisateur le demande
+
+Liste sortie de `CLAUDE.md` le 2026-10-16, sans changement de fond.
+
+- Les valeurs de `src/config/provisional.ts` (E1 et E2).
+- Q2 : la recommandation est appliquée (un administrateur créé par script local, pas de désactivation de professeur), mais pas validée [D].
+- Lignes de matrice [P] : `teacherInvitation`, `classInvite`, `classMembership`, `classRoster` ; événements de sécurité `class_member_removed` et `class_member_readmitted` [P].
+- `CLASS_INVITE_INTENT_TTL` (7 jours, [P] arbitraire) : durée du cookie et de l'intention liée au compte ; depuis Q7, le lien expire avant (1 heure).
+- Format du code de classe [P] : 8 symboles Crockford Base32, affiché `XXXX-XXXX` ; pas de réactivation après désactivation (on renouvelle).
+- E3 :
+  - **réception dérivée [D, 2026-10-14]** : un élève voit les devoirs des classes où son appartenance est active, quelle que soit la date d'envoi (réadmis ou arrivé tard, il voit aussi les devoirs déjà envoyés) ; pas de table de destinataires par élève ;
+  - lignes [P] `assignmentRecipients` et `ownSubmissionStatus` ; `content_version` et l'arbitrage modification / première remise [P] ;
+  - longueurs maximales d'un devoir (`provisional.ts`) ; heure ambiguë = première occurrence, heure sautée refusée, date limite dans le futur [P] ; date limite modifiée : dans le futur seulement si elle change [P] ;
+  - texte d'avertissement R4 et textes du verrou (`src/lib/texts.ts`).
+- E4 (plan d'E4, « Valeurs à consigner ») : 4000 caractères comptés en graphèmes [D] ; [P] normalisation des fins de ligne, U+0000 refusé, `late` stocké, refus `changed` sur `content_version`, contrat `current_version = $vue` pour E7 et E8, `requestId` côté client ; ligne de matrice [P] `noticeAcknowledgement`.
+- E5 (plan d'E5, « Valeurs à consigner ») : texte de `en-1` [D] ; valeurs E5 de `provisional.ts` et choix [P] du plan ; exécutant de « Activer le français » = le développeur (la rubrique est dans le code), contre l'administrateur de NFR-EXP-03 [P] ; limites assumées (EVL-02 R4, Q10, EVL-03 R4) ; conservation de 30 jours chez Mistral pour la fiche DON-02.
+- La preview publique [D].
+- Vercel Hobby sans carte bancaire, Neon en `us-east-2`.

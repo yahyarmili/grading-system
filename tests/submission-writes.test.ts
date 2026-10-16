@@ -12,7 +12,8 @@ function writersOf(files: SourceFile[]): string[] {
 }
 
 describe("the status of a submission has one writer", () => {
-  it("is written only by transitions.ts", () => {
+  // Parses every file of src/: slow on the Windows bind mount, slower under load.
+  it("is written only by transitions.ts", { timeout: 30_000 }, () => {
     expect(writersOf(appSources())).toEqual([]);
   });
 

@@ -98,4 +98,5 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/submissions/submissions.ts#replacementOpen": "helper of a guarded write: the SQL predicate of transition 11 (SUB-05)",
   "src/server/data/submissions/transitions.ts#insertReceived": "internal: transition 1, inside a submission transaction that has authorized the actor",
   "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor",
+  "src/server/data/evaluation/system.ts#readEvaluationInput": "system processing (§5.5, transitions 2 and 5): the AI's whitelist of a submission, read for the evaluation service only, never a screen",
 };

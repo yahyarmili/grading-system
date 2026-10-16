@@ -101,3 +101,6 @@ export const AI_MAX_OUTPUT_TOKENS = 2_000;
 
 /** [PROVISIONAL, [P]] No reasoning: the answer is the JSON alone, and the free quota is 20,000 tokens a minute. */
 export const AI_REASONING_EFFORT = "none" as const;
+
+/** [PROVISIONAL, [P] arbitrary] Most quotes the AI gives per criterion (at least 1). */
+export const AI_MAX_QUOTES_PER_CRITERION = 3;
