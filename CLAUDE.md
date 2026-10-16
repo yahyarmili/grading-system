@@ -4,7 +4,7 @@ Consignes durables pour Claude Code dans ce dépôt. Réponds en français.
 
 ## Produit
 
-Notation de productions écrites d'élèves (anglais, français). L'élève remet un texte ou des images de sa copie ; le système transcrit sans corriger ; Mistral propose un niveau de 0 à 4 sur les 5 critères d'une rubrique fixe, avec des remarques, sans l'identité de l'élève. Le professeur relit, modifie, valide, publie ; l'élève ne voit que le publié. Acteurs : administrateur, professeur, élève. Projet académique de démonstration, budget 0 MAD, données fictives.
+Notation de productions écrites d'élèves (anglais, français). L'élève remet un texte ou des images de sa copie ; le système transcrit sans corriger ; une IA (modèle gratuit d'OpenRouter) propose un niveau de 0 à 4 sur les 5 critères d'une rubrique fixe, avec des remarques, sans l'identité de l'élève. Le professeur relit, modifie, valide, publie ; l'élève ne voit que le publié. Acteurs : administrateur, professeur, élève. Projet académique de démonstration, budget 0 MAD, données fictives.
 
 ## Suivi et branche
 
@@ -18,9 +18,10 @@ Notation de productions écrites d'élèves (anglais, français). L'élève reme
 - E1 à E4 livrées. Plans approuvés dans `~/.claude/plans/` : E3 `…typed-meerkat.md`, E4 `…happy-petal.md`, E5 `partir-de-l-enqu-te-witty-eagle.md` (découpage E5.2 à E5.7, « Valeurs à consigner », écart E5.3 en fin de plan).
 - **E5 en cours** (E5.0 à E5.4 faits) :
   - rubrique : registre `RUBRIC_VERSIONS` (`src/lib/rubric.ts`, `en-1` = texte du client, gelée par empreinte) ; note = somme des niveaux sur 20 ;
-  - `src/server/ai/` : interface `Evaluator`, simulateur à pannes (défaut partout), adaptateur Mistral (`@mistralai/mistralai` 2.7.0 exact, `AI_PROVIDER`). L'adaptateur journalise lui-même `ai_request_sent` et refuse de démarrer sous `MISTRAL_DEBUG`, `MISTRAL_SDK_TELEMETRY`, `MISTRAL_OTLP_TRACES_ENDPOINT` ou `MISTRAL_SDK_DEBUG_TRACING` ;
-  - requête : `buildEvaluationRequest` (liste blanche, `PROMPT_VERSION` figée par empreinte), `readEvaluationInput`, test d'étanchéité `tests/evaluation-leak.int.test.ts` ;
-  - Mistral réel : toujours `rate_limited` (code 1300), aucune réponse du modèle obtenue.
+  - `src/server/ai/` : interface `Evaluator`, simulateur à pannes (défaut partout), adaptateur réel qui journalise lui-même `ai_request_sent` avant chaque envoi ; requête : `buildEvaluationRequest` (liste blanche, `PROMPT_VERSION` figée par empreinte), `readEvaluationInput`, test d'étanchéité `tests/evaluation-leak.int.test.ts` ;
+  - **Prestataire [D, 2026-10-16]** : OpenRouter, modèle gratuit (`:free`) à choisir par l'utilisateur ; Mistral abandonné (offre Free : 0 requête par minute). [P] : `openrouter/free` exclu (NFR-QUA-02) ; prompt **E5.4b** avant E5.5, sans laisser la valeur `mistral` entrer en base.
+  - L'adaptateur encore en place est celui de Mistral (`src/server/ai/mistral.ts`, SDK 2.7.0, `AI_MODEL` de `decisions.ts` périmé). Garanties à garder dans tout adaptateur : journal avant envoi, durée bornée, aucune journalisation ni télémétrie du client (variables de débogage refusées au démarrage), clé jamais lue implicitement.
+  - Limites des modèles gratuits : 20 requêtes par minute, 50 par jour UTC à 0 crédit acheté. La notice élève v2 nomme Mistral AI et promet son refus d'entraînement (à réécrire en v3).
 - Base dev : un compte par rôle (E1.8), migrations jusqu'à `0009`.
 
 ## Environnement
@@ -37,9 +38,9 @@ Notation de productions écrites d'élèves (anglais, français). L'élève reme
 
 1. Contrôle d'accès de la matrice en un point unique, dans la couche de données (SEC-01).
 2. Images dans une table à part, lues par une seule route ; jamais de lien public ni dans les listes.
-3. Mistral, lecture de l'écriture et email : chacun une interface unique avec simulateur à pannes (EXP-04).
+3. Évaluation par l'IA, lecture de l'écriture et email : chacun une interface unique avec simulateur à pannes (EXP-04).
 4. Étapes de lot idempotentes, avec des identifiants seulement (PRC-01).
-5. Requête Mistral construite en un point unique, depuis une liste blanche (EVL-02).
+5. Requête à l'IA construite en un point unique, depuis une liste blanche (EVL-02).
 
 **Accès** :
 - Matrice en données (`src/server/access/matrix.ts`) ; `authorize(actor, ressource, action)` est le seul contrôle ; `ownedBy` filtre la propriété dans la requête.

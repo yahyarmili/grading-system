@@ -1,6 +1,6 @@
 # Procédures sans écran (NFR-EXP-03)
 
-> Opérations faites hors de l'application. NFR-EXP-03 en demande six écrites ; en démonstration, trois sont rejouées ([besoins-non-fonctionnels.md](besoins-non-fonctionnels.md) §2.8) : créer le premier administrateur, activer le français, activer l'envoi réel à Mistral. **[P]**, écrit en E5.2 et E5.3 (2026-10-16). Les quatre autres procédures restent à écrire.
+> Opérations faites hors de l'application. NFR-EXP-03 en demande six écrites ; en démonstration, trois sont rejouées ([besoins-non-fonctionnels.md](besoins-non-fonctionnels.md) §2.8) : créer le premier administrateur, activer le français, activer l'envoi réel à l'IA. **[P]**, écrit en E5.2 et E5.3 (2026-10-16). Les quatre autres procédures restent à écrire.
 
 ## Activer le français (EVL-01 R4, Q6)
 
@@ -35,7 +35,9 @@
 - vérifier l'écran, et à partir d'E5.6 une proposition en français ;
 - supprimer la branche, puis consigner la date du rejeu ici.
 
-## Activer l'envoi réel à Mistral (NFR-DON-02, NFR-DON-05)
+## Activer l'envoi réel à l'IA (NFR-DON-02, NFR-DON-05)
+
+> **À réécrire.** Depuis le 2026-10-16 [D], le prestataire est OpenRouter, avec un modèle gratuit à choisir (`stack-technologique.md` §3). Le texte ci-dessous décrit l'adaptateur Mistral, encore présent dans le code, qui n'a jamais obtenu de réponse de Mistral. Il sera réécrit avec l'adaptateur OpenRouter (prompt E5.4b) : variables, réglages de confidentialité du compte, limites du modèle, conservation chez le fournisseur.
 
 **Quand.** Seulement sur des données fictives (DON-02) : la démonstration n'envoie jamais un vrai texte d'élève. Par défaut, partout, c'est le simulateur qui répond, et rien ne quitte la machine.
 
@@ -48,11 +50,11 @@
 - Les tests et l'E2E restent sur le simulateur, quoi que dise `.env.local`.
 
 **Étapes.**
-1. Vérifier dans la console Mistral que le refus d'entraînement est toujours actif et que Labs reste désactivé (`stack-technologique.md` §3), et relever la limite du modèle `mistral-medium-3-5`.
+1. Vérifier dans la console Mistral que le refus d'entraînement est toujours actif et que Labs reste désactivé (`stack-technologique.md` §3 au commit `a7aaf44`), et relever la limite du modèle `mistral-medium-3-5`.
 2. Essai, en local : `docker compose exec -e AI_PROVIDER=mistral web npm run ai:trial`. Attendu : une réponse JSON, le modèle qui a répondu et l'usage. En cas d'échec, seul le type d'erreur s'affiche (et le code d'erreur de Mistral), jamais le message.
 3. Contrôler le journal : une ligne `ai_request_sent` par requête partie, sans acteur ni contenu.
 4. Pour la démonstration : ajouter `AI_PROVIDER=mistral` (et `MISTRAL_API_KEY`) dans l'environnement visé, dev (`.env.local`, puis `docker compose up -d`) ou Vercel **Preview** (par l'utilisateur).
 
 **Retour arrière.** Retirer `AI_PROVIDER` (ou le mettre à `simulator`) : le simulateur répond de nouveau. Les données déjà envoyées restent chez Mistral 30 jours (offre gratuite, fiche DON-02).
 
-**Rejeu.** Partiel, le 2026-10-16 (E5.3), en local : 3 requêtes parties, 3 lignes au journal, mais Mistral a répondu `rate_limited` (code 1300) à chacune, sans `Retry-After`. Réponse du modèle non encore obtenue : à relever dans la console (limite propre à `mistral-medium-3-5`), puis à rejouer.
+**Rejeu.** Partiel, le 2026-10-16 (E5.3), en local : 3 requêtes parties, 3 lignes au journal, mais Mistral a répondu `rate_limited` (code 1300) à chacune, sans `Retry-After`. Cause trouvée le 2026-10-16 : quota de 0 requête par minute, car l'offre Free de Mistral n'active pas les clés d'API. Mistral est abandonné. Le rejeu est à refaire avec OpenRouter.

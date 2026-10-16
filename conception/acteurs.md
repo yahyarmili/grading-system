@@ -107,4 +107,4 @@ AUTH-02 et AUTH-05 sont partagées par les trois acteurs, et PRC-02 par le syst�
 | A3. L'élève relit-il son texte collé après l'envoi ? | Non. | Il voit l'état de sa remise, puis le résultat publié. SUB-01 R2 est à corriger dans `fonctionnalites.md`, comme pour l'image. |
 
 ### Encore ouvertes
-- **QNF-1, QNF-4, QNF-5, QNF-7** de l'étape 5 : responsable du traitement et CNDP, durées de conservation, choix du LLM gratuit, second facteur pour l'administrateur.
+- **QNF-1, QNF-4, QNF-5, QNF-7** de l'étape 5 : responsable du traitement et CNDP, durées de conservation, choix du LLM gratuit (prestataire tranché, OpenRouter [D, 2026-10-16] ; modèle à définir), second facteur pour l'administrateur.

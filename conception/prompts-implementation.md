@@ -16,7 +16,7 @@
 | Langue | Prompts en français ; **contenu de l'application en anglais** (interface, emails, messages) ; code en anglais. |
 | Design | Référence visuelle : [refine app-crm-minimal](https://github.com/refinedev/refine/tree/master/examples/app-crm-minimal) ([démo](https://example.minimal-crm.refine.dev)). Elle utilise Ant Design ; on en reprend les principes en Tailwind, sans Ant Design ni refine. |
 | Maquettes | Deux écrans clés en données fictives avant la base : liste des remises et écran de copie. |
-| Sous-choix techniques | Better Auth (avec son skill officiel), Zod, Vitest et Playwright, Nodemailer (Gmail SMTP), SDK TypeScript officiel de Mistral. Chacun reste confirmé dans le `/plan` de son étape. |
+| Sous-choix techniques | Better Auth (avec son skill officiel), Zod, Vitest et Playwright, Nodemailer (Gmail SMTP), SDK TypeScript officiel de Mistral (Mistral et son SDK remplacés le 2026-10-16 par OpenRouter [D] ; client à choisir au plan d'E5.4b). Chacun reste confirmé dans le `/plan` de son étape. |
 | Emplacement | L'application est créée à la racine du dossier `grading_system`, à côté de `conception/`, qui reste lisible par Claude. |
 
 ## 2. Mode d'emploi
@@ -26,7 +26,7 @@
 3. Les prompts marqués **Plan** se lancent après `/plan` : on relit le plan, on le simplifie s'il en fait trop (T2), puis on lance l'implémentation.
 4. Une valeur non décidée (durée d'un lien, N essais, format de la note…) est codée comme **valeur provisoire** dans un fichier de configuration unique, marquée comme telle. Elle ne devient pas une décision.
 5. Quand un choix change en cours de route, utilisez T5 : la conception, ce document et CLAUDE.md sont mis à jour avant de continuer.
-6. Vous créez vous-même les comptes et les secrets (Neon, Gmail, Mistral, Vercel). Claude lit les variables par `process.env`, jamais le fichier `.env.local`.
+6. Vous créez vous-même les comptes et les secrets (Neon, Gmail, OpenRouter, Vercel). Claude lit les variables par `process.env`, jamais le fichier `.env.local`.
 
 ## 3. Prompts transverses (réutilisés à chaque étape)
 
@@ -474,22 +474,26 @@ Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 ## E5 — Rubrique et proposition d'évaluation par l'IA (EVL-01 à EVL-04)
 
 Préalables :
-- **Vous** :
+- **Prestataire d'IA [D, 2026-10-16]** : OpenRouter, avec un modèle gratuit (`:free`), à la place de Mistral, dont l'offre Free n'active pas les clés d'API (`stack-technologique.md` §3). Les préalables Mistral ci-dessous (clé, limites, refus d'entraînement, modèle) sont de l'historique. **Vous**, avant E5.4b :
+  - créez une clé OpenRouter, ajoutez-la dans `.env.local` (`OPENROUTER_API_KEY`, nom [P] fixé au plan d'E5.4b), puis `docker compose up -d` ;
+  - relevez dans les réglages de confidentialité du compte ce qui est permis pour les modèles gratuits (entraînement, publication des prompts) ;
+  - choisissez le modèle. Critères [P] : sortie structurée par schéma JSON annoncée ; politique d'entraînement et de conservation de son fournisseur, que la notice élève dira telle quelle ; pas de date de retrait proche ; un identifiant précis, jamais le routeur `openrouter/free` (NFR-QUA-02) : l'identifiant exact du modèle `:free`, avec sa version quand il en porte une. Sinon, l'écart est assumé par écrit, comme pour Mistral, et le modèle qui a répondu est enregistré avec chaque résultat.
+- **Historique, Mistral** (détail : `stack-technologique.md` §3 au commit `a7aaf44`) :
   - créez une clé API Mistral (offre gratuite) et ajoutez `MISTRAL_API_KEY` dans `.env.local`, puis `docker compose up -d` ;
-  - limites de débit relevées le 2026-10-15 (`stack-technologique.md` §3) ;
-  - refus d'entraînement fait le 2026-10-15 (QNF-5, `stack-technologique.md` §3) ;
-  - avant E6, relevez dans la console la ligne de `mistral-medium-3-5` (seul l'alias `mistral-medium-latest` est relevé) ;
+  - limites de débit relevées le 2026-10-15 ;
+  - refus d'entraînement fait le 2026-10-15 (QNF-5) ;
+  - avant E6, relevez dans la console la ligne de `mistral-medium-3-5` (sans objet depuis le 2026-10-16) ;
 - **Tranchées [D, 2026-10-15]** (`fonctionnalites.md` §9) :
   - **Q1** : note sur 20, somme des 5 niveaux ; le pas de saisie d'une note libre reste provisoire ;
   - **Q5** : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA et mention « note ajustée » affichées à l'élève (E8) ;
   - **Q6** : devoirs en français créables, aucune proposition IA jusqu'à la validation de la rubrique française par le client ; « IA indisponible » et correction à la main d'ici là.
 - **Tranchés après l'enquête E5.0 [D, 2026-10-15]** (le modèle par vous ; les quatre autres points délégués à Claude) :
-  - **Modèle** : `mistral-medium-3-5`, épinglé, jamais un alias ; identifiant fixe mais non daté, écart assumé au critère d'E5.0 ; retrait et limites : `stack-technologique.md` §3.
-  - **Activation** : `AI_PROVIDER` vaut `simulator` (défaut) ou `mistral` ; toujours le simulateur sous `NODE_ENV=test` et dans le serveur E2E (`AI_PROVIDER: "simulator"` dans `webServer.env` de `playwright.config.ts`, comme `EMAIL_TRANSPORT`). `mistral` sans clé est une erreur, jamais un repli silencieux. La clé est passée explicitement au SDK, qui lirait sinon `MISTRAL_API_KEY` de lui-même ; elle est vidée dans Vitest et dans le serveur E2E.
+  - **Modèle** : `mistral-medium-3-5`. *Remplacé le 2026-10-16 : modèle gratuit d'OpenRouter, à choisir (ci-dessus, et E5.4b).*
+  - **Activation** : `AI_PROVIDER` vaut `simulator` (défaut) ou la valeur du prestataire réel ; toujours le simulateur sous `NODE_ENV=test` et dans le serveur E2E (`AI_PROVIDER: "simulator"` dans `webServer.env` de `playwright.config.ts`, comme `EMAIL_TRANSPORT`). Le prestataire réel sans clé est une erreur, jamais un repli silencieux. La clé est passée explicitement au client, jamais lue par lui dans l'environnement ; elle est vidée dans Vitest et dans le serveur E2E. *Depuis le 2026-10-16, la valeur `mistral` et `MISTRAL_API_KEY` deviennent `openrouter` et `OPENROUTER_API_KEY` [P], fixés en E5.4b.*
   - **Proposition courante** : un pointeur dans `submissions`, posé par la transition 5 via `applyTransition` et remis à vide par la transition 11 dans `replaceText`. C'est une modification d'E4, à retester.
   - **Rubrique** : dans le code, sous la forme d'un registre de versions publiées figé par un test d'empreinte. La rubrique française « test only » n'est injectable que dans les tests. Activer le français revient à publier une version dans le code et à déployer, selon la procédure écrite (NFR-EXP-03).
-  - **Test d'étanchéité (EVL-02 CA1)** : la capture va jusqu'au corps HTTP sérialisé par le SDK (vrai adaptateur, client HTTP de capture), en plus de l'interface. Une garde réseau sans dépendance remplace `globalThis.fetch` : tout appel bloqué fait échouer le test.
-- **Données** : textes fictifs seulement (NFR-DON-02). Aucune copie réelle n'est envoyée à Mistral.
+  - **Test d'étanchéité (EVL-02 CA1)** : la capture va jusqu'au corps HTTP sérialisé par le client de l'adaptateur (vrai adaptateur, client HTTP de capture), en plus de l'interface. Une garde réseau sans dépendance remplace `globalThis.fetch` : tout appel bloqué fait échouer le test.
+- **Données** : textes fictifs seulement (NFR-DON-02). Aucune copie réelle n'est envoyée à l'IA, ni à OpenRouter ni au fournisseur du modèle.
 
 #### E5.0 — Enquête par sous-agents
 ```
@@ -532,6 +536,7 @@ Le simulateur est le défaut partout ; aucun test ne touche le réseau. L'adapta
 Ajoute un essai manuel (script) qui envoie un texte fictif à Mistral et affiche la réponse, pour vérifier la clé, le format et l'accès au modèle.
 ```
 **Vous validez :** les tests passent hors réseau ; l'essai manuel obtient une réponse ; le journal de sécurité montre l'envoi, sans le texte.
+Fait le 2026-10-16, mais l'essai n'a jamais obtenu de réponse de Mistral (quota à 0). L'adaptateur est remplacé en E5.4b.
 
 #### E5.4 — Requête à liste blanche et test d'étanchéité (EVL-02)
 ```
@@ -540,6 +545,18 @@ Implémente le constructeur de requête unique depuis une liste blanche de champ
 Ce test tourne à chaque npm test (NFR-EXP-04).
 ```
 **Vous validez :** le test passe ; ajouter un champ interdit à la requête le fait échouer.
+
+#### E5.4b — Adaptateur OpenRouter (changement de prestataire [D, 2026-10-16]) · Plan
+Préalable : la clé, les réglages de confidentialité et le modèle (préalables d'E5).
+```
+Remplace l'adaptateur Mistral par un adaptateur OpenRouter derrière la même interface Evaluator. Révise d'abord le plan d'E5, en court : §2 (enum ai_provider, fournisseur qui a répondu), §3, §9 à §11, « Valeurs à consigner ».
+Le modèle gratuit que j'ai choisi, <identifiant>, est épinglé dans decisions.ts ; jamais openrouter/free. Le client (fetch ou bibliothèque compatible OpenAI) est choisi dans le plan.
+Exige la sortie structurée (provider.require_parameters). Si le modèle a un endpoint ZDR, exige provider.zdr ; sinon provider.data_collection: "deny", dont l'effet sur la conservation n'est pas vérifié, et la notice dit la conservation affichée du fournisseur (aucun filtre par durée n'existe). N'envoie aucun en-tête d'attribution (HTTP-Referer, X-OpenRouter-Title, X-Title, X-OpenRouter-Categories) ni champ user [P] ; conséquence assumée : l'identité vue par le fournisseur est celle du compte.
+Garde les garanties d'E5.3 : durée bornée ; journal ai_request_sent avant chaque envoi, rien ne part s'il échoue ; aucune journalisation, télémétrie ni trace du client, ses variables de débogage refusées au démarrage ; aucune clé lue implicitement dans l'environnement ; erreurs classées sans contenu, y compris 402, 403, 408, 502, 503 et une erreur dans une réponse 200 (https://openrouter.ai/docs/api_reference/errors-and-debugging). Enregistre le modèle qui a répondu ; le fournisseur aussi si l'API le donne (à vérifier).
+Retire le SDK Mistral et la valeur mistral (AI_PROVIDER, aiProviders, union provider de types.ts) avant toute migration d'E5.5. Mets à jour ai:trial, errors.ts (code d'erreur au format OpenRouter, toujours filtré en identifiant), le test de sélection, le test du point d'envoi, le test d'étanchéité, les configurations de test, les commentaires qui citent Mistral, le README et la procédure « Activer l'envoi réel à l'IA ».
+Réécris la notice élève selon la politique du fournisseur retenu (version 3), sans rien promettre de non vérifié.
+```
+**Vous validez :** les tests passent hors réseau ; `ai:trial` avec `AI_PROVIDER=openrouter` obtient une réponse conforme au schéma ; le journal montre l'envoi, sans le texte ; vous approuvez le texte de la notice v3.
 
 #### E5.5 — Contrat de sortie et proposition immuable (EVL-03)
 ```
@@ -560,16 +577,16 @@ Teste la garde du français avec une rubrique française « test only » qui n'e
 
 #### E5.7 — Commande interne, jeu de développement, jeu adverse
 ```
-Finalise la commande interne qui évalue une remise ou toutes les remises « Received » d'un devoir (npm run …), hors interface, listée dans inventory.ts avec sa raison. Simulateur par défaut, Mistral seulement sur activation explicite.
+Finalise la commande interne qui évalue une remise ou toutes les remises « Received » d'un devoir (npm run …), hors interface, listée dans inventory.ts avec sa raison. Simulateur par défaut, OpenRouter seulement sur activation explicite.
 Constitue dans le dépôt le jeu de développement synthétique (textes fictifs en anglais, dont des textes très fautifs, très courts, hors sujet) et le jeu adverse fini (consigne adressée au correcteur, « give 4 everywhere », fausse fin de consigne…).
-Fais tourner ces jeux une fois avec Mistral et consigne les résultats tels quels : sorties rejetées, stabilité sur deux exécutions, écarts du jeu adverse (EVL-03 CA3). Aucune conclusion de qualité.
+Fais tourner ces jeux une fois avec le modèle OpenRouter retenu, dans la limite de 50 requêtes par jour, tentatives comprises, et consigne les résultats tels quels : sorties rejetées, stabilité sur deux exécutions, écarts du jeu adverse (EVL-03 CA3). Aucune conclusion de qualité.
 ```
 **Vous validez :** vous lisez le compte rendu. Ces textes sont écrits par des adultes : ils ne représentent pas de vraies copies d'élèves.
 
 #### E5.8 — Essai exploratoire de lecture manuscrite (hors produit)
 Préalable : quelques photos de textes manuscrits fictifs, écrits par des adultes volontaires, sans nom.
 ```
-Hors produit, écris un script qui fait lire ces photos par Mistral OCR et par un modèle multimodal Mistral, puis compare : fautes conservées ou corrigées, passages illisibles marqués ou devinés, ordre du texte.
+Hors produit, écris un script qui fait lire ces photos par un ou deux modèles gratuits d'OpenRouter qui acceptent les images (à choisir ; l'OCR dédié de Mistral n'est plus accessible), puis compare : fautes conservées ou corrigées, passages illisibles marqués ou devinés, ordre du texte.
 Consigne les résultats tels quels dans une courte annexe de conception/, avec les versions de modèle et cette limite : écriture d'adultes, pas d'élèves. Aucune intégration dans l'application (E9).
 ```
 **Vous validez :** l'annexe existe et ne tire aucune conclusion au-delà de ce qui a été observé.
@@ -619,7 +636,7 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les nouvelle
 ## E6 — Traitement automatique par lots, échecs et relance (PRC-01, PRC-02)
 
 Préalables :
-- Limites de débit Mistral relevées (`stack-technologique.md` §3) : elles bornent le parallélisme. Le lot de référence fait 100 remises, et le quota gratuit peut être plus bas (NFR-TRT-01).
+- Limites des modèles gratuits d'OpenRouter (`stack-technologique.md` §3) : 20 requêtes par minute, et 50 par jour UTC à 0 crédit acheté (1 000 dès 10 crédits) ; le fournisseur peut limiter davantage. Elles bornent le parallélisme et le volume : le lot de référence de 100 remises dépasse le plafond d'une journée (NFR-TRT-01).
 - Tentatives, durée maximale par étape, parallélisme et plafond d'usage sont « à définir » : valeurs provisoires.
 
 #### E6.0 — Planifier · Plan
@@ -665,16 +682,16 @@ Couvre CA1 à CA4 ; l'élève voit seulement « Submitted, being marked », quel
 #### E6.4 — Mesures d'usage et de délai (NFR-EXP-01)
 ```
 Ajoute le script qui restitue, par devoir, le délai entre remise et « To review », l'usage d'IA par copie, les tentatives et le taux d'échec, sans identité ni contenu (EXP-01).
-Sur un lot de test, mesure aussi le nombre d'événements Workflows par copie et le délai du lot. Rapporte les chiffres tels quels, même au-dessus d'une cible, et déduis-en combien de copies par mois le plan Hobby permet.
+Sur un lot de test, mesure aussi le nombre d'événements Workflows par copie et le délai du lot. Rapporte les chiffres tels quels, même au-dessus d'une cible, et déduis-en combien de copies par mois le plan Hobby et le quota quotidien d'OpenRouter permettent.
 ```
 **Vous validez :** le rapport donne des chiffres mesurés, sans cible inventée.
 
 #### E6.5 — Vérifier et démontrer
 ```
 Écris le parcours E2E d'E6 : l'élève remet, la remise atteint « To review » (vérifié par la base de test ; l'écran du professeur arrive en E7), l'élève voit « Submitted, being marked » ; remplacement, puis nouveau traitement.
-Liste ensuite les variables à ajouter dans Vercel (Preview) pour Mistral et Workflows, sans lire .env.local. Une fois la preview poussée à ma demande, vérifie une remise traitée en ligne avec Mistral, sur un texte fictif.
+Liste ensuite les variables à ajouter dans Vercel (Preview) pour OpenRouter et Workflows, sans lire .env.local. Une fois la preview poussée à ma demande, vérifie une remise traitée en ligne avec le modèle OpenRouter retenu, sur un texte fictif.
 ```
-**Vous validez :** sur la preview, une remise fictive atteint « To review » avec une proposition de Mistral.
+**Vous validez :** sur la preview, une remise fictive atteint « To review » avec une proposition du modèle OpenRouter retenu.
 
 #### E6.6 — Revue en contexte neuf
 ```
@@ -696,7 +713,7 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs 
 | **E8** Validation, publication | E8.0 plan · E8.1 valider, publier, retirer, raccourci (REV-05, PUB-01) · E8.2 évaluation manuelle (REV-06) · E8.3 vue de l'élève à liste blanche (PUB-02) · E8.4 balayage « rien avant publication » · E8.5 rejeux de la table 8.3 · E8.6 cycle complet en texte (E2E) · revue de la fuite | Revue en contexte neuf : fuite de résultats |
 | **E9** Canal image | E9.0 enquête par sous-agents (OCR ou modèle multimodal, limites de 4,5 Mo et de 1 Go) · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur, type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 moteur de lecture et contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · revue | Sous-agents, revue |
 | **E10** Durcissement et mesure | A : matrice complète automatisée, balayage, étanchéité, pannes, sessions et liens, accessibilité (USA-03), export de sauvegarde ; revue externe facultative (CodeRabbit s'il reste gratuit pour ce dépôt, sinon `/code-review`) ; tri des constats ; T3. B : scripts de mesure depuis le journal, selon le protocole validé par le client | Revue indépendante |
-| **E11** Démonstration | Déploiement final, jeu de données fictif en anglais, scénarios scriptés, préchauffage de Neon, notice « demo, fictitious data », répétition | — |
+| **E11** Démonstration | Déploiement final, jeu de données fictif en anglais, scénarios scriptés, préchauffage de Neon, notice « demo, fictitious data », répétition dans le quota de 50 requêtes par jour (répétition et séance) | — |
 | **Fin** | Revue de toute l'application ; vérification des parcours admin, teacher, student ; synchronisation finale de CLAUDE.md | — |
 
 ## 4. Points ouverts qui touchent ces prompts
@@ -707,3 +724,4 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs 
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
 - Q1, Q5, Q6 tranchées [D, 2026-10-15] : note sur 20, somme des niveaux ; remarques dans la langue du devoir, mentions de l'IA et de la note ajustée affichées ; français sans proposition IA jusqu'à la validation de sa rubrique.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.
+- Prestataire d'IA tranché [D, 2026-10-16] : OpenRouter, modèle gratuit, à la place de Mistral. Modèle à choisir avant E5.4b ; 50 requêtes par jour à 0 crédit acheté (E5.7, E6, E9, E11).
