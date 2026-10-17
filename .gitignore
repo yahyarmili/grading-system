@@ -49,3 +49,7 @@ next-env.d.ts
 
 # AI trial reports (E5.7): copied into conception/ by hand
 /trial-results/
+
+# E5.8 exploration: handwriting photos and raw results stay local
+/explorations/handwriting/photos/
+/explorations/handwriting/results/
