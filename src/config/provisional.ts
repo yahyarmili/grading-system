@@ -90,8 +90,15 @@ export const ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 // Evaluation by the AI (E5). PROVISIONAL, [P] arbitrary: to be confirmed on
 // the trial sets (E5.7). The model itself is decided (AI_MODEL, decisions.ts).
 
-/** [PROVISIONAL, [P] arbitrary] Longest wait for one call to the AI, answer read included; well under Vercel's 300 s. */
-export const AI_CALL_TIMEOUT_MS = 60_000;
+/**
+ * [PROVISIONAL, [P]] Longest wait for one call to the AI, answer read
+ * included; under Vercel's 300 s for one call. Raised from 60 s on
+ * 2026-10-17 at the user's request: the answers of the first trial run that
+ * arrived took 39 to 57 s, and 27 calls in 34 reached 60 s
+ * (conception/annexe-essais-ia.md). Several attempts of one evaluation may
+ * now exceed 300 s together: to handle when E6 runs it on Vercel.
+ */
+export const AI_CALL_TIMEOUT_MS = 120_000;
 
 /** [PROVISIONAL, [P]] Sampling temperature: 0, for answers as stable as the model allows (EVL-03 CA3). */
 export const AI_TEMPERATURE = 0;
