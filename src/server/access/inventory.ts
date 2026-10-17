@@ -27,6 +27,10 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   submissions: ["submission", "ownSubmissionStatus"],
   submission_versions: ["submission"],
   notice_acknowledgements: ["noticeAcknowledgement"],
+  // Added by the evaluation service alone (system.ts), never changed (0011);
+  // the owner teacher reads the proposal in force.
+  evaluation_runs: ["aiProposal"],
+  ai_proposals: ["aiProposal"],
 };
 
 /**
@@ -97,6 +101,10 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/submissions/late.ts#isLate": "helper of a guarded write: the SQL comparison of lateness (SUB-04 R2)",
   "src/server/data/submissions/submissions.ts#replacementOpen": "helper of a guarded write: the SQL predicate of transition 11 (SUB-05)",
   "src/server/data/submissions/transitions.ts#insertReceived": "internal: transition 1, inside a submission transaction that has authorized the actor",
-  "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor",
+  "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor, or in the system processing of the evaluation (transitions 2 and 5)",
   "src/server/data/evaluation/system.ts#readEvaluationInput": "system processing (§5.5, transitions 2 and 5): the AI's whitelist of a submission, read for the evaluation service only, never a screen",
+  "src/server/data/evaluation/system.ts#claimForEvaluation": "system processing (§5.5, transition 2), called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#stillEvaluating": "system processing (§5.5): whether a claim still holds before a new attempt, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#recordEvaluation": "system processing (§5.5, transition 5): adds the run and the proposal, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#listReceived": "system processing (§5.5): identifiers of the received submissions of an assignment, called only by src/server/evaluation/",
 };

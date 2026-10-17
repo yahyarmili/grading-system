@@ -17,7 +17,8 @@
     "test:int": "vitest run --project integration",
     "test:e2e": "playwright test",
     "admin:create": "tsx --conditions=react-server scripts/create-admin.ts",
-    "ai:trial": "tsx --conditions=react-server scripts/ai-trial.ts"
+    "ai:trial": "tsx --conditions=react-server scripts/ai-trial.ts",
+    "ai:evaluate": "tsx --conditions=react-server scripts/evaluate.ts"
   },
   "dependencies": {
     "@vercel/functions": "3.9.11",

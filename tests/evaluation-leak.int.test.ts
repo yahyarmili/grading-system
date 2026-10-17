@@ -2,12 +2,12 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { inspect } from "node:util";
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { publishedRubric } from "@/lib/rubric";
+import { criterionIds, publishedRubric, RUBRIC_VERSIONS } from "@/lib/rubric";
 import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
 import { createOpenRouterEvaluator } from "@/server/ai/openrouter";
 import { buildEvaluationRequest, OUTPUT_SCHEMA } from "@/server/ai/request";
-import { EvaluatorError } from "@/server/ai/types";
+import { EvaluatorError, type Evaluator } from "@/server/ai/types";
 import { createAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { readEvaluationInput } from "@/server/data/evaluation/system";
@@ -16,11 +16,13 @@ import { db } from "@/server/db/client";
 import {
   assignments,
   classMemberships,
+  evaluationRuns,
   securityEvents,
   submissions,
   submissionVersions,
   users,
 } from "@/server/db/schema";
+import { evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/evaluate";
 import { replaceStudentText, submitStudentText } from "@/server/submissions/submissions";
 
 // EVL-02 CA1 and CA2, SUB-04 CA3: what leaves for the AI, read from the
@@ -64,7 +66,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const completion = () =>
+/** A conform answer to the evaluation of TEXT: every quote is its first sentence. */
+const CONFORM = JSON.stringify({
+  criteria: Object.fromEntries(
+    criterionIds.map((id) => [id, { level: 2, justification: "Simple ideas.", quotes: ["My town is small but it is beatiful."] }]),
+  ),
+  general_comment: "A clear text.",
+  next_steps: ["Check the spelling of common words."],
+  flags: { other_language: false, off_topic: false, addressed_to_marker: false },
+});
+
+const completion = (content = "{}") =>
   new Response(
     JSON.stringify({
       id: "gen-1",
@@ -73,7 +85,7 @@ const completion = () =>
       provider: "Phala",
       created: 1_760_000_000,
       usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-      choices: [{ index: 0, message: { role: "assistant", content: "{}" }, finish_reason: "stop" }],
+      choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
@@ -187,6 +199,11 @@ async function evaluate(submissionId: string, evaluator = adapter(), signal = ne
   return { read, request, result: evaluator.evaluate(request, { signal, subjectId: submissionId }) };
 }
 
+/** The evaluation service on this adapter, without waits between attempts. */
+const serviceDeps = (evaluator: Evaluator): EvaluationDeps => ({
+  evaluator, registry: RUBRIC_VERSIONS, sleep: async () => {}, callTimeoutMs: 10_000,
+});
+
 const logLines = () =>
   db.select().from(securityEvents).where(eq(securityEvents.type, "ai_request_sent"));
 
@@ -200,11 +217,16 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     markers["deadline date"] = "2030-06-14";
     markers["api key"] = KEY.slice("test-key-".length);
 
-    const { read, request, result } = await evaluate(submissionId);
+    // What the service will build, rebuilt here to compare: the builder is deterministic.
+    const read = (await readEvaluationInput(db, submissionId))!;
+    const request = buildEvaluationRequest(read.input, publishedRubric(read.input.language)!);
     expect(read.versionNumber).toBe(2);
     // Nothing identifying is in what is built, before anything leaves.
     expect(leaks([{ method: "", url: "", headers: [], body: JSON.stringify(request) }], markers)).toEqual([]);
-    await result;
+    // The real path, from the service: claim, whitelist, builder, adapter, validator, record.
+    expect(await evaluateSubmission(submissionId, serviceDeps(adapter(() => completion(CONFORM))))).toMatchObject({
+      status: "to_review", attempts: 1,
+    });
 
     expect(captured).toHaveLength(1);
     // Exactly two headers set by the adapter: no attribution, no user. Only authorization carries the key.
@@ -299,6 +321,27 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     // Each request that left has its line; nothing was printed.
     expect(await logLines()).toHaveLength(captured.length);
     expect(captured).toHaveLength(answers.length + 1);
+    expect(printed.filter((line) => [TEXT, KEY, ...Object.values(markers)].some((m) => line.includes(m)))).toEqual([]);
+  });
+});
+
+describe("each request that leaves is logged first", () => {
+  it("logs two lines for a 500 followed by a conform answer, and stores the proposal", async () => {
+    const { markers, teacher, students, classId } = await world();
+    const assignmentId = await assignment(teacher, classId, markers, "C1", "one");
+    const submissionId = await submit(students[0], assignmentId, markers, "one");
+    const answers = [() => new Response("{}", { status: 500 }), () => completion(CONFORM)];
+    const outcome = await evaluateSubmission(submissionId, serviceDeps(adapter(() => answers.shift()!())));
+    expect(outcome).toMatchObject({ status: "to_review", attempts: 2, errors: ["unavailable"] });
+    expect(captured).toHaveLength(2);
+    const lines = await logLines();
+    expect(lines).toHaveLength(2);
+    expect(lines.every((line) => line.subjectId === submissionId)).toBe(true);
+    const [run] = await db.select().from(evaluationRuns).where(eq(evaluationRuns.submissionId, submissionId));
+    // The model and the provider that answered, and the tokens summed over the answers that said them.
+    expect(run).toMatchObject({
+      provider: "openrouter", modelAnswered: "xingchen-agi/xing4.0-29b-a4b:free", providerAnswered: "Phala", totalTokens: 2,
+    });
     expect(printed.filter((line) => [TEXT, KEY, ...Object.values(markers)].some((m) => line.includes(m)))).toEqual([]);
   });
 });

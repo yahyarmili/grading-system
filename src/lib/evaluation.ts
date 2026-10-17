@@ -12,3 +12,39 @@ export type AiProvider = (typeof aiProviders)[number];
  */
 export const callErrors = ["timeout", "rate_limited", "unavailable", "rejected", "configuration"] as const;
 export type CallError = (typeof callErrors)[number];
+
+/** What one evaluation run gave (E5.5): a proposal, a failure, or a blocking alert before any request. */
+export const evaluationOutcomes = ["proposed", "failed", "not_assessable"] as const;
+export type EvaluationOutcome = (typeof evaluationOutcomes)[number];
+
+/**
+ * Why a submission is not assessable: a blocking alert, raised before any
+ * request (EVL-04). E6 and E9 will add their own causes.
+ */
+export const notAssessableCauses = ["no_content", "rubric_unavailable"] as const;
+export type NotAssessableCause = (typeof notAssessableCauses)[number];
+
+/** The teacher's label of each cause. */
+export const notAssessableCauseLabels: Record<NotAssessableCause, string> = {
+  no_content: "No content to assess",
+  rubric_unavailable: "AI unavailable: French rubric not validated",
+};
+
+/**
+ * Why one attempt failed, without content: a failed call (callErrors), an
+ * answer refused by the validator (not_json, schema, quote_not_found), the
+ * text replaced meanwhile (superseded), or an unexpected error (internal).
+ */
+export const evaluationErrors = [
+  ...callErrors,
+  "not_json",
+  "schema",
+  "quote_not_found",
+  "superseded",
+  "internal",
+] as const;
+export type EvaluationError = (typeof evaluationErrors)[number];
+
+/** Information alerts of a proposal (EVL-04): read by the owner teacher only, never by the student. */
+export const proposalAlerts = ["very_short", "other_language", "off_topic", "addressed_to_marker"] as const;
+export type ProposalAlert = (typeof proposalAlerts)[number];

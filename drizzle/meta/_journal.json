@@ -71,6 +71,20 @@
       "when": 1792148642763,
       "tag": "0009_add_ai_request_event",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792246105161,
+      "tag": "0010_create_evaluation_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792246119648,
+      "tag": "0011_protect_evaluation_rows",
+      "breakpoints": true
     }
   ]
 }

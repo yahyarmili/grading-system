@@ -332,11 +332,16 @@ describe("the Submission row (§5.4): the student writes their own, never reads 
 
     const { row } = (await storedSubmission(lina))!;
     for (const status of storedSubmissionStatuses) {
-      // Set as E5 to E8 will: validated and published only once the teacher started (check constraint).
+      // Set as E5 to E8 will: validated and published only once the teacher started,
+      // not assessable with its cause and no other state with one (check constraints).
       const started = status === "validated" || status === "published";
       await db
         .update(submissions)
-        .set({ status, teacherStartedAt: started ? sql`now()` : null })
+        .set({
+          status,
+          teacherStartedAt: started ? sql`now()` : null,
+          notAssessableCause: status === "not_assessable" ? "no_content" : null,
+        })
         .where(eq(submissions.id, row.id));
       const list = await listStudentAssignments(lina);
       const detail = await getStudentAssignment(lina, assignmentId);

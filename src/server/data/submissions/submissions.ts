@@ -170,7 +170,8 @@ export async function replaceText(actor: Actor, input: ReplaceTextInput): Promis
 
     const replaced = await applyTransition(tx, submission.id, 11, "received", {
       where: replacementOpen(userId),
-      set: { currentVersion: sql`${submissions.currentVersion} + 1` },
+      // The proposal in force was of the old version: none is current any more (SUB-05 R2).
+      set: { currentVersion: sql`${submissions.currentVersion} + 1`, currentProposalId: null },
     });
     if (!replaced) {
       if (submission.teacherStarted) return { ok: false, reason: "teacher_started" } as const;

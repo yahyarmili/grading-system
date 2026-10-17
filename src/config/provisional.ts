@@ -104,3 +104,19 @@ export const AI_REASONING_EFFORT = "none" as const;
 
 /** [PROVISIONAL, [P] arbitrary] Most quotes the AI gives per criterion (at least 1). */
 export const AI_MAX_QUOTES_PER_CRITERION = 3;
+
+/** [PROVISIONAL, [P] arbitrary] Attempts at most for one evaluation, the first included (EVL-03 R3). */
+export const AI_MAX_ATTEMPTS = 3;
+
+/** [PROVISIONAL, [P] arbitrary] Wait before a new attempt, unless the provider asked for one (Retry-After). */
+export const AI_RETRY_DELAY_MS = 2_000;
+
+/** [PROVISIONAL, [P] arbitrary] Longest wait asked by the provider (Retry-After) that is honoured; longer is cut to this. */
+export const AI_RETRY_MAX_WAIT_MS = 30_000;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Edits allowed between a quote and the text, per
+ * character of the quote, once both are normalized; to be set on the very
+ * faulty texts of the development set (E5.7).
+ */
+export const QUOTE_MAX_ERROR_RATE = 0.15;

@@ -106,6 +106,8 @@ export const ACCESS_MATRIX = {
   },
   aiProposal: {
     label: "AI proposal and alerts",
+    // Written by the system alone, never by a role (inventory.ts): the
+    // evaluation runs, the proposals and their alerts. Never changed (0011).
     concernedStudent: NO, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
   },
   unpublishedEvaluation: {

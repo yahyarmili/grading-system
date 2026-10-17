@@ -111,7 +111,10 @@ test("E4 journey: on time, late, replaced, then read only; the assignment locked
   // 5. No text and no internal state reach the student, whatever the state (A3, SUB-01 R3).
   for (const status of ["evaluation_failed", "not_assessable", "to_review"]) {
     await sql(
-      `UPDATE submissions SET status = $1 FROM users u WHERE u.id = submissions.student_id AND u.email = $2`,
+      // Not assessable carries its cause, and no other state one (check constraint, E5.5).
+      `UPDATE submissions SET status = $1::submission_status,
+         not_assessable_cause = CASE WHEN $1::submission_status = 'not_assessable' THEN 'no_content'::not_assessable_cause END
+       FROM users u WHERE u.id = submissions.student_id AND u.email = $2`,
       [status, linaEmail],
     );
     for (const path of ["/student/assignments", new URL(lina.url()).pathname]) {

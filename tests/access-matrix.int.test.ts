@@ -20,10 +20,14 @@ import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites"
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
+import { getCurrentProposal } from "@/server/data/evaluation/proposals";
 import { getPublishedRubrics } from "@/server/data/rubric/rubric";
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
-import { assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, users } from "@/server/db/schema";
+import {
+  assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, submissions, users,
+} from "@/server/db/schema";
+import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { STUDENT_NOTICE } from "@/lib/texts";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
 
@@ -252,6 +256,25 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   // refused. No write operation: none exists (CA1, tests/access-inventory.test.ts).
   rubric: {
     read: { run: (actor) => getPublishedRubrics(actor) },
+  },
+  // EVL-03: the proposal in force of the concerned student's submission,
+  // evaluated by the simulator. Read by the owner teacher only; written by
+  // the system alone, so no write operation (inventory.ts).
+  aiProposal: {
+    setup: async () => {
+      const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
+      const submitted = await submitText(people.concernedStudent, {
+        assignmentId: fixture.assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
+      });
+      if (!submitted?.ok) throw new Error("Not submitted");
+      const [{ id: submissionId }] = await db
+        .select({ id: submissions.id })
+        .from(submissions)
+        .where(eq(submissions.assignmentId, fixture.assignmentId));
+      if ((await evaluateSubmission(submissionId)).status !== "to_review") throw new Error("Not evaluated");
+      return { ...fixture, submissionId };
+    },
+    read: { run: (actor, { submissionId }) => getCurrentProposal(actor, submissionId) },
   },
 };
 
