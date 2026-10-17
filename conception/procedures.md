@@ -56,4 +56,4 @@
 
 **Retour arrière.** Retirer `AI_PROVIDER` (ou le mettre à `simulator`) : le simulateur répond de nouveau. Selon la liste d'OpenRouter, sans garantie vérifiable, rien n'est conservé chez Phala ; OpenRouter garde les métadonnées des requêtes, et peut-être quelques prompts échantillonnés, anonymes (fiche DON-02).
 
-**Rejeu.** À faire avec OpenRouter : pas encore rejoué (2026-10-17). Le rejeu partiel du 2026-10-16 avec Mistral (quota à 0) est dans l'historique git.
+**Rejeu.** Étapes 3 et 4 le 2026-10-17, en local : réponse JSON conforme au schéma de l'essai, modèle `xingchen-agi/xing4.0-29b-a4b:free` et fournisseur `Phala` donnés par la réponse, 129 tokens, 11,4 s. Étapes 1 et 2 vérifiées par l'utilisateur. Le rejeu partiel du 2026-10-16 avec Mistral (quota à 0) est dans l'historique git.

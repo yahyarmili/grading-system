@@ -557,7 +557,7 @@ Retire le SDK Mistral et la valeur mistral (AI_PROVIDER, aiProviders, union prov
 Réécris la notice élève selon la politique du fournisseur retenu (version 3), sans rien promettre de non vérifié.
 ```
 **Vous validez :** les tests passent hors réseau ; `ai:trial` avec `AI_PROVIDER=openrouter` obtient une réponse conforme au schéma ; le journal montre l'envoi, sans le texte ; vous approuvez le texte de la notice v3.
-Fait le 2026-10-17 : modèle `xingchen-agi/xing4.0-29b-a4b:free` épinglé, client `fetch`, notice v3 ; tests hors réseau passés. Restent à faire par vous : l'essai `ai:trial` réel et l'approbation de la notice v3.
+Fait le 2026-10-17 : modèle `xingchen-agi/xing4.0-29b-a4b:free` épinglé, client `fetch`, notice v3 ; tests hors réseau passés. Validé par vous le 2026-10-17 : essai `ai:trial` réel (réponse conforme, fournisseur Phala donné par la réponse) et notice v3.
 
 #### E5.5 — Contrat de sortie et proposition immuable (EVL-03)
 ```

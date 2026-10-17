@@ -21,7 +21,7 @@ Notation de productions écrites d'élèves (anglais, français). L'élève reme
   - `src/server/ai/` : interface `Evaluator`, simulateur à pannes (défaut partout), adaptateur réel qui journalise lui-même `ai_request_sent` avant chaque envoi ; requête : `buildEvaluationRequest` (liste blanche, `PROMPT_VERSION` figée par empreinte), `readEvaluationInput`, test d'étanchéité `tests/evaluation-leak.int.test.ts` ;
   - **Prestataire [D, 2026-10-16]** : OpenRouter (Mistral abandonné). **E5.4b fait (2026-10-17)** : `src/server/ai/openrouter.ts`, `fetch` sans bibliothèque ; `AI_MODEL = "xingchen-agi/xing4.0-29b-a4b:free"` et `AI_ROUTING` (`require_parameters`, `zdr`) dans `decisions.ts` ; `AI_PROVIDER=openrouter` + `OPENROUTER_API_KEY` ; jamais `openrouter/free`, aucun en-tête d'attribution ni champ `user`. `ai_provider` vaudra `simulator` | `openrouter` ; `provider_answered` à créer en E5.5.
   - Garanties de l'adaptateur : journal avant envoi (rien ne part s'il échoue), durée bornée lecture comprise, `NODE_DEBUG` refusé au démarrage, clé jamais lue implicitement, erreurs classées sans contenu (y compris dans un 200).
-  - Limites des modèles gratuits : 20 requêtes par minute, 50 par jour UTC à 0 crédit acheté. Notice élève v3 (OpenRouter, Phala, ZDR selon la liste d'OpenRouter) ; essai `ai:trial` réel et approbation de la notice à faire par l'utilisateur.
+  - Limites des modèles gratuits : 20 requêtes par minute, 50 par jour UTC à 0 crédit acheté. Notice élève v3 (OpenRouter, Phala, ZDR selon la liste d'OpenRouter) ; essai `ai:trial` réel et notice validés le 2026-10-17 (la réponse donne `provider`, ici Phala).
 - Base dev : un compte par rôle (E1.8), migrations jusqu'à `0009`.
 
 ## Environnement
