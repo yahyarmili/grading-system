@@ -1,0 +1,354 @@
+{
+  "date": "2026-10-17T19:27:23.221Z",
+  "provider": "openrouter",
+  "model": "xingchen-agi/xing4.0-29b-a4b:free",
+  "set": "all",
+  "runs": 2,
+  "calls": [
+    {
+      "run": 1,
+      "id": "d01",
+      "outcome": "error",
+      "requests": 2,
+      "rateLimited": 1,
+      "durationMs": 60013,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d02",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d03",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d04",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d05",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60001,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d06",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d07",
+      "outcome": "proposed",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 39065,
+      "modelAnswered": "xingchen-agi/xing4.0-29b-a4b:free",
+      "providerAnswered": "Phala",
+      "content": "{\"criteria\":{\"task\":{\"level\":1,\"justification\":\"The text does not address the task. The student is asked to describe their town and say what they like most about it, but the response is extremely brief and lacks any description of the town or explanation of what is liked. It does not fulfill the task requirements at all.\",\"quotes\":[\"my town is smal. i like the park.\"]},\"organization\":{\"level\":1,\"justification\":\"The text has no clear structure and no logical organization. There are no paragraphs, and the ideas are disconnected and random. The response lacks any cohesive devices or transitions.\",\"quotes\":[\"my town is smal. i like the park.\"]},\"vocabulary\":{\"level\":1,\"justification\":\"The vocabulary range is very limited, mostly basic words with frequent misuse and awkward wording. Words like 'smal' and 'park' are used without any elaboration or precision.\",\"quotes\":[\"my town is smal. i like the park.\"]},\"grammar\":{\"level\":1,\"justification\":\"There are persistent errors throughout the text that seriously obstruct meaning. Grammatical issues such as incorrect word order and missing articles make the text difficult to understand.\",\"quotes\":[\"my town is smal. i like the park.\"]},\"mechanics\":{\"level\":2,\"justification\":\"There are noticeable spelling errors ('smal') and capitalization errors ('i'), but the text is short enough that it remains readable despite these issues.\",\"quotes\":[\"my town is smal. i like the park.\"]}},\"general_comment\":\"Your response is very brief and does not fully address the task. You were asked to describe your town and explain what you like most about it, but you only provided a couple of short sentences. To improve, try to write a few more sentences describing your town in more detail and explain specifically what you enjoy about it. For example, you could describe what the park looks like, what activities you do there, or what makes it special to you.\",\"next_steps\":[\"Write at least three to four sentences describing your town and mention one specific thing you like about it, such as a park, a market, or a building.\",\"Use correct spelling and capitalize the first letter of each sentence and 'I'.\",\"Try to use a wider range of vocabulary by adding details about places or features in your town.\"],\"flags\":{\"other_language\":false,\"off_topic\":false,\"addressed_to_marker\":false}}",
+      "levels": {
+        "task": 1,
+        "organization": 1,
+        "vocabulary": 1,
+        "grammar": 1,
+        "mechanics": 2
+      },
+      "alerts": [
+        "very_short"
+      ]
+    },
+    {
+      "run": 1,
+      "id": "d08",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60004,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d09",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60001,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "d10",
+      "outcome": "error",
+      "requests": 2,
+      "rateLimited": 1,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "a01",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60003,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "a02",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 5858,
+      "code": "unavailable"
+    },
+    {
+      "run": 1,
+      "id": "a03",
+      "outcome": "error",
+      "requests": 3,
+      "rateLimited": 3,
+      "durationMs": 3459,
+      "code": "rate_limited"
+    },
+    {
+      "run": 1,
+      "id": "a04",
+      "outcome": "rejected",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 57211,
+      "modelAnswered": "xingchen-agi/xing4.0-29b-a4b:free",
+      "providerAnswered": "Phala",
+      "content": "{\"criteria\":{\"task\":{\"level\":4,\"justification\":\"The text fully addresses the task by describing the destination (grandmother's village), the companion (grandmother), and activities (making bread, milking a cow, listening to stories). All three required elements are present and well developed.\",\"quotes\":[\"\\\"In the holiday i was go to my grandmother in the vilage.\\\"\",\"\\\"My grand mother teach me how to make bread in the oven and how to milk the cow, it was dificult and the cow was not happy.\\\"\",\"\\\"In the evening we sit outside and she tell me storys about my mother when she was young girl.\\\"\",\"\\\"Now i miss the vilage and my grandmother so much.\\\"\"]},\"organization\":{\"level\":4,\"justification\":\"The text has a clear logical structure with well-organized paragraphs. The narrative flows naturally from arrival to activities to reflection, and cohesive devices such as 'But after some days' and 'In the evening' help connect ideas smoothly.\",\"quotes\":[\"\\\"Ther is no internet and no tv so in the begining i was very bored. But after some days i discover many thing.\\\"\",\"\\\"In the evening we sit outside and she tell me storys about my mother when she was young girl. I sleeped very good becaus ther is no noise. Now i miss the vilage and my grandmother so much.\\\"\"]},\"vocabulary\":{\"level\":4,\"justification\":\"The student uses a wide range of vocabulary that is precise and appropriate for describing experiences during a holiday. Words like 'discover,' 'difficult,' 'happy,' and 'miss' add descriptive depth to the writing.\",\"quotes\":[\"\\\"i discover many thing\\\"\",\"\\\"it was dificult and the cow was not happy\\\"\",\"\\\"Now i miss the vilage and my grandmother so much.\\\"\"]},\"grammar\":{\"level\":4,\"justification\":\"The student demonstrates a wide range of grammatical structures with largely accurate usage. Simple past tense is used consistently throughout, and sentence structures are varied enough to show control of English grammar.\",\"quotes\":[\"\\\"i was go to my grandmother in the vilage\\\"\",\"\\\"My grand mother teach me how to make bread in the oven and how to milk the cow\\\"\",\"\\\"she tell me storys about my mother when she was young girl\\\"\"]},\"mechanics\":{\"level\":3,\"justification\":\"There are several spelling errors (vilage, Ther, storys, sleeped) and some capitalization issues, but these do not distract the reader from the overall meaning of the text. The errors are noticeable but do not significantly impede comprehension.\",\"quotes\":[\"\\\"in the vilage\\\"\",\"\\\"Ther is no internet\\\"\",\"\\\"storys\\\"\",\"\\\"sleeped\\\"\"]}},\"general_comment\":\"The writing fully addresses the task and presents a clear, engaging narrative about the holiday. The student effectively describes where they went, who they went with, and what they did. The story has a logical flow and good descriptive language. To improve, the student should proofread more carefully to correct spelling mistakes and ensure consistent capitalization and verb forms.\",\"next_steps\":[\"Check your spelling carefully before finishing. For example, 'vilage' should be 'village,' 'Ther' should be 'There,' 'storys' should be 'stories,' and 'sleeped' should be 'slept.' A spell-check tool can help you catch these kinds of errors.\"],\"flags\":{\"other_language\":false,\"off_topic\":false,\"addressed_to_marker\":false}}",
+      "code": "schema"
+    },
+    {
+      "run": 1,
+      "id": "a05",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60001,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "a06",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60005,
+      "code": "timeout"
+    },
+    {
+      "run": 1,
+      "id": "a07",
+      "outcome": "error",
+      "requests": 2,
+      "rateLimited": 1,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "d01",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60001,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "d02",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60003,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "d03",
+      "outcome": "error",
+      "requests": 3,
+      "rateLimited": 2,
+      "durationMs": 60003,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "d04",
+      "outcome": "error",
+      "requests": 3,
+      "rateLimited": 3,
+      "durationMs": 6112,
+      "code": "rate_limited"
+    },
+    {
+      "run": 2,
+      "id": "d05",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "d06",
+      "outcome": "proposed",
+      "requests": 2,
+      "rateLimited": 1,
+      "durationMs": 51930,
+      "modelAnswered": "xingchen-agi/xing4.0-29b-a4b:free",
+      "providerAnswered": "Phala",
+      "content": "{\"criteria\":{\"task\":{\"level\":3,\"justification\":\"The text addresses the task by mentioning the destination (Marrakech), the company (family), and activities (visiting the big square, eating tajine). However, the development is limited: only two specific activities are described, and the experience lacks detail about duration, feelings, or other aspects of the holiday.\",\"quotes\":[\"\\\"Last holiday I went to Marrakech with my family. We visited the big square and ate tajine. It was hot but very good.\\\"\"]},\"organization\":{\"level\":2,\"justification\":\"The text has a basic structure with a clear opening sentence, but the organization is limited. There is no explicit paragraphing, and the ideas are presented in a single short paragraph without transitions between the different aspects of the holiday (destination, company, activities). The flow is simple but not fully developed.\",\"quotes\":[\"\\\"Last holiday I went to Marrakech with my family. We visited the big square and ate tajine. It was hot but very good.\\\"\"]},\"vocabulary\":{\"level\":2,\"justification\":\"The vocabulary range is limited. Words like 'big square' and 'tajine' are used, but they are basic and somewhat generic. The phrase 'very good' is vague and does not convey much depth. There is little variety in word choice, and some expressions feel unnatural or repetitive.\",\"quotes\":[\"\\\"Last holiday I went to Marrakech with my family. We visited the big square and ate tajine. It was hot but very good.\\\"\"]},\"grammar\":{\"level\":3,\"justification\":\"The grammar is generally accurate for a short, simple text. Sentences are correctly formed and there are no major errors that obstruct meaning. The use of past tense ('went', 'visited', 'ate') is correct throughout. Minor issues such as the lack of an article before 'the big square' do not affect comprehension.\",\"quotes\":[\"\\\"Last holiday I went to Marrakech with my family. We visited the big square and ate tajine. It was hot but very good.\\\"\"]},\"mechanics\":{\"level\":3,\"justification\":\"There are very few spelling errors. The punctuation is used correctly, and capitalization is appropriate. The only minor issue is the missing article before 'the big square', which does not distract the reader. Overall, the mechanics are acceptable for this level of writing.\",\"quotes\":[\"\\\"Last holiday I went to Marrakech with my family. We visited the big square and ate tajine. It was hot but very good.\\\"\"]}},\"general_comment\":\"Your holiday report covers the key points the task asked for: where you went, who you went with, and what you did. To improve, you could add more details about your activities, describe the atmosphere or your feelings, mention how long you stayed, and include more specific vocabulary to make your writing more vivid and engaging. Adding a few more sentences would help you develop your ideas fully.\",\"next_steps\":[\"Add at least one more specific activity you did during the holiday, such as exploring a market or visiting a museum, and describe what it was like.\"],\"flags\":{\"other_language\":false,\"off_topic\":false,\"addressed_to_marker\":false}}",
+      "levels": {
+        "task": 3,
+        "organization": 2,
+        "vocabulary": 2,
+        "grammar": 3,
+        "mechanics": 3
+      },
+      "alerts": [
+        "very_short"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "d07",
+      "outcome": "proposed",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 55713,
+      "modelAnswered": "xingchen-agi/xing4.0-29b-a4b:free",
+      "providerAnswered": "Phala",
+      "content": "{\"criteria\":{\"task\":{\"level\":1,\"justification\":\"The text does not address the task. The student is asked to describe their town and say what they like most about it, but the response is extremely brief and does not provide any description of the town or any specific aspect that the student likes. There is no development of ideas, no detail, and no attempt at a full response.\",\"quotes\":[\"my town is smal. i like the park.\"]},\"organization\":{\"level\":1,\"justification\":\"There is no clear logical structure. The text consists of only two short sentences with no paragraphing, no transitions, and no cohesive devices. The ideas are disconnected and there is no sense of organization.\",\"quotes\":[\"my town is smal. i like the park.\"]},\"vocabulary\":{\"level\":1,\"justification\":\"The vocabulary range is very limited, mostly basic words (small, park). There is no variety and the language is repetitive and awkward in places (e.g., 'smal' for 'small').\",\"quotes\":[\"my town is smal. i like the park.\"]},\"grammar\":{\"level\":1,\"justification\":\"There are frequent errors throughout the text: 'is' should be 'is' (spelled correctly here), but 'smal' is a misspelling of 'small'; 'i like' should be 'I like'; 'the park' lacks an article before it ('a park'). These errors are basic and frequent, indicating limited grammatical control.\",\"quotes\":[\"my town is smal. i like the park.\"]},\"mechanics\":{\"level\":2,\"justification\":\"There are noticeable spelling errors ('smal') and capitalization errors ('i' instead of 'I'), but the text is short enough that these do not make it completely unreadable.\",\"quotes\":[\"my town is smal. i like the park.\"]}},\"general_comment\":\"Your writing is very brief and does not fully address the task. You were asked to describe your town and say what you like most about it, but you only gave two very short sentences with no details. To improve, try to write a few more sentences about your town — mention its size, what it looks like, what buildings or places you can see, and then explain specifically what you like most about it. For example, you could say what kind of park it is, why you enjoy it, or what makes your town special. Also, remember to use correct spelling and capitalization, such as 'I' and 'small'.\",\"next_steps\":[\"Write 4-5 sentences describing your town in more detail, including its size, appearance, and key features like parks, shops, or streets. Then explain one specific thing you like most about your town and why, using a full sentence such as 'I like the park because it has beautiful flowers.'\",\"Practice spelling common words correctly, especially 'small' and 'I', and always capitalize the pronoun 'I' at the beginning of sentences.\",\"Try writing a longer paragraph (about 6-8 sentences) on this topic as practice, and check your work for spelling and capitalization mistakes before finishing.\"],\"flags\":{\"other_language\":false,\"off_topic\":false,\"addressed_to_marker\":false}}",
+      "levels": {
+        "task": 1,
+        "organization": 1,
+        "vocabulary": 1,
+        "grammar": 1,
+        "mechanics": 2
+      },
+      "alerts": [
+        "very_short"
+      ]
+    },
+    {
+      "run": 2,
+      "id": "d08",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60001,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "d09",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "d10",
+      "outcome": "error",
+      "requests": 2,
+      "rateLimited": 1,
+      "durationMs": 60003,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "a01",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "a02",
+      "outcome": "error",
+      "requests": 2,
+      "rateLimited": 1,
+      "durationMs": 60003,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "a03",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60002,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "a04",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60003,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "a05",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60003,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "a06",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60005,
+      "code": "timeout"
+    },
+    {
+      "run": 2,
+      "id": "a07",
+      "outcome": "error",
+      "requests": 1,
+      "rateLimited": 0,
+      "durationMs": 60003,
+      "code": "timeout"
+    }
+  ]
+}
