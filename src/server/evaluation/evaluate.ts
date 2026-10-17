@@ -2,7 +2,7 @@ import "server-only";
 import { AI_CALL_TIMEOUT_MS, AI_MAX_ATTEMPTS, AI_RETRY_DELAY_MS, AI_RETRY_MAX_WAIT_MS } from "@/config/provisional";
 import type { EvaluationError, ProposalAlert } from "@/lib/evaluation";
 import { calculateGrade } from "@/lib/grade";
-import { criterionIds, publishedRubric, RUBRIC_VERSIONS, type RubricVersion } from "@/lib/rubric";
+import { criterionIds, RUBRIC_VERSIONS, type RubricVersion } from "@/lib/rubric";
 import { EvaluatorError, getEvaluator, type Evaluator, type Usage } from "@/server/ai";
 import { parseProposalOutput, type ProposalOutput } from "@/server/ai/output";
 import { buildEvaluationRequest, PROMPT_VERSION } from "@/server/ai/request";
@@ -15,6 +15,7 @@ import {
   type EvaluationResult,
   type RunRecord,
 } from "@/server/data/evaluation/system";
+import { checkBlockingAlerts, isVeryShort } from "@/server/evaluation/alerts";
 
 // The evaluation of a submission by the AI (EVL-03), transitions 2 and 5 of
 // §5.5: claim, request built from the whitelist, bounded attempts, answer
@@ -47,7 +48,7 @@ export type EvaluationOutcome =
 /** Failed calls retried: a later attempt may succeed. configuration and rejected stop at once. */
 const RETRIED = new Set<EvaluationError>(["timeout", "rate_limited", "unavailable"]);
 
-/** The three flags of the model, as information alerts (EVL-04); very_short is the system's own (E5.6). */
+/** The three flags of the model, as information alerts (EVL-04), best effort; very_short is the system's own (alerts.ts). */
 function flagAlerts(flags: ProposalOutput["flags"]): ProposalAlert[] {
   const alerts: ProposalAlert[] = [];
   if (flags.otherLanguage) alerts.push("other_language");
@@ -99,16 +100,16 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
   });
 
   try {
-    rubric = publishedRubric(claim.input.language, deps.registry);
-    if (!rubric) {
-      // No rubric for the language (French, Q6 [D]): blocking, before any request.
-      // The other blocking alert and their order come with E5.6.
+    const blocking = checkBlockingAlerts(claim.input, deps.registry);
+    if ("cause" in blocking) {
+      // Blocking alert (EVL-04 R1): no request, no proposal, no grade 0, no retry.
       return {
         outcome: "not_assessable",
-        cause: "rubric_unavailable",
+        cause: blocking.cause,
         run: { ...run(), modelRequested: null, promptVersion: null, rubricVersion: null },
       };
     }
+    rubric = blocking.rubric;
     const request = buildEvaluationRequest(claim.input, rubric);
     let wait = 0;
     while (attempts < AI_MAX_ATTEMPTS) {
@@ -152,7 +153,7 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
           criteria,
           generalComment,
           nextSteps,
-          alerts: flagAlerts(flags),
+          alerts: [...(isVeryShort(claim.input.text, claim.input.language) ? ["very_short" as const] : []), ...flagAlerts(flags)],
           proposedGrade: calculateGrade(criterionIds.map((id) => criteria[id].level)),
         },
       };

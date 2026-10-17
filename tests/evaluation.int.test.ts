@@ -23,13 +23,26 @@ import {
   users,
 } from "@/server/db/schema";
 import { evaluateAssignment, evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/evaluate";
+import { FR_TEST_RUBRIC } from "./fixtures/rubric-fr-test";
 
 // EVL-03 CA1, CA2 (R3) and CA4, with the simulator: transitions 2 and 5, the
 // bounded attempts, the proposal stored once and never changed, a replaced
 // text that leaves the old evaluation kept and not current (SUB-05 R2).
+// EVL-04 CA1 and CA2, EVL-01 CA4: the alerts, and the French guard.
 
-const TEXT = "My town is small but it is beatiful. There is a market every friday and the peoples are friendly.";
-const NEW_TEXT = "My town has a river and an old bridge. On sunday we walk along the river with my grandparents.";
+// Both over SHORT_TEXT_MIN_WORDS: no "very short" alert unless a test wants one.
+const TEXT =
+  "My town is small but it is beatiful. There is a market every friday and the peoples are friendly. " +
+  "In the morning I walk to school with my sister, and in the evening we play football in the park near the river. " +
+  "My grandparents lives in the old part of the town, where the streets are narrow and the houses are white.";
+const NEW_TEXT =
+  "My town has a river and an old bridge. On sunday we walk along the river with my grandparents. " +
+  "There is also a small library where I borrow books every week, and a café where my father drinks his coffee with his friends. " +
+  "In summer the town is full of tourists who take photos of the bridge and buy souvenirs in the little shops.";
+const FRENCH_TEXT =
+  "Ma ville est petite mais elle est très belle. Il y a un marché tous les vendredis et les gens sont gentils. " +
+  "Le matin, je vais à l'école avec ma sœur, et le soir nous jouons au football dans le parc près de la rivière. " +
+  "Mes grands-parents habitent dans la vieille ville, où les rues sont étroites et les maisons sont blanches.";
 
 type World = { teacher: Actor; student: Actor; assignmentId: string; submissionId: string };
 
@@ -397,16 +410,81 @@ describe("E4 retested with the evaluation", () => {
     ).rejects.toThrow();
   });
 
-  it("makes a French submission not assessable, without any request, while the French rubric is not validated", async () => {
-    const w = await world(TEXT, "fr");
+});
+
+/** A blocking alert: not assessable with its cause, one run without request or version, no proposal, no retry. */
+async function expectNotAssessable(w: World, simulator: SimulatorEvaluator, cause: "no_content" | "rubric_unavailable") {
+  expect(await evaluateSubmission(w.submissionId, deps(simulator))).toEqual({
+    status: "not_assessable", attempts: 0, durationMs: expect.any(Number), errors: [],
+  });
+  expect(simulator.captured()).toEqual([]);
+  expect(await submissionRow(w.submissionId)).toEqual({
+    status: "not_assessable", currentVersion: 1, currentProposalId: null, notAssessableCause: cause,
+  });
+  const runs = await runsOf(w.submissionId);
+  expect(runs).toHaveLength(1);
+  expect(runs[0]).toMatchObject({
+    outcome: "not_assessable", notAssessableCause: cause, provider: "simulator", attempts: 0, attemptErrors: [],
+    modelRequested: null, modelAnswered: null, promptVersion: null, rubricVersion: null,
+  });
+  expect(await proposalsOf(w.submissionId)).toEqual([]);
+  // No retry in a loop: a second command leaves it as it is.
+  expect(await evaluateSubmission(w.submissionId, deps(simulator))).toEqual({ status: "skipped" });
+  expect(await runsOf(w.submissionId)).toHaveLength(1);
+}
+
+describe("EVL-04 CA1: a text without content is not assessable, without any request", () => {
+  it("gives no_content to « 12345 !!! », with no proposal and no grade", async () => {
+    await expectNotAssessable(await world("12345 !!!"), new SimulatorEvaluator(), "no_content");
+  });
+
+  it("gives no_content, not rubric_unavailable, to a French text without content: no rubric version", async () => {
+    await expectNotAssessable(await world("12345 !!!", "fr"), new SimulatorEvaluator(), "no_content");
+  });
+});
+
+describe("EVL-01 CA4: no AI proposal for a French assignment while the French rubric is not validated", () => {
+  it("makes a French submission not assessable (rubric_unavailable), without any request", async () => {
+    await expectNotAssessable(await world(FRENCH_TEXT, "fr"), new SimulatorEvaluator(), "rubric_unavailable");
+  });
+
+  it("evaluates it in French with a French rubric (test only, injected): the guard is the rubric's absence", async () => {
+    const w = await world(FRENCH_TEXT, "fr");
     const simulator = new SimulatorEvaluator();
-    expect(await evaluateSubmission(w.submissionId, deps(simulator))).toMatchObject({ status: "not_assessable", attempts: 0 });
-    expect(simulator.captured()).toEqual([]);
-    expect(await submissionRow(w.submissionId)).toMatchObject({ status: "not_assessable", notAssessableCause: "rubric_unavailable" });
-    expect((await runsOf(w.submissionId))[0]).toMatchObject({
-      outcome: "not_assessable", notAssessableCause: "rubric_unavailable", attempts: 0,
-      modelRequested: null, promptVersion: null, rubricVersion: null,
+    expect(await evaluateSubmission(w.submissionId, deps(simulator, { registry: [...RUBRIC_VERSIONS, FR_TEST_RUBRIC] }))).toMatchObject({
+      status: "to_review", attempts: 1,
     });
-    expect(await proposalsOf(w.submissionId)).toEqual([]);
+    const [{ request }] = simulator.captured();
+    expect(request.system).toContain("in French");
+    expect(request.system).toContain("Réalisation de la tâche (test)");
+    expect(request.system).not.toContain("Task Achievement");
+    expect(JSON.parse(request.user)).toMatchObject({ language: "fr", student_text: FRENCH_TEXT });
+    expect((await runsOf(w.submissionId))[0]).toMatchObject({ outcome: "proposed", rubricVersion: "fr-test" });
+    const [proposal] = await proposalsOf(w.submissionId);
+    expect(proposal).toMatchObject({ alerts: [], generalComment: "Commentaire général simulé." });
+    expect(await submissionRow(w.submissionId)).toMatchObject({ status: "to_review", currentProposalId: proposal.id });
+  });
+});
+
+describe("EVL-04 CA2: a very short text gets the alert, and its proposal", () => {
+  it("stores very_short with the proposal, before the model's flags", async () => {
+    const w = await world("My town is small. I like it.");
+    const simulator = new SimulatorEvaluator();
+    const evaluator: Evaluator = {
+      provider: "simulator",
+      model: "simulator",
+      evaluate: async (request, context) => {
+        const response = await simulator.evaluate(request, context);
+        const answer = JSON.parse(response.content);
+        answer.flags = { other_language: true, off_topic: false, addressed_to_marker: false };
+        return { ...response, content: JSON.stringify(answer) };
+      },
+    };
+    expect(await evaluateSubmission(w.submissionId, deps(evaluator))).toMatchObject({ status: "to_review", attempts: 1 });
+    const [proposal] = await proposalsOf(w.submissionId);
+    expect(proposal).toMatchObject({ alerts: ["very_short", "other_language"], proposedGrade: 10 });
+    expect(await submissionRow(w.submissionId)).toMatchObject({ status: "to_review", currentProposalId: proposal.id });
+    // Read by the owner teacher with the proposal (the student never reads it: matrix, CA3 replayed in E8).
+    expect((await getCurrentProposal(w.teacher, w.submissionId))?.alerts).toEqual(["very_short", "other_language"]);
   });
 });

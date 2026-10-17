@@ -120,3 +120,11 @@ export const AI_RETRY_MAX_WAIT_MS = 30_000;
  * faulty texts of the development set (E5.7).
  */
 export const QUOTE_MAX_ERROR_RATE = 0.15;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Under this many words, a text gets the
+ * information alert "very short" (EVL-04 R2, CA2; threshold "to be defined"
+ * in the specification). Words as Intl.Segmenter finds them in the
+ * assignment's language; to be set on the trial sets (E5.7) or by the client.
+ */
+export const SHORT_TEXT_MIN_WORDS = 50;

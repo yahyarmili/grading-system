@@ -16,13 +16,14 @@ Notation de productions écrites d'élèves (anglais, français). L'élève reme
 ## État (2026-10-17)
 
 - E1 à E4 livrées. Plans approuvés dans `~/.claude/plans/` : E3 `…typed-meerkat.md`, E4 `…happy-petal.md`, E5 `partir-de-l-enqu-te-witty-eagle.md` (découpage E5.2 à E5.7, « Valeurs à consigner », écart E5.3 en fin de plan).
-- **E5 en cours** (E5.0 à E5.5 faits) :
+- **E5 en cours** (E5.0 à E5.6 faits) :
   - rubrique : registre `RUBRIC_VERSIONS` (`src/lib/rubric.ts`, `en-1` = texte du client, gelée par empreinte) ; note = somme des niveaux sur 20 ;
   - `src/server/ai/` : interface `Evaluator`, simulateur à pannes (défaut partout), adaptateur réel qui journalise lui-même `ai_request_sent` avant chaque envoi ; requête : `buildEvaluationRequest` (liste blanche, `PROMPT_VERSION` figée par empreinte), `readEvaluationInput`, test d'étanchéité `tests/evaluation-leak.int.test.ts` ;
   - **Prestataire [D, 2026-10-16]** : OpenRouter (Mistral abandonné). **E5.4b fait (2026-10-17)** : `src/server/ai/openrouter.ts`, `fetch` sans bibliothèque ; `AI_MODEL = "xingchen-agi/xing4.0-29b-a4b:free"` et `AI_ROUTING` (`require_parameters`, `zdr`) dans `decisions.ts` ; `AI_PROVIDER=openrouter` + `OPENROUTER_API_KEY` ; jamais `openrouter/free`, aucun en-tête d'attribution ni champ `user`. `ai_provider` vaut `simulator` | `openrouter`.
   - Garanties de l'adaptateur : journal avant envoi (rien ne part s'il échoue), durée bornée lecture comprise, `NODE_DEBUG` refusé au démarrage, clé jamais lue implicitement, erreurs classées sans contenu (y compris dans un 200).
   - Limites des modèles gratuits : 20 requêtes par minute, 50 par jour UTC à 0 crédit acheté. Notice élève v3 (OpenRouter, Phala, ZDR selon la liste d'OpenRouter) ; essai `ai:trial` réel et notice validés le 2026-10-17 (la réponse donne `provider`, ici Phala).
   - **E5.5 fait** : `evaluation_runs` et `ai_proposals` (`0010`), immuables par trigger (`0011`, `forbid_change`) ; validateur `src/server/ai/output.ts` et `quotes.ts` ; service `src/server/evaluation/evaluate.ts` (claim, tentatives bornées, `recordEvaluation`, résultat `stale` conservé non courant) ; seul `src/server/data/evaluation/system.ts` insère ces tables (`tests/evaluation-writes.test.ts`) ; `getCurrentProposal` ; commande `npm run ai:evaluate -- --submission|--assignment <id> [--simulate <faute>]`.
+  - **E5.6 fait** : alertes (EVL-04) dans `src/server/evaluation/alerts.ts` ; bloquantes avant toute requête, `no_content` puis `rubric_unavailable` ; `very_short` sous `SHORT_TEXT_MIN_WORDS` [P] ; rubrique française `fr-test` réservée aux tests (`tests/fixtures/rubric-fr-test.ts`, injectée par `registry`).
 - Base dev : un compte par rôle (E1.8), migrations jusqu'à `0011`.
 
 ## Environnement
