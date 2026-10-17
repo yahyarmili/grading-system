@@ -5,7 +5,7 @@ import type { SourceFile } from "./access-inventory";
 // Static import checks: which file imports which module. Specifiers are
 // resolved to a repository path without extension, trailing slash or
 // "/index" ("src/server/ai"), or kept as they are for packages
-// ("@mistralai/mistralai/lib/http.js").
+// ("openai/resources").
 
 /** A module this check cannot follow (computed specifier, createRequire). */
 export const UNFOLLOWABLE = "<unfollowable import>";

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publishedRubric } from "@/lib/rubric";
 import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
-import { createMistralEvaluator } from "@/server/ai/mistral";
+import { createOpenRouterEvaluator } from "@/server/ai/openrouter";
 import { buildEvaluationRequest, OUTPUT_SCHEMA } from "@/server/ai/request";
 import { EvaluatorError } from "@/server/ai/types";
 import { createAssignment } from "@/server/data/assignments/assignments";
@@ -25,7 +25,7 @@ import { replaceStudentText, submitStudentText } from "@/server/submissions/subm
 
 // EVL-02 CA1 and CA2, SUB-04 CA3: what leaves for the AI, read from the
 // database by the real path (submission → whitelist → builder → the real
-// Mistral adapter), captured at the HTTP layer (the final Request the SDK
+// OpenRouter adapter), captured at the HTTP layer (the final Request the adapter
 // would send), with the real security log. Runs at each npm test (NFR-EXP-04).
 
 const KEY = `test-key-${randomBytes(6).toString("hex")}`;
@@ -67,9 +67,10 @@ afterEach(() => {
 const completion = () =>
   new Response(
     JSON.stringify({
-      id: "cmpl-1",
+      id: "gen-1",
       object: "chat.completion",
-      model: "mistral-medium-3-5",
+      model: "xingchen-agi/xing4.0-29b-a4b:free",
+      provider: "Phala",
       created: 1_760_000_000,
       usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       choices: [{ index: 0, message: { role: "assistant", content: "{}" }, finish_reason: "stop" }],
@@ -79,11 +80,10 @@ const completion = () =>
 
 /** The real adapter, its HTTP requests captured and answered by `answer`, with the real security log. */
 const adapter = (answer: () => Response | Promise<Response> = completion) =>
-  createMistralEvaluator({
+  createOpenRouterEvaluator({
     apiKey: KEY,
     env: {},
-    fetcher: async (input) => {
-      const req = input as Request;
+    fetcher: async (req) => {
       captured.push({ method: req.method, url: req.url, headers: [...req.headers.entries()], body: await req.clone().text() });
       return answer();
     },
@@ -207,8 +207,9 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     await result;
 
     expect(captured).toHaveLength(1);
-    // Only the authorization header carries the key; nothing else does.
+    // Exactly two headers set by the adapter: no attribution, no user. Only authorization carries the key.
     const [sent] = captured;
+    expect(sent.headers.map(([k]) => k).sort()).toEqual(["authorization", "content-type"]);
     const withoutKey = Object.fromEntries(Object.entries(markers).filter(([name]) => name !== "api key"));
     expect(leaks(captured, withoutKey)).toEqual([]);
     expect(sent.headers.filter(([, v]) => v.includes(KEY)).map(([k]) => k)).toEqual(["authorization"]);
@@ -217,7 +218,7 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     // Exactly the expected fields, at both levels.
     const body = JSON.parse(sent.body);
     expect(Object.keys(body).sort()).toEqual(
-      ["max_tokens", "messages", "model", "reasoning_effort", "response_format", "stream", "temperature"].sort(),
+      ["max_tokens", "messages", "model", "provider", "reasoning", "response_format", "stream", "temperature"].sort(),
     );
     // The messages and the schema are the builder's, untouched: nothing added on the way.
     expect(body.messages).toEqual([
@@ -225,6 +226,8 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
       { role: "user", content: request.user },
     ]);
     expect(body.response_format).toEqual({ type: "json_schema", json_schema: { name: "evaluation", schema: OUTPUT_SCHEMA, strict: true } });
+    expect(body.provider).toEqual({ require_parameters: true, zdr: true });
+    expect(body.reasoning).toEqual({ effort: "none" });
     // No identifier or date in any form, wherever it would hide; never the replaced text.
     const withoutAuthorization = { ...sent, headers: sent.headers.filter(([k]) => k !== "authorization") };
     expect(seen(withoutAuthorization)).not.toMatch(ANY_ID_OR_DATE);
@@ -251,7 +254,7 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     const { markers, teacher, students, classId } = await world();
     const assignmentId = await assignment(teacher, classId, markers, "C1", "one");
     await submit(students[0], assignmentId, markers, "one");
-    const sent = { method: "POST", url: "https://api.mistral.ai/v1/chat/completions", headers: [] as [string, string][], body: "{}" };
+    const sent = { method: "POST", url: "https://openrouter.ai/api/v1/chat/completions", headers: [] as [string, string][], body: "{}" };
     expect(leaks([{ ...sent, headers: [["x-trace", markers["one submission id"]]] }], markers)).toEqual(["one submission id"]);
     expect(leaks([{ ...sent, url: `${sent.url}?who=${encodeURIComponent(markers["stuone email"])}` }], markers)).toEqual(
       expect.arrayContaining(["stuone email", "stuone email local part", "stuone email domain"]),
@@ -264,7 +267,7 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     }
   });
 
-  it("leaks nothing either when the call fails, whatever Mistral answers", async () => {
+  it("leaks nothing either when the call fails, whatever OpenRouter answers", async () => {
     const { markers, teacher, students, classId } = await world();
     const assignmentId = await assignment(teacher, classId, markers, "C1", "one");
     const submissionId = await submit(students[0], assignmentId, markers, "one");
@@ -273,7 +276,8 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     const answers: [string, () => Response | Promise<Response>][] = [
       ["500", () => json(500, { message: TEXT })],
       ["429", () => json(429, { message: TEXT }, { "retry-after": "3" })],
-      ["422 echoing the input", () => json(422, { detail: [{ loc: ["body"], msg: TEXT, type: "value_error", input: TEXT }] })],
+      ["400 echoing the input", () => json(400, { error: { code: 400, message: TEXT, metadata: { raw: TEXT } } })],
+      ["an error inside a 200, echoing the input", () => json(200, { error: { code: 403, message: TEXT, metadata: { moderation: { reasons: [TEXT], flagged_input: TEXT } } } })],
       ["not JSON", () => new Response(TEXT, { status: 200, headers: { "content-type": "text/plain" } })],
       ["network down", () => Promise.reject(new TypeError(`fetch failed ${TEXT}`))],
     ];

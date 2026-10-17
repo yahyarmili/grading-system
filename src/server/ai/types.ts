@@ -1,7 +1,7 @@
 import { callErrors, type AiProvider, type CallError } from "@/lib/evaluation";
 
 // The single evaluation interface (stack-technologique.md §4, rule 3;
-// NFR-EXP-04): the Mistral adapter and the simulator implement it. It sees a
+// NFR-EXP-04): the OpenRouter adapter and the simulator implement it. It sees a
 // request already built, never a submission, an identifier or an identity.
 
 /** A JSON Schema object, sent as the expected shape of the answer. */
@@ -37,6 +37,8 @@ export type EvaluationResponse = {
   content: string;
   /** The model the provider says answered; null when it did not say. */
   modelAnswered: string | null;
+  /** The company that ran the model, when OpenRouter names it (undocumented field); null otherwise. */
+  providerAnswered: string | null;
   usage: Usage | null;
 };
 
@@ -77,8 +79,9 @@ export class EvaluatorError extends Error {
   /** For rate_limited: the wait the provider asked for, when it said. */
   readonly retryAfterMs?: number;
   /**
-   * The provider's own error code (Mistral's "code" or "type"), kept only when it
-   * looks like an identifier: it tells a quota from a capacity limit, without content.
+   * The provider's own error code (OpenRouter's metadata error_type and
+   * provider_code), kept only when it looks like an identifier: it tells a
+   * quota from a capacity limit, without content.
    */
   readonly providerCode?: string;
 

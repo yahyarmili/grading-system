@@ -41,7 +41,7 @@ test("a student submits a pasted text once, kept as written, then sees it being 
     `SELECT n.version FROM notice_acknowledgements n JOIN users u ON u.id = n.user_id WHERE u.email = $1`,
     [email],
   );
-  expect(recorded).toEqual([{ version: 2 }]);
+  expect(recorded).toEqual([{ version: 3 }]); // STUDENT_NOTICE.version (src/lib/texts.ts)
 
   await expect(student.getByText("Do not write your name in your text.")).toBeVisible();
   await expect(student.getByText("At most 4,000 characters. A longer text is refused, never cut.")).toBeVisible();

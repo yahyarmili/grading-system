@@ -1,6 +1,6 @@
 import { afterEach, expect } from "vitest";
 
-// No test touches the network (E5: the Mistral adapter runs only with an
+// No test touches the network (E5: the OpenRouter adapter runs only with an
 // injected fetch). Every fetch() is refused and recorded, and the test that
 // made it fails even if it caught the error. The database (pg, over TCP) does
 // not use fetch and is not concerned.

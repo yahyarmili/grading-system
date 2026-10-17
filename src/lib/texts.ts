@@ -57,12 +57,16 @@ export const TO_BE_DEFINED = "To be defined.";
  * replacement does not ask again). No promise that their name is not sent
  * (Q10 [D]): a name written in the text goes with it. The data controller,
  * retention and contact wait for QNF-1 and QNF-4.
- * Version 2: the Mistral training opt-out is done and Labs models stay off
- * (stack-technologique.md §3). If either setting changes, change the sentence
- * and raise the version.
+ * Version 3 (E5.4b, 2026-10-17): OpenRouter instead of Mistral. Each sentence
+ * rests on what was read that day (stack-technologique.md §3): every request
+ * asks for zero-data-retention endpoints only (AI_ROUTING, decisions.ts); the
+ * model's one such endpoint is Phala's, as OpenRouter lists it, without a
+ * guarantee; OpenRouter's own collection page (metadata kept, a few prompts
+ * sampled anonymously to be sorted). Nothing more is promised. A new model, a
+ * new routing or a change of these pages: change the sentence, raise the version.
  */
 export const STUDENT_NOTICE = {
-  version: 2,
+  version: 3,
   title: "Before your first submission: your data",
   demonstration:
     "This is a demonstration with fictitious data. Do not submit real personal information or a real student's work.",
@@ -75,9 +79,10 @@ export const STUDENT_NOTICE = {
     {
       heading: "What is sent to an AI",
       body: [
-        "Your text, the assignment's subject, instructions and language, and the marking rubric are sent to Mistral AI, an outside AI service based outside Morocco.",
+        "Your text, the assignment's subject, instructions and language, and the marking rubric are sent to OpenRouter, an outside service based outside Morocco. OpenRouter passes them to the company that runs the AI model (currently Phala). Where that company processes them is not known.",
         "The app does not add your name, email or class. But everything written in your text is sent as it is: if you write your name in it, your name is sent too.",
-        "The app's account with this service is set so that what it receives is not used to train its models.",
+        "The app asks OpenRouter to use only companies that, according to OpenRouter, keep nothing they receive, and so do not use it to train their models. The app cannot check this itself.",
+        "OpenRouter says it does not keep your text by default. It keeps details about each request, such as its size and time, and may look at a few texts, without linking them to the app's account, to sort them by topic.",
       ],
     },
     {

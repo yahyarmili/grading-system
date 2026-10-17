@@ -127,9 +127,12 @@ describe("the notice text (Q10, QNF-1)", () => {
     expect(all).toContain("if you write your name in it, your name is sent too");
   });
 
-  it("says the training opt-out is set, never that the AI service may train on the text", () => {
-    expect(all).toContain("is set so that what it receives is not used to train its models");
-    expect(all).not.toMatch(/may (use|train)|improve its models/i);
+  it("says what the app asks of OpenRouter and that it cannot check it, never more", () => {
+    expect(all).toContain("sent to OpenRouter");
+    expect(all).toContain("according to OpenRouter, keep nothing they receive");
+    expect(all).toContain("The app cannot check this itself.");
+    expect(all).toContain("It keeps details about each request");
+    expect(all).not.toMatch(/Mistral|is set so that|may (use|train)|improve its models|never (kept|stored)|guarantee/i);
   });
 
   it("says it is a demonstration with fictitious data, and leaves the undecided to be defined", () => {

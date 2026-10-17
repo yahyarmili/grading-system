@@ -1,10 +1,10 @@
-// Manual trial of the AI connection (E5.3): sends one fixed, fictitious text
-// and prints the raw answer, to check the key, the answer format and the
+// Manual trial of the AI connection (E5.3, E5.4b): sends one fixed, fictitious
+// text and prints the raw answer, to check the key, the answer format and the
 // access to the pinned model. Nothing is stored but the security log line of
 // a real sending (DON-05). Run inside the container:
 //   simulator:  docker compose exec web npm run ai:trial
-//   Mistral:    docker compose exec -e AI_PROVIDER=mistral web npm run ai:trial
-// Mistral needs MISTRAL_API_KEY in .env.local. Fictitious data only (DON-02).
+//   OpenRouter: docker compose exec -e AI_PROVIDER=openrouter web npm run ai:trial
+// OpenRouter needs OPENROUTER_API_KEY in .env.local. Fictitious data only (DON-02).
 // Runs with --conditions=react-server so "server-only" modules load outside Next.
 
 import { AI_MAX_OUTPUT_TOKENS, AI_REASONING_EFFORT, AI_TEMPERATURE } from "@/config/provisional";
@@ -38,13 +38,14 @@ const TRIAL: EvaluationRequest = {
 async function main(): Promise<number> {
   const evaluator = getEvaluator();
   console.log(`Provider: ${evaluator.provider}; model requested: ${evaluator.model}`);
-  if (evaluator.provider === "mistral") console.log("Sending one fictitious text to Mistral…");
+  if (evaluator.provider === "openrouter") console.log("Sending one fictitious text to OpenRouter…");
 
   const started = performance.now();
   const response = await evaluator.evaluate(TRIAL, { signal: new AbortController().signal, subjectId: null });
   const duration = Math.round(performance.now() - started);
 
   console.log(`Model answered: ${response.modelAnswered ?? "(not said)"}`);
+  console.log(`Provider answered: ${response.providerAnswered ?? "(not said)"}`);
   console.log(
     response.usage
       ? `Tokens: ${response.usage.promptTokens ?? "?"} in, ${response.usage.completionTokens ?? "?"} out, ${response.usage.totalTokens ?? "?"} in all`
@@ -67,7 +68,7 @@ async function main(): Promise<number> {
 function describeFailure(error: unknown): string {
   if (error instanceof EvaluatorError) {
     const wait = error.retryAfterMs === undefined ? "" : ` (retry after ${Math.ceil(error.retryAfterMs / 1000)} s)`;
-    const code = error.providerCode ? ` [Mistral: ${error.providerCode}]` : "";
+    const code = error.providerCode ? ` [OpenRouter: ${error.providerCode}]` : "";
     return `${error.kind}: ${error.message}${wait}${code}`;
   }
   if (error instanceof AiConfigurationError) return error.message;

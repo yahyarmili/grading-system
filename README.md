@@ -1,6 +1,6 @@
 # Grading System
 
-Application web de notation de productions écrites d'élèves, en anglais et en français. L'élève remet un texte ou des images de sa copie ; une IA (Mistral) propose des niveaux sur une rubrique fixe ; le professeur relit, modifie, valide puis publie. Projet académique de démonstration, données fictives. La spécification est dans [`conception/`](conception/).
+Application web de notation de productions écrites d'élèves, en anglais et en français. L'élève remet un texte ou des images de sa copie ; une IA (modèle gratuit via OpenRouter) propose des niveaux sur une rubrique fixe ; le professeur relit, modifie, valide puis publie. Projet académique de démonstration, données fictives. La spécification est dans [`conception/`](conception/).
 
 ## Démo en ligne
 
@@ -34,6 +34,7 @@ Node ne tourne que dans Docker.
    | `BETTER_AUTH_SECRET` | Secret de session (32 caractères ou plus) |
    | `BETTER_AUTH_URL` | `http://localhost:3000` (base des liens envoyés par email) |
    | `SMTP_USER`, `SMTP_PASSWORD` | Facultatif : Gmail et mot de passe d'application. Sans eux, les emails sont écrits dans `.mail-capture/` |
+   | `AI_PROVIDER`, `OPENROUTER_API_KEY` | Facultatif : `openrouter` et une clé OpenRouter pour un envoi réel à l'IA, données fictives seulement ([procédure](conception/procedures.md)). Sans eux, le simulateur répond |
 
 2. Lancer :
 
@@ -53,6 +54,7 @@ Node ne tourne que dans Docker.
 | `docker compose exec web npm run lint` | ESLint |
 | `docker compose exec web npm run db:generate -- --name=<verbe_objet>` | Nouvelle migration (relire le SQL, puis commiter) |
 | `docker compose exec web npm run admin:create -- --email <email> --first-name <prénom> --last-name <nom>` | Premier administrateur : reçoit un lien pour choisir son mot de passe |
+| `docker compose exec -e AI_PROVIDER=openrouter web npm run ai:trial` | Essai de l'IA réelle : un texte fictif, la réponse brute ; sans `-e`, le simulateur |
 
 ## Déploiement (Vercel)
 

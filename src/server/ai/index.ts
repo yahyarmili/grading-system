@@ -1,5 +1,5 @@
 import "server-only";
-import { createMistralEvaluator } from "./mistral";
+import { createOpenRouterEvaluator } from "./openrouter";
 import { SimulatorEvaluator } from "./simulator";
 import { AiConfigurationError, type Evaluator } from "./types";
 
@@ -17,16 +17,16 @@ export { SimulatorEvaluator, type CapturedRequest, type SimulatedFault } from ".
 
 type AiEnv = {
   NODE_ENV?: string;
-  /** "mistral" sends for real; absent or empty: the simulator. */
+  /** "openrouter" sends for real; absent or empty: the simulator. */
   AI_PROVIDER?: string;
-  MISTRAL_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
 };
 
-export type EvaluatorChoice = { provider: "simulator" } | { provider: "mistral"; apiKey: string };
+export type EvaluatorChoice = { provider: "simulator" } | { provider: "openrouter"; apiKey: string };
 
 /**
- * The simulator by default, everywhere; Mistral only when asked by name, with
- * a key (conception/procedures.md, "Activer l'envoi réel à Mistral"). Tests
+ * The simulator by default, everywhere; OpenRouter only when asked by name, with
+ * a key (conception/procedures.md, "Activer l'envoi réel à l'IA"). Tests
  * always get the simulator. Anything else is refused, never replaced by the
  * simulator: a typo must not pass for a real sending, nor the reverse.
  */
@@ -34,17 +34,17 @@ export function selectEvaluator(env: AiEnv): EvaluatorChoice {
   if (env.NODE_ENV === "test") return { provider: "simulator" };
   const provider = env.AI_PROVIDER?.trim() ?? "";
   if (provider === "" || provider === "simulator") return { provider: "simulator" };
-  if (provider !== "mistral") {
-    throw new AiConfigurationError('AI_PROVIDER must be "simulator" or "mistral", or be left empty.');
+  if (provider !== "openrouter") {
+    throw new AiConfigurationError('AI_PROVIDER must be "simulator" or "openrouter", or be left empty.');
   }
-  const apiKey = env.MISTRAL_API_KEY?.trim() ?? "";
-  if (apiKey === "") throw new AiConfigurationError("AI_PROVIDER=mistral needs MISTRAL_API_KEY.");
-  return { provider: "mistral", apiKey };
+  const apiKey = env.OPENROUTER_API_KEY?.trim() ?? "";
+  if (apiKey === "") throw new AiConfigurationError("AI_PROVIDER=openrouter needs OPENROUTER_API_KEY.");
+  return { provider: "openrouter", apiKey };
 }
 
 function createEvaluator(env: NodeJS.ProcessEnv): Evaluator {
   const choice = selectEvaluator(env);
-  return choice.provider === "mistral" ? createMistralEvaluator({ apiKey: choice.apiKey }) : new SimulatorEvaluator();
+  return choice.provider === "openrouter" ? createOpenRouterEvaluator({ apiKey: choice.apiKey }) : new SimulatorEvaluator();
 }
 
 // One evaluator per process, kept across hot reloads like the database pool.

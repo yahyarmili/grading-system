@@ -100,7 +100,7 @@ export class SimulatorEvaluator implements Evaluator {
       fault?.kind === "invalid_output" && fault.variant === "not_json"
         ? "This is not JSON."
         : JSON.stringify(this.answer(request, fault));
-    return { content, modelAnswered: this.model, usage: null };
+    return { content, modelAnswered: this.model, providerAnswered: null, usage: null };
   }
 
   /** The next `times` calls fail with this fault, in order after any already queued. */

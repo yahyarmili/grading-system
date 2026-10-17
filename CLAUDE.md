@@ -13,15 +13,15 @@ Notation de productions écrites d'élèves (anglais, français). L'élève reme
 - **Branche** [D] : tout se fait sur `preview`. Fin de chaque prompt : commit sur `preview`, **sans pousser** ; pousser seulement à la demande. `main` n'avance pas.
 - **T5 en attente** : `.claude/a-consigner.md`, à consigner dans `conception/` à la demande.
 
-## État (2026-10-16)
+## État (2026-10-17)
 
 - E1 à E4 livrées. Plans approuvés dans `~/.claude/plans/` : E3 `…typed-meerkat.md`, E4 `…happy-petal.md`, E5 `partir-de-l-enqu-te-witty-eagle.md` (découpage E5.2 à E5.7, « Valeurs à consigner », écart E5.3 en fin de plan).
-- **E5 en cours** (E5.0 à E5.4 faits) :
+- **E5 en cours** (E5.0 à E5.4b faits) :
   - rubrique : registre `RUBRIC_VERSIONS` (`src/lib/rubric.ts`, `en-1` = texte du client, gelée par empreinte) ; note = somme des niveaux sur 20 ;
   - `src/server/ai/` : interface `Evaluator`, simulateur à pannes (défaut partout), adaptateur réel qui journalise lui-même `ai_request_sent` avant chaque envoi ; requête : `buildEvaluationRequest` (liste blanche, `PROMPT_VERSION` figée par empreinte), `readEvaluationInput`, test d'étanchéité `tests/evaluation-leak.int.test.ts` ;
-  - **Prestataire [D, 2026-10-16]** : OpenRouter, modèle gratuit (`:free`) à choisir par l'utilisateur ; Mistral abandonné (offre Free : 0 requête par minute). [P] : `openrouter/free` exclu (NFR-QUA-02) ; prompt **E5.4b** avant E5.5, sans laisser la valeur `mistral` entrer en base.
-  - L'adaptateur encore en place est celui de Mistral (`src/server/ai/mistral.ts`, SDK 2.7.0, `AI_MODEL` de `decisions.ts` périmé). Garanties à garder dans tout adaptateur : journal avant envoi, durée bornée, aucune journalisation ni télémétrie du client (variables de débogage refusées au démarrage), clé jamais lue implicitement.
-  - Limites des modèles gratuits : 20 requêtes par minute, 50 par jour UTC à 0 crédit acheté. La notice élève v2 nomme Mistral AI et promet son refus d'entraînement (à réécrire en v3).
+  - **Prestataire [D, 2026-10-16]** : OpenRouter (Mistral abandonné). **E5.4b fait (2026-10-17)** : `src/server/ai/openrouter.ts`, `fetch` sans bibliothèque ; `AI_MODEL = "xingchen-agi/xing4.0-29b-a4b:free"` et `AI_ROUTING` (`require_parameters`, `zdr`) dans `decisions.ts` ; `AI_PROVIDER=openrouter` + `OPENROUTER_API_KEY` ; jamais `openrouter/free`, aucun en-tête d'attribution ni champ `user`. `ai_provider` vaudra `simulator` | `openrouter` ; `provider_answered` à créer en E5.5.
+  - Garanties de l'adaptateur : journal avant envoi (rien ne part s'il échoue), durée bornée lecture comprise, `NODE_DEBUG` refusé au démarrage, clé jamais lue implicitement, erreurs classées sans contenu (y compris dans un 200).
+  - Limites des modèles gratuits : 20 requêtes par minute, 50 par jour UTC à 0 crédit acheté. Notice élève v3 (OpenRouter, Phala, ZDR selon la liste d'OpenRouter) ; essai `ai:trial` réel et approbation de la notice à faire par l'utilisateur.
 - Base dev : un compte par rôle (E1.8), migrations jusqu'à `0009`.
 
 ## Environnement

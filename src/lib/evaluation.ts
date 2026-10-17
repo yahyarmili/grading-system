@@ -1,8 +1,8 @@
 // Closed lists of the evaluation by the AI (E5). Kept free of imports: the
 // database schema will read them (E5.5), and drizzle-kit loads the schema alone.
 
-/** Where an evaluation request goes: the simulator by default, Mistral only on demand. */
-export const aiProviders = ["simulator", "mistral"] as const;
+/** Where an evaluation request goes: the simulator by default, OpenRouter only on demand. */
+export const aiProviders = ["simulator", "openrouter"] as const;
 export type AiProvider = (typeof aiProviders)[number];
 
 /**

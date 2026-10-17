@@ -6,8 +6,8 @@ import { drainBlocked, NETWORK_BLOCKED } from "./setup/network-guard";
 
 describe("the network guard", () => {
   it("refuses fetch and records its origin, without the query", async () => {
-    await expect(fetch("https://api.mistral.ai/v1/chat/completions?key=secret")).rejects.toThrow(NETWORK_BLOCKED);
+    await expect(fetch("https://openrouter.ai/api/v1/chat/completions?key=secret")).rejects.toThrow(NETWORK_BLOCKED);
     await expect(fetch(new Request("https://example.test/x"))).rejects.toThrow(NETWORK_BLOCKED);
-    expect(drainBlocked()).toEqual(["https://api.mistral.ai", "https://example.test"]);
+    expect(drainBlocked()).toEqual(["https://openrouter.ai", "https://example.test"]);
   });
 });

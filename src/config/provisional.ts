@@ -99,7 +99,7 @@ export const AI_TEMPERATURE = 0;
 /** [PROVISIONAL, [P] arbitrary] Most tokens of an answer: room for five justifications, a comment and next steps. */
 export const AI_MAX_OUTPUT_TOKENS = 2_000;
 
-/** [PROVISIONAL, [P]] No reasoning: the answer is the JSON alone, and the free quota is 20,000 tokens a minute. */
+/** [PROVISIONAL, [P]] No reasoning: the answer is the JSON alone. The model reasons by default, and its reasoning shares max_tokens. */
 export const AI_REASONING_EFFORT = "none" as const;
 
 /** [PROVISIONAL, [P] arbitrary] Most quotes the AI gives per criterion (at least 1). */

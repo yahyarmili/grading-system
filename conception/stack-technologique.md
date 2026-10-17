@@ -19,7 +19,7 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 | Base de données | PostgreSQL avec Drizzle ORM, chez Neon (offre gratuite) | PostgreSQL et Drizzle [D] ; Neon proposé, validé | FIA-01 |
 | Hébergement | Vercel, plan Hobby | Proposé, validé | — |
 | Traitement par lots | Vercel Workflows | Proposé, validé | TRT-01, PRC-01, PRC-02 |
-| IA | OpenRouter, modèle gratuit (identifiant en `:free`), à choisir. Lecture de l'écriture par un modèle multimodal gratuit, à essayer en E5.8. | OpenRouter [D, 2026-10-16], remplace Mistral [D, 2026-10-12] ; modèle : à définir ; lecture de l'écriture : [P], à comparer en E5.8 et E9.0 | EVL-02, QUA-02, EXP-04 |
+| IA | OpenRouter, modèle gratuit `xingchen-agi/xing4.0-29b-a4b:free`, appelé par `fetch` sans bibliothèque. Lecture de l'écriture par un modèle multimodal gratuit, à essayer en E5.8. | OpenRouter [D, 2026-10-16], remplace Mistral [D, 2026-10-12] ; modèle [D, 2026-10-17] ; `fetch` [P] ; lecture de l'écriture : [P], à comparer en E5.8 et E9.0 | EVL-02, QUA-02, EXP-04 |
 | Email | Gmail SMTP (mot de passe d'application) pour la démonstration | Proposé, validé | AUTH-01, 03, 05 |
 | Images | Dans PostgreSQL, table séparée | [D] 2026-10-12 | SEC-01, DON-01 |
 | Sauvegarde | Export périodique de la base, à concevoir | [P] | FIA-02 (documentée seulement) |
@@ -29,7 +29,15 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 
 - **Images dans la base.** Neon gratuit : 1 Go par projet, écritures bloquées au-delà ([Neon](https://neon.com/pricing)). Une fonction Vercel accepte 4,5 Mo au plus en requête et en réponse ([Vercel](https://vercel.com/docs/functions/limitations)). Conséquences [P] : chaque page est réduite dans le navigateur avant l'envoi, une page par requête ; la photo reste « sans retouche » du point de vue de l'élève (USA-01). Il faut garder assez de résolution pour lire l'écriture, ce qui se vérifie en E9. Formats, poids et nombre de pages : à définir (TRT-02), pour tenir dans 1 Go. Supprimer les images à la fin de la revue (DON-01) libère la place.
 - **Lots.** Workflows reprend après un plantage et relance les étapes en échec ([Vercel](https://vercel.com/docs/workflows)). Hobby inclut 50 000 événements par mois, une étape normale en produit 3, plus 1 par nouvelle tentative, et 1 Go de données écrites par mois ; l'état d'un traitement n'est conservé qu'un jour après sa fin ([tarifs](https://vercel.com/docs/workflows/pricing)). Le nombre d'étapes par copie est inconnu : à mesurer en E6. Le SDK multi-région est en bêta.
-- **OpenRouter [D, 2026-10-16], à la place de Mistral.** L'organisation Mistral est sur l'offre Free, dont les clés d'API ne sont pas activées : bandeau « Upgrade to activate your API keys » de la console ; chaque appel répond `429`, avec `x-ratelimit-limit-req-minute: 0` (constaté le 2026-10-16). Les relevés et réglages Mistral du 2026-10-15 (limites, refus d'entraînement, modèle `mistral-medium-3-5` [D]) sont donc sans objet ; ils restent dans l'historique git de ce fichier (§3 au commit `a7aaf44`). OpenRouter relaie chaque requête à l'un des fournisseurs du modèle choisi, selon le routage ([sélection](https://openrouter.ai/docs/guides/routing/provider-selection)). Son API est compatible OpenAI (`https://openrouter.ai/api/v1`, [démarrage](https://openrouter.ai/docs/quickstart)). Modèle : à définir.
+- **OpenRouter [D, 2026-10-16], à la place de Mistral.** L'organisation Mistral est sur l'offre Free, dont les clés d'API ne sont pas activées : bandeau « Upgrade to activate your API keys » de la console ; chaque appel répond `429`, avec `x-ratelimit-limit-req-minute: 0` (constaté le 2026-10-16). Les relevés et réglages Mistral du 2026-10-15 (limites, refus d'entraînement, modèle `mistral-medium-3-5` [D]) sont donc sans objet ; ils restent dans l'historique git de ce fichier (§3 au commit `a7aaf44`). OpenRouter relaie chaque requête à l'un des fournisseurs du modèle choisi, selon le routage ([sélection](https://openrouter.ai/docs/guides/routing/provider-selection)). Son API est compatible OpenAI (`https://openrouter.ai/api/v1`, [démarrage](https://openrouter.ai/docs/quickstart)).
+- **Modèle [D, 2026-10-17]** : `xingchen-agi/xing4.0-29b-a4b:free` (TeleAI). Relevé le 2026-10-17 ([endpoints](https://openrouter.ai/api/v1/models/xingchen-agi/xing4.0-29b-a4b:free/endpoints)) :
+  - un seul endpoint, Phala, listé ZDR ;
+  - sortie structurée et `reasoning` pris en charge ;
+  - pas de date de retrait ;
+  - raisonnement activé par défaut, coupé par `reasoning.effort: "none"`.
+
+  L'identifiant `:free` ne porte pas de date (`canonical_slug` `…-20261015`) : OpenRouter peut le faire pointer ailleurs. Chaque requête exige `provider.require_parameters` et `provider.zdr` (`AI_ROUTING`, `decisions.ts`).
+- **Client [P]** : `fetch`, sans bibliothèque. Le SDK `openai` lit seul ses variables, relance et ajoute des en-têtes décrivant la machine. Aucun en-tête d'attribution ni champ `user` n'est envoyé : le fournisseur voit l'identité du compte.
 - **Limites des modèles gratuits** ([limites](https://openrouter.ai/docs/api_reference/limits)) :
   - 20 requêtes par minute ;
   - 50 par jour (jour UTC) tant que moins de 10 crédits (dollars) ont été achetés, 1 000 à partir de 10.
@@ -44,9 +52,9 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
     - conservent sans entraîner : Google AI Studio (55 jours), Cohere (30 jours), AtlasCloud, Poolside ;
     - ne conservent pas (ZDR) : Phala, qui sert `xing4.0-29b-a4b:free`.
 
-  D'où, toujours, des données fictives. La notice élève v2 nomme Mistral AI et promet son refus d'entraînement : elle est à réécrire (v3) selon le modèle choisi.
+  D'où, toujours, des données fictives. La notice élève v3 (2026-10-17) dit ce qui est demandé (ZDR) et ce qu'OpenRouter dit de sa collecte, sans rien promettre de plus.
 - **Sortie structurée.** Elle est prise en charge endpoint par endpoint et peut changer ; `strict` n'est pas garanti partout ([sorties structurées](https://openrouter.ai/docs/guides/features/structured-outputs)). Sans `provider.require_parameters: true`, un paramètre non pris en charge peut être ignoré en silence ; la documentation se contredit sur ce point. La validation côté serveur (E5.5) reste donc indispensable. Le 2026-10-16, 5 des 16 modèles gratuits annoncent `structured_outputs` ([liste des modèles](https://openrouter.ai/api/v1/models)).
-- **Stabilité.** La disponibilité des modèles gratuits « changes frequently » ([routeur gratuit](https://openrouter.ai/docs/guides/routing/routers/free-router)). Certains ont déjà une date de retrait (`expiration_date` ; Poolside au 2026-10-31), et aucun préavis n'est documenté. Le routeur `openrouter/free` tire un modèle au hasard : il est exclu (NFR-QUA-02) [P]. [P] Le modèle qui a répondu (champ `model` de la réponse) est enregistré avec chaque résultat, et le fournisseur aussi si l'API le donne : à vérifier en E5.4b, car la réponse documentée n'a pas de champ dédié. La précision de lecture de l'écriture manuscrite n'est pas vérifiée de façon indépendante : à mesurer en E5.8 et E9.
+- **Stabilité.** La disponibilité des modèles gratuits « changes frequently » ([routeur gratuit](https://openrouter.ai/docs/guides/routing/routers/free-router)). Certains ont déjà une date de retrait (`expiration_date` ; Poolside au 2026-10-31), et aucun préavis n'est documenté. Le routeur `openrouter/free` tire un modèle au hasard : il est exclu (NFR-QUA-02) [P]. [P] Le modèle qui a répondu (champ `model` de la réponse) est enregistré avec chaque résultat, et le fournisseur aussi quand la réponse le donne (champ `provider`, non documenté en non-streaming) : sa présence est à constater au premier `ai:trial` réel. La précision de lecture de l'écriture manuscrite n'est pas vérifiée de façon indépendante : à mesurer en E5.8 et E9.
 - **Erreurs.** Le corps est `{error: {code, message, metadata?}}`. Une erreur peut aussi arriver dans une réponse 200, et un 402 est possible même sur un modèle gratuit, si le solde est négatif ([erreurs](https://openrouter.ai/docs/api_reference/errors-and-debugging)). `Retry-After` n'est présent que si tous les fournisseurs essayés ont indiqué un délai ([limites](https://openrouter.ai/docs/api_reference/limits)).
 - **Vercel Hobby.** Gratuit, fonctions de 300 s. Usage réservé au non commercial ([règles](https://vercel.com/docs/limits/fair-use-guidelines)), compatible avec un projet académique. Un projet payant ou commercial exigerait le plan Pro.
 - **Neon.** Compute suspendu après 5 minutes d'inactivité, donc démarrage à froid à prévoir. Historique de restauration de 6 h seulement : d'où l'export périodique.
@@ -64,12 +72,12 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 
 ## 5. Reste à choisir ou à vérifier
 
-**Tranché le 2026-10-12 [D]** (à confirmer dans le plan de chaque étape, voir [prompts-implementation.md](prompts-implementation.md)) : Better Auth pour l'authentification et les sessions, Zod pour la validation, Vitest et Playwright pour les tests, Nodemailer pour l'email, SDK TypeScript officiel pour Mistral. Interface de l'application en anglais.
+**Tranché le 2026-10-12 [D]** (à confirmer dans le plan de chaque étape, voir [prompts-implementation.md](prompts-implementation.md)) : Better Auth pour l'authentification et les sessions, Zod pour la validation, Vitest et Playwright pour les tests, Nodemailer pour l'email. Interface de l'application en anglais.
 
-**Remplacé le 2026-10-16 [D]** : Mistral et son SDK, par OpenRouter (§3). Le client (`fetch` ou bibliothèque compatible OpenAI) est à choisir dans le plan de l'adaptateur [P].
+**Remplacé le 2026-10-16 [D]** : Mistral et son SDK, par OpenRouter (§3). Le client est `fetch`, sans bibliothèque [P, E5.4b, 2026-10-17].
 
 **À vérifier :**
-- le modèle gratuit à retenir : sortie structurée, politique d'entraînement et de conservation de son fournisseur, date de retrait, limites réelles ;
+- la présence du champ `provider` dans la réponse, et les limites réelles du modèle retenu ;
 - les réglages de confidentialité du compte OpenRouter pour les modèles gratuits ;
 - si Vercel exige une carte à l'inscription ;
 - région de la base Neon ;

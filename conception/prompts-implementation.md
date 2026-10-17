@@ -475,7 +475,7 @@ Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 
 Préalables :
 - **Prestataire d'IA [D, 2026-10-16]** : OpenRouter, avec un modèle gratuit (`:free`), à la place de Mistral, dont l'offre Free n'active pas les clés d'API (`stack-technologique.md` §3). Les préalables Mistral ci-dessous (clé, limites, refus d'entraînement, modèle) sont de l'historique. **Vous**, avant E5.4b :
-  - créez une clé OpenRouter, ajoutez-la dans `.env.local` (`OPENROUTER_API_KEY`, nom [P] fixé au plan d'E5.4b), puis `docker compose up -d` ;
+  - créez une clé OpenRouter, ajoutez-la dans `.env.local` (`OPENROUTER_API_KEY`, fixé en E5.4b), puis `docker compose up -d` ;
   - relevez dans les réglages de confidentialité du compte ce qui est permis pour les modèles gratuits (entraînement, publication des prompts) ;
   - choisissez le modèle. Critères [P] : sortie structurée par schéma JSON annoncée ; politique d'entraînement et de conservation de son fournisseur, que la notice élève dira telle quelle ; pas de date de retrait proche ; un identifiant précis, jamais le routeur `openrouter/free` (NFR-QUA-02) : l'identifiant exact du modèle `:free`, avec sa version quand il en porte une. Sinon, l'écart est assumé par écrit, comme pour Mistral, et le modèle qui a répondu est enregistré avec chaque résultat.
 - **Historique, Mistral** (détail : `stack-technologique.md` §3 au commit `a7aaf44`) :
@@ -557,6 +557,7 @@ Retire le SDK Mistral et la valeur mistral (AI_PROVIDER, aiProviders, union prov
 Réécris la notice élève selon la politique du fournisseur retenu (version 3), sans rien promettre de non vérifié.
 ```
 **Vous validez :** les tests passent hors réseau ; `ai:trial` avec `AI_PROVIDER=openrouter` obtient une réponse conforme au schéma ; le journal montre l'envoi, sans le texte ; vous approuvez le texte de la notice v3.
+Fait le 2026-10-17 : modèle `xingchen-agi/xing4.0-29b-a4b:free` épinglé, client `fetch`, notice v3 ; tests hors réseau passés. Restent à faire par vous : l'essai `ai:trial` réel et l'approbation de la notice v3.
 
 #### E5.5 — Contrat de sortie et proposition immuable (EVL-03)
 ```
@@ -724,4 +725,4 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs 
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
 - Q1, Q5, Q6 tranchées [D, 2026-10-15] : note sur 20, somme des niveaux ; remarques dans la langue du devoir, mentions de l'IA et de la note ajustée affichées ; français sans proposition IA jusqu'à la validation de sa rubrique.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.
-- Prestataire d'IA tranché [D, 2026-10-16] : OpenRouter, modèle gratuit, à la place de Mistral. Modèle à choisir avant E5.4b ; 50 requêtes par jour à 0 crédit acheté (E5.7, E6, E9, E11).
+- Prestataire d'IA tranché [D, 2026-10-16] : OpenRouter, modèle gratuit, à la place de Mistral. Modèle `xingchen-agi/xing4.0-29b-a4b:free` [D, 2026-10-17], adaptateur en place (E5.4b) ; 50 requêtes par jour à 0 crédit acheté (E5.7, E6, E9, E11).

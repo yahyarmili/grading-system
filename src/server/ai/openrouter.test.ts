@@ -1,15 +1,16 @@
 import { inspect } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMistralEvaluator, FORBIDDEN_ENV, type MistralOptions } from "./mistral";
+import { createOpenRouterEvaluator, FORBIDDEN_ENV, type OpenRouterOptions } from "./openrouter";
 import { AiConfigurationError, EvaluatorError, type EvaluationRequest } from "./types";
 
-// The Mistral adapter against a fake fetch: what leaves, when the security log
-// is written, how each failure is named, and that nothing it does prints or
-// carries the key, the request or the answer. No network (network-guard.ts).
+// The OpenRouter adapter against a fake fetch: what leaves, when the security
+// log is written, how each failure is named, and that nothing it does prints
+// or carries the key, the request or the answer. No network (network-guard.ts).
 
 const KEY = "test-key-7f3a91c2";
 const STUDENT = "MARKER-STUDENT-TEXT-c41d";
 const ECHO = "MARKER-ANSWER-BODY-9e0b";
+const MODEL = "xingchen-agi/xing4.0-29b-a4b:free";
 
 const request: EvaluationRequest = {
   system: "Fixed instructions.",
@@ -22,32 +23,41 @@ const request: EvaluationRequest = {
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 
-const completion = (content: unknown, extra: Record<string, unknown> = {}) =>
+const completion = (content: unknown, extra: Record<string, unknown> = {}, choice: Record<string, unknown> = {}) =>
   json(200, {
-    id: "cmpl-1",
+    id: "gen-1",
     object: "chat.completion",
-    model: "mistral-medium-3-5",
+    model: MODEL,
+    provider: "Phala",
     created: 1_760_000_000,
     usage: { prompt_tokens: 120, completion_tokens: 30, total_tokens: 150 },
-    choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+    choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop", native_finish_reason: "stop", ...choice }],
     ...extra,
   });
 
-type Sent = { url: string; method: string; headers: Headers; body: Record<string, unknown> };
+/** An OpenRouter error body whose every free-text field carries the markers. */
+const failure = (code: number, metadata: Record<string, unknown> = {}) => ({
+  error: {
+    code,
+    message: `${ECHO} ${STUDENT}`,
+    metadata: { raw: `${ECHO} ${STUDENT}`, moderation: { reasons: [ECHO], flagged_input: STUDENT, provider_name: "Phala" }, ...metadata },
+  },
+});
+
+type Sent = { url: string; method: string; headers: [string, string][]; body: Record<string, unknown> };
 
 /** An adapter whose requests are captured and answered by `answer`; the log lines are counted. */
-function adapter(answer: (req: Request) => Promise<Response> | Response, options: Partial<MistralOptions> = {}) {
+function adapter(answer: (req: Request) => Promise<Response> | Response, options: Partial<OpenRouterOptions> = {}) {
   const sent: Sent[] = [];
   const log: (string | null)[] = [];
-  const evaluator = createMistralEvaluator({
+  const evaluator = createOpenRouterEvaluator({
     apiKey: KEY,
     env: {},
     journal: async (subjectId) => {
       log.push(subjectId);
     },
-    fetcher: async (input) => {
-      const req = input as Request;
-      sent.push({ url: req.url, method: req.method, headers: req.headers, body: await req.clone().json() });
+    fetcher: async (req) => {
+      sent.push({ url: req.url, method: req.method, headers: [...req.headers.entries()], body: await req.clone().json() });
       return answer(req);
     },
     ...options,
@@ -87,46 +97,62 @@ function expectNothingLeaked(error: unknown) {
 }
 
 describe("what leaves", () => {
-  it("one POST to Mistral's chat endpoint, with the pinned model, the whitelist request and nothing else", async () => {
+  it("one POST to OpenRouter's chat endpoint, with the pinned model and routing, the whitelist request and nothing else", async () => {
     const { evaluator, sent } = adapter(() => completion('{"ok":true}'));
     await call(evaluator);
     expect(sent).toHaveLength(1);
     const [req] = sent;
     expect(req.method).toBe("POST");
-    expect(req.url).toBe("https://api.mistral.ai/v1/chat/completions");
-    expect(req.headers.get("authorization")).toBe(`Bearer ${KEY}`);
+    expect(req.url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    // Exactly these headers: no attribution (HTTP-Referer, X-Title, X-OpenRouter-Title, X-OpenRouter-Categories).
+    expect(Object.fromEntries(req.headers)).toEqual({ authorization: `Bearer ${KEY}`, "content-type": "application/json" });
     expect(req.body).toEqual({
-      model: "mistral-medium-3-5",
+      model: MODEL,
       messages: [
         { role: "system", content: request.system },
         { role: "user", content: request.user },
       ],
       temperature: 0,
       max_tokens: 300,
-      reasoning_effort: "none",
-      response_format: { type: "json_schema", json_schema: { name: "trial", schema: request.schema, strict: true } },
+      reasoning: { effort: "none" },
+      response_format: { type: "json_schema", json_schema: { name: "trial", strict: true, schema: request.schema } },
+      provider: { require_parameters: true, zdr: true },
       stream: false,
     });
   });
 
-  it("returns the raw text, the model that answered and the tokens used", async () => {
+  it("returns the raw text, the model and the provider that answered, and the tokens used", async () => {
     const { evaluator } = adapter(() => completion('{"ok":true}'));
     expect(await call(evaluator)).toEqual({
       content: '{"ok":true}',
-      modelAnswered: "mistral-medium-3-5",
+      modelAnswered: MODEL,
+      providerAnswered: "Phala",
       usage: { promptTokens: 120, completionTokens: 30, totalTokens: 150 },
     });
   });
 
-  it("joins the text chunks of a list answer and ignores the others", async () => {
-    const { evaluator } = adapter(() =>
-      completion([
-        { type: "thinking", thinking: [{ type: "text", text: "hidden" }] },
-        { type: "text", text: '{"ok":' },
-        { type: "text", text: "true}" },
-      ]),
-    );
+  it("says nothing of a provider it was not told, or told in a form that is not a name", async () => {
+    for (const provider of [undefined, "", 7, `${ECHO}\n${STUDENT}`, "x".repeat(65)]) {
+      const { evaluator } = adapter(() => completion("{}", { provider, usage: undefined, model: undefined }));
+      expect(await call(evaluator)).toMatchObject({ providerAnswered: null, modelAnswered: null, usage: null });
+    }
+    const { evaluator } = adapter(() => completion("{}", { provider: "Google AI Studio" }));
+    expect((await call(evaluator)).providerAnswered).toBe("Google AI Studio");
+  });
+
+  it("joins the text parts of a list answer, and leaves the reasoning out", async () => {
+    const content = [
+      { type: "reasoning", text: "hidden" },
+      { type: "text", text: '{"ok":' },
+      { type: "text", text: "true}" },
+    ];
+    const { evaluator } = adapter(() => completion(null, {}, { message: { role: "assistant", reasoning: "hidden", content } }));
     expect((await call(evaluator)).content).toBe('{"ok":true}');
+  });
+
+  it("leaves a cut answer to the validator: its text, as it came", async () => {
+    const { evaluator } = adapter(() => completion('{"ok":', {}, { finish_reason: "length" }));
+    expect((await call(evaluator)).content).toBe('{"ok":');
   });
 });
 
@@ -170,16 +196,6 @@ describe("the security log (DON-05)", () => {
     expect(sent).toHaveLength(0);
   });
 
-  it("writes nothing for a request the SDK refuses before it leaves", async () => {
-    const { evaluator, sent, log } = adapter(() => completion("{}"));
-    const invalid = { ...request, generation: { ...request.generation, temperature: Number.NaN } };
-    const error = await evaluator.evaluate(invalid, { signal: new AbortController().signal, subjectId: "s" }).catch((e: unknown) => e);
-    expect(error).toMatchObject({ kind: "rejected" });
-    expect(sent).toHaveLength(0);
-    expect(log).toHaveLength(0);
-    expectNothingLeaked(error);
-  });
-
   it("writes nothing for a call refused before it leaves (already past its deadline)", async () => {
     const { evaluator, sent, log } = adapter(() => completion("{}"));
     const controller = new AbortController();
@@ -192,16 +208,26 @@ describe("the security log (DON-05)", () => {
 
 describe("each failure has a kind, and carries nothing (EVL-03 R3)", () => {
   it.each([
-    ["500", () => json(500, { message: ECHO }), "unavailable"],
+    ["400", () => json(400, failure(400)), "rejected"],
+    ["401", () => json(401, failure(401)), "configuration"],
+    ["402 (no credit left)", () => json(402, failure(402)), "configuration"],
+    ["403 by a budget of the account", () => json(403, failure(403, { limit_source: "key_limit" })), "configuration"],
+    ["403 by moderation, echoing our input", () => json(403, failure(403)), "rejected"],
+    ["404 (unknown model)", () => json(404, failure(404)), "configuration"],
+    ["408", () => json(408, failure(408)), "timeout"],
+    ["418, any other 4xx", () => json(418, failure(418)), "rejected"],
+    ["500", () => json(500, failure(500)), "unavailable"],
+    ["502 (model down)", () => json(502, failure(502, { error_type: "provider_unavailable" })), "unavailable"],
+    ["503 (no provider meets the routing)", () => json(503, failure(503)), "unavailable"],
     ["503 in plain text", () => new Response(ECHO, { status: 503 }), "unavailable"],
-    ["401", () => json(401, { message: ECHO }), "configuration"],
-    ["403", () => json(403, { message: ECHO }), "configuration"],
-    ["404 (unknown model)", () => json(404, { message: ECHO }), "configuration"],
-    ["400", () => json(400, { message: ECHO }), "rejected"],
-    ["422 echoing our input", () => json(422, { detail: [{ loc: ["body"], msg: ECHO, type: "value_error", input: STUDENT }] }), "rejected"],
-    ["a 422 whose body the SDK cannot read as a validation error", () => json(422, { detail: ECHO }), "rejected"],
-    ["a 422 with a broken JSON body", () => new Response(`{"detail": "${ECHO}`, { status: 422, headers: { "content-type": "application/json" } }), "rejected"],
-    ["418, any other 4xx", () => json(418, { message: ECHO }), "rejected"],
+    ["an error at the top of a 200", () => json(200, { id: "gen-1", ...failure(502) }), "unavailable"],
+    ["a 429 at the top of a 200", () => json(200, failure(429)), "rate_limited"],
+    ["an error at the top of a 200, without a code", () => json(200, { error: { message: ECHO } }), "unavailable"],
+    ["an error in the choice, after part of the answer", () => completion(`{"partial":"${ECHO}`, {}, { finish_reason: "error", error: failure(502).error }), "unavailable"],
+    ["a choice ended by an error, with no error object", () => completion(`{"partial":"${ECHO}`, {}, { finish_reason: "error" }), "unavailable"],
+    ["a content filter", () => completion(ECHO, {}, { finish_reason: "content_filter" }), "rejected"],
+    ["a refusal", () => completion(null, {}, { message: { role: "assistant", content: null, refusal: ECHO } }), "rejected"],
+    ["a 200 with no choice", () => json(200, { id: "gen-1", model: MODEL, choices: [] }), "unavailable"],
     ["a 200 that is not JSON", () => new Response(ECHO, { status: 200, headers: { "content-type": "text/plain" } }), "unavailable"],
     ["a 200 that is not a chat completion", () => json(200, { answer: ECHO }), "unavailable"],
     ["a 200 with a broken JSON body", () => new Response(`{"x": "${ECHO}`, { status: 200, headers: { "content-type": "application/json" } }), "unavailable"],
@@ -218,10 +244,10 @@ describe("each failure has a kind, and carries nothing (EVL-03 R3)", () => {
     expectNothingLeaked(error);
   });
 
-  it("429 → rate_limited, with the wait Mistral asked for", async () => {
-    const { evaluator } = adapter(() => json(429, { message: ECHO }, { "retry-after": "7" }));
+  it("429 → rate_limited, with the wait and the code OpenRouter gave", async () => {
+    const { evaluator } = adapter(() => json(429, failure(429, { error_type: "rate_limit_exceeded", provider_code: 1300 }), { "retry-after": "7" }));
     const error = await call(evaluator).catch((e: unknown) => e);
-    expect(error).toMatchObject({ kind: "rate_limited", retryAfterMs: 7000 });
+    expect(error).toMatchObject({ kind: "rate_limited", retryAfterMs: 7000, providerCode: "rate_limit_exceeded/1300" });
     expectNothingLeaked(error);
   });
 
@@ -293,30 +319,34 @@ describe("each failure has a kind, and carries nothing (EVL-03 R3)", () => {
 });
 
 describe("the adapter refuses to start", () => {
-  it.each(FORBIDDEN_ENV.flatMap((name) => [[name, "true"], [name, "false"], [name, ""]]))(
+  it.each(FORBIDDEN_ENV.flatMap((name) => [[name, "http,undici"], [name, "false"], [name, ""]]))(
     "when %s is set, even to %j",
     (name, value) => {
-      expect(() => createMistralEvaluator({ apiKey: KEY, env: { [name]: value } })).toThrow(AiConfigurationError);
+      expect(() => createOpenRouterEvaluator({ apiKey: KEY, env: { [name]: value } })).toThrow(AiConfigurationError);
     },
   );
 
   it.each(["", "   "])("without a key (%j): a request would leave unauthenticated", (apiKey) => {
-    expect(() => createMistralEvaluator({ apiKey, env: {} })).toThrow(AiConfigurationError);
+    expect(() => createOpenRouterEvaluator({ apiKey, env: {} })).toThrow(AiConfigurationError);
   });
 
   it.each([0, -1, 1.5, Number.POSITIVE_INFINITY])("with a call timeout of %s", (callTimeoutMs) => {
-    expect(() => createMistralEvaluator({ apiKey: KEY, env: {}, callTimeoutMs })).toThrow(AiConfigurationError);
+    expect(() => createOpenRouterEvaluator({ apiKey: KEY, env: {}, callTimeoutMs })).toThrow(AiConfigurationError);
   });
 
   it("and its refusal names variables, never the key", () => {
     const error = (() => {
       try {
-        createMistralEvaluator({ apiKey: KEY, env: { MISTRAL_DEBUG: "1" } });
+        createOpenRouterEvaluator({ apiKey: KEY, env: { NODE_DEBUG: "http" } });
       } catch (e) {
         return e;
       }
     })();
-    expect(String(error)).toContain("MISTRAL_DEBUG");
+    expect(String(error)).toContain("NODE_DEBUG");
     expect(inspect(error)).not.toContain(KEY);
+  });
+
+  it("reads no key from the environment: OPENROUTER_API_KEY alone starts nothing", () => {
+    expect(() => createOpenRouterEvaluator({ apiKey: "", env: { OPENROUTER_API_KEY: KEY } })).toThrow(AiConfigurationError);
   });
 });

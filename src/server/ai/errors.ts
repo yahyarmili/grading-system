@@ -1,35 +1,63 @@
 import { EvaluatorError } from "./types";
 
+// OpenRouter's errors (https://openrouter.ai/docs/api_reference/errors-and-debugging):
+// a body {error: {code, message, metadata?}}, with the HTTP status, or inside
+// a 200 when the failure came after the provider accepted the request. Only
+// identifiers are kept: the message, metadata.raw and the moderation details
+// may hold our input.
+
 /**
- * The kind of a failed HTTP answer (EVL-03 R3), with a default for any other
- * status: an unknown status never escapes as a provider error.
+ * The kind of a failed answer (EVL-03 R3), from its HTTP status (or the code
+ * of an error inside a 200) and OpenRouter's error object, with a default for
+ * any other status: an unknown status never escapes as a provider error.
  */
-export function errorForStatus(status: number, retryAfterMs?: number, providerCode?: string): EvaluatorError {
-  if (status === 429) return new EvaluatorError("rate_limited", retryAfterMs, providerCode);
-  if (status === 401 || status === 403 || status === 404) return new EvaluatorError("configuration", undefined, providerCode);
-  if (status >= 400 && status < 500) return new EvaluatorError("rejected", undefined, providerCode);
-  return new EvaluatorError("unavailable", undefined, providerCode);
+export function errorForStatus(status: number, retryAfterMs?: number, error?: unknown): EvaluatorError {
+  const code = providerCodeOf(error);
+  if (status === 408) return new EvaluatorError("timeout", undefined, code);
+  if (status === 429) return new EvaluatorError("rate_limited", retryAfterMs, code);
+  // 402: no credit left (a negative balance, even on a free model).
+  if (status === 401 || status === 402 || status === 404) return new EvaluatorError("configuration", undefined, code);
+  // 403: a budget of the account, or our request refused (moderation, guardrail).
+  if (status === 403) return new EvaluatorError(isBudgetBlock(error) ? "configuration" : "rejected", undefined, code);
+  if (status >= 400 && status < 500) return new EvaluatorError("rejected", undefined, code);
+  return new EvaluatorError("unavailable", undefined, code);
 }
 
 /** An identifier: letters, digits and _ . : - only, at most 64 characters. Anything else could be content. */
 const IDENTIFIER = /^[A-Za-z0-9_.:-]{1,64}$/;
 
+const metadataOf = (error: unknown): Record<string, unknown> | undefined => {
+  const metadata = error && typeof error === "object" ? (error as { metadata?: unknown }).metadata : undefined;
+  return metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : undefined;
+};
+
+const isBudgetBlock = (error: unknown) => typeof metadataOf(error)?.limit_source === "string";
+
 /**
- * Mistral's error "type" and "code" from an error body, joined by "/", each
- * kept only when it is an identifier; undefined otherwise. Never the message.
+ * OpenRouter's error_type and the upstream provider_code from an error
+ * object's metadata, joined by "/", each kept only when it is an identifier;
+ * undefined otherwise. Never the message.
  */
-export function providerCodeOf(body: unknown): string | undefined {
-  if (typeof body !== "string") return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    return undefined;
-  }
-  if (!parsed || typeof parsed !== "object") return undefined;
-  const { type, code } = parsed as Record<string, unknown>;
-  const parts = [type, code].map((v) => (typeof v === "number" ? String(v) : v)).filter((v): v is string => typeof v === "string" && IDENTIFIER.test(v));
+export function providerCodeOf(error: unknown): string | undefined {
+  const metadata = metadataOf(error);
+  if (!metadata) return undefined;
+  const parts = [metadata.error_type, metadata.provider_code]
+    .map((v) => (typeof v === "number" ? String(v) : v))
+    .filter((v): v is string => typeof v === "string" && IDENTIFIER.test(v));
   return parts.length > 0 ? parts.join("/") : undefined;
+}
+
+/** The error object of an OpenRouter body (its "error" field), or undefined when the body is not one. */
+export function errorObjectOf(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return undefined;
+  const error = (body as { error?: unknown }).error;
+  return error && typeof error === "object" && !Array.isArray(error) ? error : undefined;
+}
+
+/** The HTTP-like code of an error object (OpenRouter's error.code), when it is one. */
+export function errorCodeOf(error: unknown): number | undefined {
+  const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
+  return typeof code === "number" && Number.isInteger(code) ? code : undefined;
 }
 
 /** Retry-After in milliseconds, from seconds or an HTTP date; undefined when absent or unreadable. */
