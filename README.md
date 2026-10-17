@@ -54,7 +54,9 @@ Node ne tourne que dans Docker.
 | `docker compose exec web npm run lint` | ESLint |
 | `docker compose exec web npm run db:generate -- --name=<verbe_objet>` | Nouvelle migration (relire le SQL, puis commiter) |
 | `docker compose exec web npm run admin:create -- --email <email> --first-name <prénom> --last-name <nom>` | Premier administrateur : reçoit un lien pour choisir son mot de passe |
-| `docker compose exec -e AI_PROVIDER=openrouter web npm run ai:trial` | Essai de l'IA réelle : un texte fictif, la réponse brute ; sans `-e`, le simulateur |
+| `docker compose exec web npm run ai:trial [-- --provider openrouter]` | Essai de l'IA : un texte fictif, la réponse brute ; le simulateur sans `--provider openrouter` |
+| `docker compose exec web npm run ai:trial -- --set all --runs 2 [--provider openrouter]` | Jeux d'essai de `scripts/fixtures/ai/` (E5.7) ; rapport dans `trial-results/` ; s'arrête avant 50 requêtes par jour UTC |
+| `docker compose exec web npm run ai:evaluate -- --submission <id> \| --assignment <id> [--provider openrouter]` | Évalue une remise ou les remises « Received » d'un devoir, hors interface ; le simulateur par défaut |
 
 ## Déploiement (Vercel)
 

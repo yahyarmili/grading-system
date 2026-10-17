@@ -85,6 +85,8 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/auth/invitations.ts#acceptTeacherInvitation": "one-time link: the token is the proof",
   "src/server/data/auth/invitations.ts#createFirstAdmin": "local script only (Q2), never a screen",
   "src/server/data/auth/security-events.ts#recordSecurityEvent": "internal: writes the security log",
+  "src/server/data/auth/security-events.ts#countAiRequestsToday":
+    "scripts only (ai:evaluate, ai:trial): counts today's ai_request_sent rows, reads none, for the free model's daily quota",
   "src/server/data/auth/throttle.ts#countAttempt": "internal: attempt counters",
   "src/server/data/auth/throttle.ts#isLocked": "internal: attempt counters",
   "src/server/data/auth/throttle.ts#recordFailure": "internal: attempt counters",
@@ -107,4 +109,17 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/evaluation/system.ts#stillEvaluating": "system processing (§5.5): whether a claim still holds before a new attempt, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#recordEvaluation": "system processing (§5.5, transition 5): adds the run and the proposal, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#listReceived": "system processing (§5.5): identifiers of the received submissions of an assignment, called only by src/server/evaluation/",
+};
+
+/**
+ * Every file of scripts/, and why it exists: commands run by hand inside the
+ * container, outside any screen and any session. They reach data through
+ * src/server/data/ only, with the exports listed above.
+ */
+export const SCRIPTS: Record<string, string> = {
+  "scripts/create-admin.ts": "npm run admin:create: the first administrator (Q2), local script only, never a screen",
+  "scripts/evaluate.ts":
+    "npm run ai:evaluate: evaluates one or all received submissions of an assignment (transitions 2 and 5) until E6 chains it; the simulator unless --provider openrouter",
+  "scripts/ai-trial.ts":
+    "npm run ai:trial: connection trial and trial sets (E5.7) on fictitious texts; stores nothing but the security log; the simulator unless --provider openrouter",
 };

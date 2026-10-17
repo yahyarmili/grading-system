@@ -33,8 +33,8 @@ export type EvaluationDeps = {
   callTimeoutMs: number;
 };
 
-export const defaultDeps = (): EvaluationDeps => ({
-  evaluator: getEvaluator(),
+export const defaultDeps = (evaluator: Evaluator = getEvaluator()): EvaluationDeps => ({
+  evaluator,
   registry: RUBRIC_VERSIONS,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   callTimeoutMs: AI_CALL_TIMEOUT_MS,
@@ -198,13 +198,26 @@ export async function evaluateSubmission(submissionId: string, deps: EvaluationD
   };
 }
 
-/** Evaluates, one after the other, the received submissions of an assignment; one failure never stops the others. */
+type AssignmentOutcome = EvaluationOutcome | { status: "error"; kind: string } | { status: "postponed" };
+
+/**
+ * Evaluates, one after the other, the received submissions of an assignment;
+ * one failure never stops the others. `mayStart`, asked before each one (the
+ * daily quota of the free model), leaves the rest received, "postponed".
+ */
 export async function evaluateAssignment(
   assignmentId: string,
   deps: EvaluationDeps = defaultDeps(),
-): Promise<{ submissionId: string; outcome: EvaluationOutcome | { status: "error"; kind: string } }[]> {
-  const results = [];
+  mayStart: () => Promise<boolean> = async () => true,
+): Promise<{ submissionId: string; outcome: AssignmentOutcome }[]> {
+  const results: { submissionId: string; outcome: AssignmentOutcome }[] = [];
+  let postponed = false;
   for (const submissionId of await listReceived(assignmentId)) {
+    postponed ||= !(await mayStart());
+    if (postponed) {
+      results.push({ submissionId, outcome: { status: "postponed" } });
+      continue;
+    }
     try {
       results.push({ submissionId, outcome: await evaluateSubmission(submissionId, deps) });
     } catch (error) {
@@ -221,8 +234,9 @@ export function errorKind(error: unknown): string {
 }
 
 /** One line per submission for the internal command, without text or identity. */
-export function formatOutcomeLine(label: string, outcome: EvaluationOutcome | { status: "error"; kind: string }): string {
+export function formatOutcomeLine(label: string, outcome: AssignmentOutcome): string {
   if (outcome.status === "skipped") return `${label}: skipped (not received, or not a text)`;
+  if (outcome.status === "postponed") return `${label}: postponed, still received (daily AI request limit)`;
   if (outcome.status === "error") return `${label}: error (${outcome.kind})`;
   const errors = outcome.errors.length > 0 ? `, errors: ${outcome.errors.join(", ")}` : "";
   return `${label}: ${outcome.status}, ${outcome.attempts} attempt(s), ${outcome.durationMs} ms${errors}`;

@@ -46,3 +46,6 @@ next-env.d.ts
 # Playwright reports (E2E)
 /playwright-report/
 /test-results/
+
+# AI trial reports (E5.7): copied into conception/ by hand
+/trial-results/

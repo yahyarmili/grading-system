@@ -12,8 +12,10 @@ import {
   appSources,
   checkDataExports,
   checkEntryPoints,
+  checkScripts,
   checkTables,
   dataSources,
+  scriptSources,
 } from "./helpers/access-inventory";
 
 // AUTH-04: nothing reaches data without its place in the access matrix
@@ -168,5 +170,22 @@ describe("the rubric is read-only: no write path exists (EVL-01 CA1)", () => {
       text: `export async function editRubric(actor: Actor) { authorize(actor, "rubric", "write"); }`,
     };
     expect(checkDataExports([...dataSources(), probe]).cells.has("rubric.write")).toBe(true);
+  });
+});
+
+describe("every script has its place and its reason (E5.7)", () => {
+  const scripts = scriptSources();
+
+  it("covers the real scripts/", () => {
+    expect(scripts.length).toBeGreaterThan(0);
+    expect(checkScripts(scripts)).toEqual([]);
+  });
+
+  it("fails on a script added without an entry, and on a stale entry", () => {
+    const probe = { path: "scripts/probe.ts", text: "console.log(1);" };
+    expect(checkScripts([...scripts, probe])).toEqual(["scripts/probe.ts: script without an entry in SCRIPTS (inventory.ts)"]);
+    expect(checkScripts(scripts.filter((file) => file.path !== "scripts/evaluate.ts"))).toEqual([
+      "scripts/evaluate.ts: listed in SCRIPTS but no longer exists",
+    ]);
   });
 });

@@ -42,9 +42,19 @@ export function selectEvaluator(env: AiEnv): EvaluatorChoice {
   return { provider: "openrouter", apiKey };
 }
 
-function createEvaluator(env: NodeJS.ProcessEnv): Evaluator {
+function createEvaluator(env: AiEnv): Evaluator {
   const choice = selectEvaluator(env);
   return choice.provider === "openrouter" ? createOpenRouterEvaluator({ apiKey: choice.apiKey }) : new SimulatorEvaluator();
+}
+
+/**
+ * The internal commands' evaluator: the simulator unless the command line
+ * names OpenRouter (--provider openrouter), with OPENROUTER_API_KEY. The
+ * environment's AI_PROVIDER is ignored, so that a value left in .env.local
+ * never makes a command send for real.
+ */
+export function evaluatorForCommand(provider: string | undefined, env: AiEnv = process.env): Evaluator {
+  return createEvaluator({ ...env, AI_PROVIDER: provider ?? "simulator" });
 }
 
 // One evaluator per process, kept across hot reloads like the database pool.

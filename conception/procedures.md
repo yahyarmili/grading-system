@@ -41,8 +41,8 @@
 
 **Effet.** Les évaluations partent chez OpenRouter, vers le modèle `xingchen-agi/xing4.0-29b-a4b:free` [D, 2026-10-17], épinglé dans `decisions.ts` avec le routage (`require_parameters`, `zdr`). OpenRouter les relaie au fournisseur du modèle, Phala au 2026-10-17, le seul endpoint ZDR listé. Chaque requête qui part laisse d'abord une ligne `ai_request_sent` au journal de sécurité, sans contenu ; si cette ligne ne peut pas être écrite, rien ne part. Limites : 20 requêtes par minute, 50 par jour UTC, tentatives comprises (`stack-technologique.md` §3).
 
-**Conditions (vérifiées au premier usage de l'IA dans le processus, et à chaque lancement de `ai:trial` ; sinon refus, jamais de repli silencieux).**
-- `AI_PROVIDER=openrouter` exactement ; toute autre valeur non vide, `mistral` comprise, est refusée.
+**Conditions (vérifiées au premier usage de l'IA dans le processus, et à chaque lancement d'une commande ; sinon refus, jamais de repli silencieux).**
+- Application (serveur Next) : `AI_PROVIDER=openrouter` exactement ; toute autre valeur non vide, `mistral` comprise, est refusée. Commandes internes (`ai:trial`, `ai:evaluate`) [P, E5.7] : `--provider openrouter` sur la ligne de commande ; elles ignorent `AI_PROVIDER`, pour qu'une valeur laissée dans `.env.local` ne fasse jamais partir un envoi réel. Avec OpenRouter, elles s'arrêtent avant de dépasser 50 requêtes dans le jour UTC, comptées sur le journal de sécurité de la base visée.
 - `OPENROUTER_API_KEY` non vide. L'adaptateur reçoit la clé, il ne la lit jamais lui-même dans l'environnement.
 - `NODE_DEBUG` non défini, quelle que soit sa valeur : il fait écrire à Node les requêtes envoyées.
 - Les tests et l'E2E restent sur le simulateur, quoi que dise `.env.local`.
@@ -50,7 +50,7 @@
 **Étapes.**
 1. Vérifier que le modèle a encore un endpoint ZDR et pas de date de retrait : [`/endpoints`](https://openrouter.ai/api/v1/models/xingchen-agi/xing4.0-29b-a4b:free/endpoints) (`expiration_date`, fournisseurs) et [`/endpoints/zdr`](https://openrouter.ai/api/v1/endpoints/zdr). Sinon : nouvelle décision de modèle, et nouvelle version de la notice élève.
 2. Vérifier dans les réglages de confidentialité du compte OpenRouter que la journalisation des prompts et l'usage des entrées par OpenRouter restent désactivés.
-3. Essai, en local : `docker compose exec -e AI_PROVIDER=openrouter web npm run ai:trial`. Attendu : une réponse JSON conforme au schéma, le modèle et le fournisseur qui ont répondu (ou « (not said) »), l'usage. En cas d'échec, seuls s'affichent le type d'erreur et le code d'OpenRouter (`error_type`, `provider_code`), jamais le message.
+3. Essai, en local : `docker compose exec web npm run ai:trial -- --provider openrouter`. Attendu : une réponse JSON conforme au schéma, le modèle et le fournisseur qui ont répondu (ou « (not said) »), l'usage. En cas d'échec, seuls s'affichent le type d'erreur et le code d'OpenRouter (`error_type`, `provider_code`), jamais le message.
 4. Contrôler le journal : une ligne `ai_request_sent` par requête partie, sans acteur ni contenu.
 5. Pour la démonstration : ajouter `AI_PROVIDER=openrouter` (et `OPENROUTER_API_KEY`) dans l'environnement visé, dev (`.env.local`, puis `docker compose up -d`) ou Vercel **Preview** (par l'utilisateur).
 

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { ENTRY_POINTS, TABLES, UNGUARDED_DATA_EXPORTS } from "@/server/access/inventory";
+import { ENTRY_POINTS, SCRIPTS, TABLES, UNGUARDED_DATA_EXPORTS } from "@/server/access/inventory";
 import { ACCESS_MATRIX, ACTIONS } from "@/server/access/matrix";
 
 // Static checks behind AUTH-04: every table, server entry point and data
@@ -204,3 +204,14 @@ export function checkDataExports(
 
 export const appSources = () => readSources("src", () => true);
 export const dataSources = () => readSources("src/server/data", () => true);
+
+/** Files of scripts/ missing from SCRIPTS, and entries that no longer exist. */
+export function checkScripts(files: SourceFile[], scripts: typeof SCRIPTS = SCRIPTS): string[] {
+  const paths = files.map((file) => file.path);
+  return [
+    ...paths.filter((file) => !scripts[file]).map((file) => `${file}: script without an entry in SCRIPTS (inventory.ts)`),
+    ...Object.keys(scripts).filter((file) => !paths.includes(file)).map((file) => `${file}: listed in SCRIPTS but no longer exists`),
+  ];
+}
+
+export const scriptSources = () => readSources("scripts", () => true);

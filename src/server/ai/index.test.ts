@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getEvaluator, getSimulator, selectEvaluator, SimulatorEvaluator } from ".";
+import { evaluatorForCommand, getEvaluator, getSimulator, selectEvaluator, SimulatorEvaluator } from ".";
 import { AiConfigurationError } from "./types";
 
 // The simulator by default; OpenRouter only by name and with a key; a wrong
@@ -55,5 +55,20 @@ describe("getEvaluator", () => {
   it("is the simulator in the tests, one per process", () => {
     expect(getEvaluator()).toBeInstanceOf(SimulatorEvaluator);
     expect(getEvaluator()).toBe(getSimulator());
+  });
+});
+
+describe("evaluatorForCommand (E5.7)", () => {
+  const env = { NODE_ENV: "development", AI_PROVIDER: "openrouter", OPENROUTER_API_KEY: "k" };
+
+  it("gives the simulator unless the command line names OpenRouter, whatever AI_PROVIDER says", () => {
+    expect(evaluatorForCommand(undefined, env)).toBeInstanceOf(SimulatorEvaluator);
+    expect(evaluatorForCommand("simulator", env)).toBeInstanceOf(SimulatorEvaluator);
+  });
+
+  it("gives OpenRouter by name with a key; refuses it without a key, and any other name", () => {
+    expect(evaluatorForCommand("openrouter", env).provider).toBe("openrouter");
+    expect(() => evaluatorForCommand("openrouter", { NODE_ENV: "development" })).toThrow(AiConfigurationError);
+    expect(() => evaluatorForCommand("mistral", env)).toThrow(AiConfigurationError);
   });
 });

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "d01",
+    "kinds": ["fluent"],
+    "subject": "Describe your town and say what you like most about it.",
+    "instructions": null,
+    "text": "I live in a small coastal town in the north of the country. In the morning, fishermen bring their boats back to the harbour and sell fish on the quay, so the whole town smells of the sea. What I like most is the old lighthouse at the end of the pier. From the top, you can see the mountains on one side and the open sea on the other. In summer the streets get crowded with tourists, but in winter the town becomes quiet again, and I enjoy walking along the empty beach with my dog after school. I hope it never changes too much."
+  },
+  {
+    "id": "d02",
+    "kinds": ["average"],
+    "subject": "Describe your town and say what you like most about it.",
+    "instructions": null,
+    "text": "My town is not very big but it is nice. There is a park, two schools and a big market on saturday. I like the market because there is many things to buy, like fruits, clothes and old books. My favourite place is the café near the station, I go there with my friends after school and we drink orange juice. The people in my town is friendly and they say hello in the street. The only problem is the traffic in the evening, it is very noisy. But in general I am happy to live here."
+  },
+  {
+    "id": "d03",
+    "kinds": ["very_faulty"],
+    "subject": "Describe your town and say what you like most about it.",
+    "instructions": null,
+    "text": "my town it is a litle town but very beatifull. ther is a montain near and a river who pass in the midle. in the town we have a mosque, a school and many shop. i like very much the river becaus in summer we go swiming with my cousin and we eat watermelon on the grass. the peoples is very kind and they help evrybody. in winter is very cold and somtime is snow. i want stay in my town all my life becaus my familly live here and i love them."
+  },
+  {
+    "id": "d04",
+    "kinds": ["very_faulty"],
+    "subject": "Write about your last holiday.",
+    "instructions": "Say where you went, who you went with, and what you did.",
+    "text": "last sumer i go to the see with my parent and my litle sister. we take the bus for six hour and it was very long and hot. the hotel was near of the beach and from the window we can see the boat. evry day we swim and we play in the sand, my sister she make a big castel. one day my father he take a boat for fishing but he dont catch nothing and we laugh a lot. the food was delicius, speciely the fish with the potato. i want go again next year becaus it was the best holiday of my life."
+  },
+  {
+    "id": "d05",
+    "kinds": ["very_faulty"],
+    "subject": "Write about your last holiday.",
+    "instructions": "Say where you went, who you went with, and what you did.",
+    "text": "In the holiday i was go to my grandmother in the vilage. Ther is no internet and no tv so in the begining i was very bored. But after some days i discover many thing. My grand mother teach me how to make bread in the oven and how to milk the cow, it was dificult and the cow was not happy. In the evening we sit outside and she tell me storys about my mother when she was young girl. I sleeped very good becaus ther is no noise. Now i miss the vilage and my grandmother so much."
+  },
+  {
+    "id": "d06",
+    "kinds": ["very_short"],
+    "subject": "Write about your last holiday.",
+    "instructions": "Say where you went, who you went with, and what you did.",
+    "text": "Last holiday I went to Marrakech with my family. We visited the big square and ate tajine. It was hot but very good."
+  },
+  {
+    "id": "d07",
+    "kinds": ["very_short", "very_faulty"],
+    "subject": "Describe your town and say what you like most about it.",
+    "instructions": null,
+    "text": "my town is smal. i like the park."
+  },
+  {
+    "id": "d08",
+    "kinds": ["off_topic"],
+    "subject": "Describe your town and say what you like most about it.",
+    "instructions": null,
+    "text": "My favourite football team is Real Madrid. I watch all their matches on television with my brother. My favourite player is the goalkeeper because he is very tall and he stops many balls. Last year they won the Champions League and we were so happy that we shouted until midnight. I have a white shirt with the number of my favourite player on the back. One day I want to go to Spain and see a match in the stadium, because the atmosphere must be amazing. Football is the best sport in the world."
+  },
+  {
+    "id": "d09",
+    "kinds": ["fluent", "advanced"],
+    "subject": "Should students wear a school uniform? Give your opinion.",
+    "instructions": "Give at least two arguments and a conclusion.",
+    "text": "Many schools require their students to wear a uniform, and this rule often sparks heated debate. In my view, uniforms do more good than harm. First, they reduce visible differences between rich and poor families, so students are judged less by their clothes and more by their behaviour. Second, they save time in the morning: nobody has to decide what to wear, and parents spend less money on fashionable outfits. Admittedly, uniforms limit self-expression, and some students feel uncomfortable in them. However, schools could allow small personal touches, such as badges or scarves. All things considered, I believe uniforms create a fairer and calmer atmosphere for learning."
+  },
+  {
+    "id": "d10",
+    "kinds": ["average", "instructions"],
+    "subject": "Should students wear a school uniform? Give your opinion.",
+    "instructions": "Give at least two arguments and a conclusion.",
+    "text": "I think students should not wear a uniform. First, the uniform is not comfortable, it is too hot in summer and the colour is ugly. Second, everybody is different and we want to show our personality with our clothes. When I wear my own clothes I feel more confident and I work better. Some people say the uniform is good because it is cheaper, but my parents buy two uniforms every year and it is expensive too. In conclusion, I prefer to choose my clothes, and I think the school must give us this freedom."
+  }
+]
