@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { AiProvider, EvaluationError, NotAssessableCause, ProposalAlert } from "@/lib/evaluation";
 import type { CriterionId, Level } from "@/lib/rubric";
 import type { EvaluationInput } from "@/server/ai/request";
@@ -69,6 +69,8 @@ export async function claimForEvaluation(submissionId: string): Promise<Evaluati
     if (!read) return null;
     const claimed = await applyTransition(tx, submissionId, 2, "evaluating", {
       where: eq(submissions.currentVersion, read.versionNumber),
+      // The database clock, not the container's: releaseStuckEvaluations compares it in SQL.
+      set: { updatedAt: sql`now()` },
     });
     return claimed ? { submissionId, ...read } : null;
   });
@@ -212,4 +214,40 @@ export async function listReceived(assignmentId: string): Promise<string[]> {
     .where(and(eq(submissions.assignmentId, assignmentId), eq(submissions.status, "received")))
     .orderBy(submissions.submittedAt, submissions.id);
   return rows.map((row) => row.id);
+}
+
+/**
+ * Transition 5, evaluating → evaluation_failed, without a run: the result of
+ * the claim could not be recorded (the database refused it twice). Guarded by
+ * the version claimed; false when the submission is no longer evaluating it.
+ */
+export async function releaseEvaluation(claim: Pick<EvaluationClaim, "submissionId" | "versionNumber">): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const moved = await applyTransition(tx, claim.submissionId, 5, "evaluation_failed", {
+      where: eq(submissions.currentVersion, claim.versionNumber),
+    });
+    return !!moved;
+  });
+}
+
+/**
+ * PRC-02 R1: no submission stays evaluating. Those claimed longer ago than
+ * `afterMs` (compared in SQL, on the database clock of the claim) go to
+ * evaluation_failed, without a run: what the abandoned evaluation did is not
+ * known (a crash, a killed process). Its result, if it ever arrives, is kept
+ * but not current, like a replaced text's. Identifiers of the released ones.
+ */
+export async function releaseStuckEvaluations(afterMs: number): Promise<string[]> {
+  const stuck = and(
+    eq(submissions.status, "evaluating"),
+    sql`${submissions.updatedAt} < now() - make_interval(secs => ${afterMs / 1000})`,
+  );
+  return db.transaction(async (tx) => {
+    const rows = await tx.select({ id: submissions.id }).from(submissions).where(stuck).orderBy(submissions.id).for("update");
+    const released: string[] = [];
+    for (const { id } of rows) {
+      if (await applyTransition(tx, id, 5, "evaluation_failed", { where: stuck })) released.push(id);
+    }
+    return released;
+  });
 }

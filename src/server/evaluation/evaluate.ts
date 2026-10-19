@@ -1,5 +1,11 @@
 import "server-only";
-import { AI_CALL_TIMEOUT_MS, AI_MAX_ATTEMPTS, AI_RETRY_DELAY_MS, AI_RETRY_MAX_WAIT_MS } from "@/config/provisional";
+import {
+  AI_CALL_TIMEOUT_MS,
+  AI_MAX_ATTEMPTS,
+  AI_RETRY_DELAY_MS,
+  AI_RETRY_MAX_WAIT_MS,
+  EVALUATION_STUCK_AFTER_MS,
+} from "@/config/provisional";
 import type { EvaluationError, ProposalAlert } from "@/lib/evaluation";
 import { calculateGrade } from "@/lib/grade";
 import { criterionIds, RUBRIC_VERSIONS, type RubricVersion } from "@/lib/rubric";
@@ -10,6 +16,8 @@ import {
   claimForEvaluation,
   listReceived,
   recordEvaluation,
+  releaseEvaluation,
+  releaseStuckEvaluations,
   stillEvaluating,
   type EvaluationClaim,
   type EvaluationResult,
@@ -174,8 +182,10 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
  * Evaluates one received submission. "skipped" when it is not received (or
  * not a text); "stale" when its text was replaced during the evaluation: the
  * run is kept, not current, and the new version stays received (SUB-05 R2).
- * After the claim, an unexpected error ends on evaluation_failed: a
- * submission is never left evaluating by an ordinary error.
+ * After the claim, an unexpected error ends on evaluation_failed. When the
+ * database refuses the result twice, the submission is released to
+ * evaluation_failed without a run, and the error is thrown; if even that
+ * fails, or the process stops, releaseStuckSubmissions frees it later.
  */
 export async function evaluateSubmission(submissionId: string, deps: EvaluationDeps = defaultDeps()): Promise<EvaluationOutcome> {
   const started = performance.now();
@@ -186,11 +196,19 @@ export async function evaluateSubmission(submissionId: string, deps: EvaluationD
   let recorded;
   try {
     recorded = await recordEvaluation(claim, result);
-  } catch (error) {
-    if (result.outcome === "failed") throw error;
-    // A proposal the database refused (a bug): recorded as a failure instead.
-    result = { outcome: "failed", run: { ...result.run, attemptErrors: [...result.run.attemptErrors, "internal"] } };
-    recorded = await recordEvaluation(claim, result);
+  } catch {
+    // A proposal the database refused (a bug) is recorded as a failure
+    // instead; a failure, once more (the database may have been down).
+    if (result.outcome !== "failed") {
+      result = { outcome: "failed", run: { ...result.run, attemptErrors: [...result.run.attemptErrors, "internal"] } };
+    }
+    try {
+      recorded = await recordEvaluation(claim, result);
+    } catch (error) {
+      // Refused twice: never left evaluating, even without a run.
+      await releaseEvaluation(claim).catch(() => false);
+      throw error;
+    }
   }
   return {
     status: recorded.status,
@@ -242,4 +260,14 @@ export function formatOutcomeLine(label: string, outcome: AssignmentOutcome): st
   if (outcome.status === "error") return `${label}: error (${outcome.kind})`;
   const errors = outcome.errors.length > 0 ? `, errors: ${outcome.errors.join(", ")}` : "";
   return `${label}: ${outcome.status}, ${outcome.attempts} attempt(s), ${outcome.durationMs} ms${errors}`;
+}
+
+/**
+ * PRC-02 R1: releases to evaluation_failed the submissions evaluating for
+ * longer than the longest evaluation (EVALUATION_STUCK_AFTER_MS [P]): a crash
+ * or a stopped process left them. Run by the command before it evaluates;
+ * E6 decides when its processing runs it. Identifiers of the released ones.
+ */
+export function releaseStuckSubmissions(afterMs: number = EVALUATION_STUCK_AFTER_MS): Promise<string[]> {
+  return releaseStuckEvaluations(afterMs);
 }

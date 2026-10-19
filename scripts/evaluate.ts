@@ -29,6 +29,7 @@ import {
   evaluateAssignment,
   evaluateSubmission,
   formatOutcomeLine,
+  releaseStuckSubmissions,
 } from "@/server/evaluation/evaluate";
 
 const FAULTS: Record<string, SimulatedFault> = {
@@ -86,6 +87,10 @@ async function main(): Promise<number> {
     console.log(`Requests sent to the AI today (UTC): ${sent} of ${AI_DAILY_REQUEST_LIMIT}`);
     return sent + AI_MAX_ATTEMPTS <= AI_DAILY_REQUEST_LIMIT;
   };
+
+  // PRC-02 R1: a submission left evaluating by a crash or a stopped command is released first.
+  const released = await releaseStuckSubmissions();
+  if (released.length > 0) console.log(`Released to evaluation failed (evaluating for too long): ${released.length}`);
 
   const deps = defaultDeps(evaluator);
   if (values.submission) {

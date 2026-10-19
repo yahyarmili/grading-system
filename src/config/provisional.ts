@@ -137,6 +137,15 @@ export const AI_RETRY_DELAY_MS = 2_000;
 export const AI_RETRY_MAX_WAIT_MS = 30_000;
 
 /**
+ * [PROVISIONAL, [P] derived] How long a submission may stay evaluating before
+ * it is released to evaluation_failed (PRC-02 R1): the longest evaluation
+ * (every attempt at its timeout, the longest wait between two), plus 5 minutes
+ * for the database and the validator. 12 minutes with the values above.
+ */
+export const EVALUATION_STUCK_AFTER_MS =
+  AI_MAX_ATTEMPTS * AI_CALL_TIMEOUT_MS + (AI_MAX_ATTEMPTS - 1) * AI_RETRY_MAX_WAIT_MS + 5 * 60_000;
+
+/**
  * [PROVISIONAL, [P] arbitrary] Edits allowed between a quote and the text, per
  * character of the quote, once both are normalized; to be set on the very
  * faulty texts of the development set (E5.7).

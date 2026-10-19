@@ -769,6 +769,8 @@ Ne modifie rien. Renvoie d'abord la revue.
 ```
 Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs provisoires et les mesures d'E5.16.
 
+Revue faite le 2026-10-19 (agent neuf aux consignes de `feature-reviewer`, fichier créé après le démarrage de la session) : aucun critique, 1 majeur, 12 mineurs. T4 : majeur reproduit (remise bloquée en `evaluating` si la base refuse deux fois le résultat, ou si le processus s'arrête après la prise en charge). T3 : repli dans `evaluateSubmission` (`releaseEvaluation`) et balayage `releaseStuckSubmissions`, appelé par `ai:evaluate` au démarrage, au-delà d'`EVALUATION_STUCK_AFTER_MS` [P] (12 min, dérivé) ; la prise en charge date `updated_at` sur l'horloge de la base ; tests `tests/evaluation-release.int.test.ts`, avec contre-épreuve. Mineurs : non traités, à trier.
+
 ---
 
 ## E6 — Traitement automatique par lots, échecs et relance (PRC-01, PRC-02)
