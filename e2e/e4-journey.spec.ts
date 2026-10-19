@@ -109,11 +109,19 @@ test("E4 journey: on time, late, replaced, then read only; the assignment locked
   await omar.screenshot({ path: "test-results/e4-5-removed-read-only-phone.png", fullPage: true });
 
   // 5. No text and no internal state reach the student, whatever the state (A3, SUB-01 R3).
+  // Since E6 her replacement is evaluated by itself: wait for it, then set each state by hand.
+  await expect
+    .poll(async () => (await sql<{ status: string }>(
+      "SELECT s.status FROM submissions s JOIN users u ON u.id = s.student_id WHERE u.email = $1", [linaEmail],
+    ))[0].status, { timeout: 60_000 })
+    .toBe("to_review");
   for (const status of ["evaluation_failed", "not_assessable", "to_review"]) {
     await sql(
-      // Not assessable carries its cause, and no other state one (check constraint, E5.5).
+      // Not assessable carries its cause, and no other state one; a proposal is current
+      // in to_review only (check constraints, E5.5).
       `UPDATE submissions SET status = $1::submission_status,
-         not_assessable_cause = CASE WHEN $1::submission_status = 'not_assessable' THEN 'no_content'::not_assessable_cause END
+         not_assessable_cause = CASE WHEN $1::submission_status = 'not_assessable' THEN 'no_content'::not_assessable_cause END,
+         current_proposal_id = CASE WHEN $1::submission_status = 'to_review' THEN current_proposal_id END
        FROM users u WHERE u.id = submissions.student_id AND u.email = $2`,
       [status, linaEmail],
     );

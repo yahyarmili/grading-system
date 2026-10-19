@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { SUBMISSION_MAX_REPLACEMENTS } from "@/config/decisions";
+import type { EvaluationRef } from "@/lib/evaluation";
 import { sourcesOf } from "@/lib/submission-status";
 import { checkSubmissionText } from "@/lib/submission-text";
 import type { Actor } from "@/server/access/actor";
@@ -29,10 +30,11 @@ export type NewTextSubmission = {
  * Submitted (again, for the same request: idempotent), or refused: the task
  * changed since it was shown, the notice in force was not read (NFR-DON-04),
  * or the student already submitted with another form. Null when the assignment is absent, not received through an active
- * membership, or the account is not confirmed (§5.5, transition 1).
+ * membership, or the account is not confirmed (§5.5, transition 1). `ref`
+ * names the version to evaluate, for the trigger once committed (PRC-01).
  */
 export type SubmitTextResult =
-  | { ok: true; submittedAt: string; late: boolean }
+  | { ok: true; submittedAt: string; late: boolean; ref: EvaluationRef }
   | { ok: false; reason: "changed" | "already_submitted" | "notice_not_read" };
 
 /** An account that confirmed its address; an unconfirmed one has no session, checked again here. */
@@ -79,7 +81,11 @@ export async function submitText(actor: Actor, input: NewTextSubmission): Promis
     if (!created) {
       // The pair has its submission: the same request again is the same answer.
       const [same] = await tx
-        .select({ submittedAt: submissions.submittedAt, late: submissions.late })
+        .select({
+          submittedAt: submissions.submittedAt,
+          late: submissions.late,
+          ref: { submissionId: submissions.id, versionNumber: submissions.currentVersion },
+        })
         .from(submissions)
         .innerJoin(submissionVersions, eq(submissionVersions.submissionId, submissions.id))
         .where(
@@ -90,7 +96,7 @@ export async function submitText(actor: Actor, input: NewTextSubmission): Promis
           ),
         );
       return same
-        ? ({ ok: true, submittedAt: same.submittedAt.toISOString(), late: same.late } as const)
+        ? ({ ok: true, submittedAt: same.submittedAt.toISOString(), late: same.late, ref: same.ref } as const)
         : ({ ok: false, reason: "already_submitted" } as const);
     }
 
@@ -101,7 +107,12 @@ export async function submitText(actor: Actor, input: NewTextSubmission): Promis
       text: input.text,
       requestId: input.requestId,
     });
-    return { ok: true, submittedAt: created.submittedAt.toISOString(), late: created.late } as const;
+    return {
+      ok: true,
+      submittedAt: created.submittedAt.toISOString(),
+      late: created.late,
+      ref: { submissionId: created.id, versionNumber: 1 },
+    } as const;
   });
 }
 
@@ -131,9 +142,10 @@ export type ReplaceTextInput = Omit<NewTextSubmission, "contentVersion">;
  * Replaced (again, for the same request: idempotent), or refused: the
  * teacher started first, or no replacement is left. Null when the student has
  * no submission for this assignment, or is no longer an active member.
+ * `ref` names the active version, to evaluate again (SUB-05 R2).
  */
 export type ReplaceTextResult =
-  | { ok: true; replacedAt: string; replacementsLeft: number }
+  | { ok: true; replacedAt: string; replacementsLeft: number; ref: EvaluationRef }
   | { ok: false; reason: "teacher_started" | "limit_reached" };
 
 /**
@@ -165,7 +177,12 @@ export async function replaceText(actor: Actor, input: ReplaceTextInput): Promis
       .from(submissionVersions)
       .where(and(eq(submissionVersions.submissionId, submission.id), eq(submissionVersions.requestId, input.requestId)));
     if (same) {
-      return { ok: true, replacedAt: same.createdAt.toISOString(), replacementsLeft: left(submission.currentVersion) } as const;
+      return {
+        ok: true,
+        replacedAt: same.createdAt.toISOString(),
+        replacementsLeft: left(submission.currentVersion),
+        ref: { submissionId: submission.id, versionNumber: submission.currentVersion },
+      } as const;
     }
 
     const replaced = await applyTransition(tx, submission.id, 11, "received", {
@@ -190,6 +207,11 @@ export async function replaceText(actor: Actor, input: ReplaceTextInput): Promis
         requestId: input.requestId,
       })
       .returning({ createdAt: submissionVersions.createdAt });
-    return { ok: true, replacedAt: version.createdAt.toISOString(), replacementsLeft: left(replaced.currentVersion) } as const;
+    return {
+      ok: true,
+      replacedAt: version.createdAt.toISOString(),
+      replacementsLeft: left(replaced.currentVersion),
+      ref: { submissionId: submission.id, versionNumber: replaced.currentVersion },
+    } as const;
   });
 }

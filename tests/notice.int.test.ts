@@ -10,6 +10,7 @@ import { db } from "@/server/db/client";
 import { assignments, classMemberships, noticeAcknowledgements, submissions, users } from "@/server/db/schema";
 import { acknowledgeStudentNotice, NOTICE_MESSAGES } from "@/server/notices/notices";
 import { SUBMISSION_MESSAGES, submitStudentText } from "@/server/submissions/submissions";
+import { noTrigger } from "./helpers/triggers";
 
 // NFR-DON-04: the student reads the notice before the first submission; the
 // reading is recorded (account, date, version) and the server refuses a first
@@ -41,7 +42,7 @@ async function setup() {
 }
 
 const submit = (actor: Actor, assignmentId: string) =>
-  submitStudentText(actor, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: "My town is small." });
+  submitStudentText(actor, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: "My town is small." }, noTrigger);
 
 const readings = () => db.select().from(noticeAcknowledgements);
 

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 import { roleHome } from "./src/lib/roles";
 
 // Docker Desktop on Windows mounts the project over 9p, which emits no file
@@ -19,4 +20,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Vercel Workflows (E6): compiles "use workflow" and "use step", and generates
+// the flow route under src/app/.well-known/workflow/ (not committed).
+export default withWorkflow(nextConfig);

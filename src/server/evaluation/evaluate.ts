@@ -29,7 +29,8 @@ import { checkBlockingAlerts, isVeryShort } from "@/server/evaluation/alerts";
 // §5.5: claim, request built from the whitelist, bounded attempts, answer
 // checked against the output contract, grade calculated by the system, run
 // and proposal recorded. No transaction stays open during a call to the AI.
-// Run by the internal command (scripts/evaluate.ts); E6 chains it after a submission.
+// Run by the internal command (scripts/evaluate.ts) and, after each
+// submission or replacement, by the workflow's step (steps.ts, E6).
 
 export type EvaluationDeps = {
   evaluator: Evaluator;
@@ -186,10 +187,15 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
  * database refuses the result twice, the submission is released to
  * evaluation_failed without a run, and the error is thrown; if even that
  * fails, or the process stops, releaseStuckSubmissions frees it later.
+ * `expectedVersion`: only that version is claimed, "skipped" otherwise.
  */
-export async function evaluateSubmission(submissionId: string, deps: EvaluationDeps = defaultDeps()): Promise<EvaluationOutcome> {
+export async function evaluateSubmission(
+  submissionId: string,
+  deps: EvaluationDeps = defaultDeps(),
+  opts: { expectedVersion?: number } = {},
+): Promise<EvaluationOutcome> {
   const started = performance.now();
-  const claim = await claimForEvaluation(submissionId);
+  const claim = await claimForEvaluation(submissionId, opts.expectedVersion);
   if (!claim) return { status: "skipped" };
 
   let result = await attempt(claim, deps, started);

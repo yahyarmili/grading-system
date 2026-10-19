@@ -8,6 +8,12 @@ export const E2E_BASE_URL = `http://localhost:${E2E_PORT}`;
 /** Where the E2E server writes captured emails (inside the container, outside the repository). */
 export const E2E_MAIL_DIR = path.join(os.tmpdir(), "grading-e2e-mail");
 
+/**
+ * Where the E2E server's Local World keeps its runs (Vercel Workflows, E6):
+ * not the dev server's .workflow-data, whose queue it would mix with.
+ */
+export const E2E_WORKFLOW_DIR = path.join(os.tmpdir(), "grading-e2e-workflow");
+
 /** The test database: reset at each run, like the integration tests. */
 export function testDatabaseUrl(): string {
   const url = process.env.DATABASE_URL_TEST;

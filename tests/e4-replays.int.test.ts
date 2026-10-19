@@ -37,6 +37,7 @@ import {
   SUBMISSION_MESSAGES,
   submitStudentText,
 } from "@/server/submissions/submissions";
+import { noTrigger } from "./helpers/triggers";
 
 // E4.6: the replays of the step on real submissions (fonctionnalites.md §8.3):
 // ASG-03 CA2, CLS-04 CA3 (the submission kept; the teacher's list in E7),
@@ -81,10 +82,10 @@ async function setup() {
 }
 
 const submit = (student: Actor, assignmentId: string, text: string, requestId = randomUUID()) =>
-  submitStudentText(student, { assignmentId, contentVersion: "1", requestId, text });
+  submitStudentText(student, { assignmentId, contentVersion: "1", requestId, text }, noTrigger);
 
 const replace = (student: Actor, assignmentId: string, text: string, requestId = randomUUID()) =>
-  replaceStudentText(student, { assignmentId, requestId, text });
+  replaceStudentText(student, { assignmentId, requestId, text }, noTrigger);
 
 async function submitted(student: Actor, assignmentId: string, text: string) {
   const state = await submit(student, assignmentId, text);

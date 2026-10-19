@@ -13,6 +13,8 @@ const DATABASE = `import { db } from "@/server/db/client";\nexport const databas
 const SYSTEM = `import { readEvaluationInput } from "@/server/data/evaluation/system";\nexport const read = readEvaluationInput;\n`;
 const SYSTEM_RELATIVE = `import { readEvaluationInput } from "../data/evaluation/system";\nexport const read = readEvaluationInput;\n`;
 
+const WORKFLOW = `import { start } from "workflow/api";\nexport const begin = start;\n`;
+
 const eslint = new ESLint();
 
 /** The restricted imports ESLint reports for this text at this path. */
@@ -49,7 +51,16 @@ describe("each import is allowed where the table says, refused everywhere else",
     expect(await restricted(path, text)).toEqual([expect.stringContaining("Only the evaluation service")]);
   });
 
+  it.each([["src/app/x.ts"], ["src/server/data/x.ts"], ["scripts/x.ts"]])(
+    "refuses Workflows in %s",
+    { timeout: 30_000 },
+    async (path) => {
+      expect(await restricted(path, WORKFLOW)).toEqual([expect.stringContaining("starts or defines workflows")]);
+    },
+  );
+
   it.each([
+    ["src/server/evaluation/x.ts", WORKFLOW],
     ["src/server/data/x.ts", DATABASE],
     ["src/server/db/x.ts", DATABASE],
     ["tests/x.ts", DATABASE],

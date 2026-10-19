@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_BASE_URL, E2E_MAIL_DIR, E2E_PORT } from "./e2e/support/env";
+import { E2E_BASE_URL, E2E_MAIL_DIR, E2E_PORT, E2E_WORKFLOW_DIR } from "./e2e/support/env";
 
 // E1 journeys in a real browser. Runs in the "e2e" compose service (Playwright
 // image): docker compose run --rm e2e
@@ -38,6 +38,9 @@ export default defineConfig({
       // The journeys never reach the AI, whatever .env.local says (E5).
       AI_PROVIDER: "simulator",
       GRADING_ANTHROPIC_API_KEY: "",
+      // Workflows' Local World (E6): its queue calls this server back, and keeps its own runs.
+      WORKFLOW_LOCAL_BASE_URL: E2E_BASE_URL,
+      WORKFLOW_LOCAL_DATA_DIR: E2E_WORKFLOW_DIR,
     },
   },
 });

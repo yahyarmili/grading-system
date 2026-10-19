@@ -1,0 +1,12 @@
+import type { EvaluationRef } from "@/lib/evaluation";
+import { evaluateStep } from "@/server/evaluation/steps";
+
+// PRC-01: one run per trigger, started by trigger.ts once the submission or
+// replacement committed. The workflow body runs in Workflows' sandbox and
+// reaches the database only through its steps.
+
+/** Evaluates one version of a submission; "skipped" when another run took it or it was replaced. */
+export async function evaluateSubmissionWorkflow(ref: EvaluationRef) {
+  "use workflow";
+  return evaluateStep(ref);
+}

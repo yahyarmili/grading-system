@@ -55,14 +55,22 @@ export type EvaluationClaim = { submissionId: string; versionNumber: number; inp
  * snapshot), then the transition is guarded by the version read. Null when
  * the submission is not received or its active version is not a text. Two
  * claims at once give one evaluation; a replacement at the same time is
- * waited for, never missed.
+ * waited for, never missed. With `expectedVersion` (E6: the version a
+ * submission or replacement triggered), null as well when another version is
+ * active: a trigger of a replaced text evaluates nothing (SUB-05 R2).
  */
-export async function claimForEvaluation(submissionId: string): Promise<EvaluationClaim | null> {
+export async function claimForEvaluation(submissionId: string, expectedVersion?: number): Promise<EvaluationClaim | null> {
   return db.transaction(async (tx) => {
     const [locked] = await tx
       .select({ id: submissions.id })
       .from(submissions)
-      .where(and(eq(submissions.id, submissionId), eq(submissions.status, "received")))
+      .where(
+        and(
+          eq(submissions.id, submissionId),
+          eq(submissions.status, "received"),
+          expectedVersion === undefined ? undefined : eq(submissions.currentVersion, expectedVersion),
+        ),
+      )
       .for("update");
     if (!locked) return null;
     const read = await readEvaluationInput(tx, submissionId);

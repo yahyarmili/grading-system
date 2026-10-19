@@ -13,6 +13,7 @@ import { isLate } from "@/server/data/submissions/late";
 import { db } from "@/server/db/client";
 import { assignments, classMemberships, submissions, submissionVersions, users } from "@/server/db/schema";
 import { submitStudentText } from "@/server/submissions/submissions";
+import { noTrigger } from "./helpers/triggers";
 
 // SUB-04: a submission is late when its first submission is strictly after
 // the deadline (R2), compared in SQL by the database. CA1 here; CA2 (a
@@ -106,7 +107,7 @@ describe("a real first submission, by the database clock", () => {
     await db.update(assignments).set({ deadline: due }).where(eq(assignments.id, created.assignmentId));
     const state = await submitStudentText(student, {
       assignmentId: created.assignmentId, contentVersion: "1", requestId: randomUUID(), text: "My town is small.",
-    });
+    }, noTrigger);
     return { student, assignmentId: created.assignmentId, state };
   }
 

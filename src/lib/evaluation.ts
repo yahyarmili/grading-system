@@ -55,6 +55,13 @@ export const evaluationErrors = [
 ] as const;
 export type EvaluationError = (typeof evaluationErrors)[number];
 
+/**
+ * The version of a submission an automatic evaluation is for (PRC-01, E6):
+ * identifiers only, the one argument of the workflow and its steps (rule 4),
+ * never the text. Built by the data layer once the transaction committed.
+ */
+export type EvaluationRef = { submissionId: string; versionNumber: number };
+
 /** Information alerts of a proposal (EVL-04): read by the owner teacher only, never by the student. */
 export const proposalAlerts = ["very_short", "other_language", "off_topic", "addressed_to_marker"] as const;
 export type ProposalAlert = (typeof proposalAlerts)[number];

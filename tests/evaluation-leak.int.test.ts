@@ -24,6 +24,7 @@ import {
 } from "@/server/db/schema";
 import { evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/evaluate";
 import { replaceStudentText, submitStudentText } from "@/server/submissions/submissions";
+import { noTrigger } from "./helpers/triggers";
 
 // EVL-02 CA1 and CA2, SUB-04 CA3: what leaves for the AI, read from the
 // database by the real path (submission → whitelist → builder → the real
@@ -180,10 +181,10 @@ async function submit(
   text = TEXT,
   replacements: string[] = [],
 ): Promise<string> {
-  const state = await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text });
+  const state = await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text }, noTrigger);
   if (state.status !== "done") throw new Error(`Not submitted: ${state.status}`);
   for (const replacement of replacements) {
-    const replaced = await replaceStudentText(student, { assignmentId, requestId: randomUUID(), text: replacement });
+    const replaced = await replaceStudentText(student, { assignmentId, requestId: randomUUID(), text: replacement }, noTrigger);
     if (replaced.status !== "done") throw new Error(`Not replaced: ${replaced.status}`);
   }
   const rows = await db

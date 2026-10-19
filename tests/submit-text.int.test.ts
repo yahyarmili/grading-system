@@ -18,6 +18,7 @@ import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { db } from "@/server/db/client";
 import { assignments, classMemberships, submissions, submissionVersions, users } from "@/server/db/schema";
 import { SUBMISSION_MESSAGES, submitStudentText, type SubmitTextInput } from "@/server/submissions/submissions";
+import { noTrigger } from "./helpers/triggers";
 
 // SUB-02: submit a pasted text (R1 to R3, CA1 to CA3), with the first
 // submission's lock of the assignment (ASG-03) and its lateness (SUB-04 R2).
@@ -69,20 +70,20 @@ describe("CA1: the text is stored exactly as written, with a dated confirmation"
     ["spaces around it", "   My town.   "],
   ])("keeps %s", async (_, text) => {
     const { student, assignmentId } = await setup();
-    const state = await submitStudentText(student, form(assignmentId, text));
+    const state = await submitStudentText(student, form(assignmentId, text), noTrigger);
     expect(state.status).toBe("done");
     expect(await storedTexts()).toEqual([text]);
   });
 
   it("changes only the line endings the browser sends as CRLF", async () => {
     const { student, assignmentId } = await setup();
-    await submitStudentText(student, form(assignmentId, "One.\r\nTwo.\r\n\r\nThree."));
+    await submitStudentText(student, form(assignmentId, "One.\r\nTwo.\r\n\r\nThree."), noTrigger);
     expect(await storedTexts()).toEqual(["One.\nTwo.\n\nThree."]);
   });
 
   it("dates it by the database, then shows it as being marked", async () => {
     const { student, assignmentId } = await setup();
-    const state = await submitStudentText(student, form(assignmentId, "My town is small."));
+    const state = await submitStudentText(student, form(assignmentId, "My town is small."), noTrigger);
     if (state.status !== "done") throw new Error(state.status);
 
     const [row] = await db
@@ -105,7 +106,7 @@ describe("CA1: the text is stored exactly as written, with a dated confirmation"
   it("never gives the text back to the student (A3)", async () => {
     const { student, assignmentId } = await setup();
     const text = "A sentence only the teacher reads.";
-    const state = await submitStudentText(student, form(assignmentId, text));
+    const state = await submitStudentText(student, form(assignmentId, text), noTrigger);
     const read = [state, await listStudentAssignments(student), await getStudentAssignment(student, assignmentId)];
     expect(JSON.stringify(read)).not.toContain(text);
   });
@@ -113,14 +114,14 @@ describe("CA1: the text is stored exactly as written, with a dated confirmation"
   it(`accepts ${SUBMISSION_TEXT_MAX_LENGTH} characters as displayed`, async () => {
     const { student, assignmentId } = await setup();
     const text = "é".normalize("NFD").repeat(SUBMISSION_TEXT_MAX_LENGTH);
-    expect((await submitStudentText(student, form(assignmentId, text))).status).toBe("done");
+    expect((await submitStudentText(student, form(assignmentId, text), noTrigger)).status).toBe("done");
     expect(await storedTexts()).toEqual([text]);
   });
 
   it("marks it late only after the deadline, by the database clock", async () => {
     const { student, assignmentId } = await setup();
     await db.update(assignments).set({ deadline: sql`now() - interval '1 minute'` }).where(eq(assignments.id, assignmentId));
-    expect((await submitStudentText(student, form(assignmentId, "Late text."))).status).toBe("done");
+    expect((await submitStudentText(student, form(assignmentId, "Late text."), noTrigger)).status).toBe("done");
     expect((await db.select({ late: submissions.late }).from(submissions))[0].late).toBe(true);
   });
 });
@@ -133,7 +134,7 @@ describe("CA2: an empty, blank or too long text is refused, nothing stored", () 
     [`${SUBMISSION_TEXT_MAX_LENGTH + 1} characters`, "a".repeat(SUBMISSION_TEXT_MAX_LENGTH + 1), SUBMISSION_TEXT_ERRORS.tooLong],
   ])("refuses %s", async (_, text, error) => {
     const { student, assignmentId } = await setup();
-    expect(await submitStudentText(student, form(assignmentId, text))).toEqual({ status: "invalid", error });
+    expect(await submitStudentText(student, form(assignmentId, text), noTrigger)).toEqual({ status: "invalid", error });
     expect(await db.select().from(submissions)).toEqual([]);
     expect(await lockedAt(assignmentId)).toBeNull();
   });
@@ -141,7 +142,7 @@ describe("CA2: an empty, blank or too long text is refused, nothing stored", () 
 
 describe("CA3: only a confirmed, active member of a recipient class submits", () => {
   const refused = async (actor: Actor, assignmentId: string) => {
-    expect(await submitStudentText(actor, form(assignmentId, "My town."))).toEqual({
+    expect(await submitStudentText(actor, form(assignmentId, "My town."), noTrigger)).toEqual({
       status: "error", reason: "unavailable", message: SUBMISSION_MESSAGES.unavailable,
     });
     expect(await db.select().from(submissions)).toEqual([]);
@@ -169,22 +170,22 @@ describe("CA3: only a confirmed, active member of a recipient class submits", ()
 
   it("refuses an assignment that does not exist", async () => {
     const { student } = await setup();
-    expect(await submitStudentText(student, form(randomUUID(), "My town."))).toMatchObject({ reason: "unavailable" });
+    expect(await submitStudentText(student, form(randomUUID(), "My town."), noTrigger)).toMatchObject({ reason: "unavailable" });
   });
 
   it("refuses a teacher, even the assignment's own", async () => {
     const { teacher, assignmentId } = await setup();
-    expect(await submitStudentText(teacher, form(assignmentId, "My town."))).toMatchObject({ reason: "notAllowed" });
+    expect(await submitStudentText(teacher, form(assignmentId, "My town."), noTrigger)).toMatchObject({ reason: "notAllowed" });
     expect(await db.select().from(submissions)).toEqual([]);
   });
 
   it("keeps a removed student's submission, read only (SUB-01 R4, CLS-04 CA3)", async () => {
     const { teacher, student, classId, assignmentId } = await setup();
-    await submitStudentText(student, form(assignmentId, "My town."));
+    await submitStudentText(student, form(assignmentId, "My town."), noTrigger);
     await removeStudent(teacher, classId, student.userId);
     expect(await db.select().from(submissions)).toHaveLength(1);
     expect(await getStudentAssignment(student, assignmentId)).toMatchObject({ status: "being_marked", canSubmit: false });
-    expect(await submitStudentText(student, form(assignmentId, "Again."))).toMatchObject({ reason: "unavailable" });
+    expect(await submitStudentText(student, form(assignmentId, "Again."), noTrigger)).toMatchObject({ reason: "unavailable" });
   });
 });
 
@@ -192,7 +193,7 @@ describe("one submission, however often it is sent", () => {
   it("makes a double send of the same form one submission (race)", async () => {
     const { student, assignmentId } = await setup();
     const sent = form(assignmentId, "My town is small.");
-    const [first, second] = await Promise.all([submitStudentText(student, sent), submitStudentText(student, sent)]);
+    const [first, second] = await Promise.all([submitStudentText(student, sent, noTrigger), submitStudentText(student, sent, noTrigger)]);
     expect(first).toEqual(second);
     expect(first.status).toBe("done");
     expect(await db.select().from(submissions)).toHaveLength(1);
@@ -202,16 +203,16 @@ describe("one submission, however often it is sent", () => {
   it("answers a resend after a network cut with the same confirmation", async () => {
     const { student, assignmentId } = await setup();
     const sent = form(assignmentId, "My town is small.");
-    const first = await submitStudentText(student, sent);
-    expect(await submitStudentText(student, sent)).toEqual(first);
+    const first = await submitStudentText(student, sent, noTrigger);
+    expect(await submitStudentText(student, sent, noTrigger)).toEqual(first);
     expect(await storedTexts()).toHaveLength(1);
   });
 
   it("makes two forms sent at once one submission: the other is told it is already submitted", async () => {
     const { student, assignmentId } = await setup();
     const results = await Promise.all([
-      submitStudentText(student, form(assignmentId, "From one tab.")),
-      submitStudentText(student, form(assignmentId, "From another tab.")),
+      submitStudentText(student, form(assignmentId, "From one tab."), noTrigger),
+      submitStudentText(student, form(assignmentId, "From another tab."), noTrigger),
     ]);
     expect(results.map((r) => (r.status === "error" ? r.reason : r.status)).sort()).toEqual(["alreadySubmitted", "done"]);
     expect(await db.select().from(submissions)).toHaveLength(1);
@@ -220,8 +221,8 @@ describe("one submission, however often it is sent", () => {
 
   it("refuses a second form: the student already submitted", async () => {
     const { student, assignmentId } = await setup();
-    await submitStudentText(student, form(assignmentId, "First."));
-    expect(await submitStudentText(student, form(assignmentId, "Second."))).toMatchObject({ reason: "alreadySubmitted" });
+    await submitStudentText(student, form(assignmentId, "First."), noTrigger);
+    expect(await submitStudentText(student, form(assignmentId, "Second."), noTrigger)).toMatchObject({ reason: "alreadySubmitted" });
     expect(await storedTexts()).toEqual(["First."]);
   });
 });
@@ -229,7 +230,7 @@ describe("one submission, however often it is sent", () => {
 describe("the first submission locks the assignment (ASG-03)", () => {
   it("sets the lock; the task and the deletion are then refused", async () => {
     const { teacher, student, assignmentId } = await setup();
-    await submitStudentText(student, form(assignmentId, "My town."));
+    await submitStudentText(student, form(assignmentId, "My town."), noTrigger);
     expect(await lockedAt(assignmentId)).not.toBeNull();
     const task = { subject: "Another subject.", language: "en" as const, deadline: new Date(Date.now() + 864e5), instructions: null };
     expect(await updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task })).toEqual({
@@ -242,10 +243,10 @@ describe("the first submission locks the assignment (ASG-03)", () => {
     const { teacher, student, assignmentId } = await setup();
     const task = { subject: "Describe your school.", language: "en" as const, deadline: new Date(Date.now() + 864e5), instructions: null };
     expect(await updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task })).toEqual({ ok: true });
-    expect(await submitStudentText(student, form(assignmentId, "My town."))).toMatchObject({ reason: "changed" });
+    expect(await submitStudentText(student, form(assignmentId, "My town."), noTrigger)).toMatchObject({ reason: "changed" });
     expect(await lockedAt(assignmentId)).toBeNull();
     // The page now shows version 2: the same text goes through.
-    expect((await submitStudentText(student, form(assignmentId, "My town.", { contentVersion: "2" }))).status).toBe("done");
+    expect((await submitStudentText(student, form(assignmentId, "My town.", { contentVersion: "2" }), noTrigger)).status).toBe("done");
   });
 });
 
@@ -274,7 +275,7 @@ describe("a first submission and a change of the task at the same time: one goes
     const { teacher, student, assignmentId } = await setup();
     const [submitted, edited] = await queued(
       assignmentId,
-      () => submitStudentText(student, form(assignmentId, "My town.")),
+      () => submitStudentText(student, form(assignmentId, "My town."), noTrigger),
       () => updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task: newTask }),
     );
     expect(submitted.status).toBe("done");
@@ -289,7 +290,7 @@ describe("a first submission and a change of the task at the same time: one goes
     const [edited, submitted] = await queued(
       assignmentId,
       () => updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task: newTask }),
-      () => submitStudentText(student, form(assignmentId, "My town.")),
+      () => submitStudentText(student, form(assignmentId, "My town."), noTrigger),
     );
     expect(edited).toEqual({ ok: true });
     expect(submitted).toMatchObject({ status: "error", reason: "changed" });
@@ -300,7 +301,7 @@ describe("a first submission and a change of the task at the same time: one goes
   it("raced freely: exactly one of the two outcomes, never both", async () => {
     const { teacher, student, assignmentId } = await setup();
     const [submitted, edited] = await Promise.all([
-      submitStudentText(student, form(assignmentId, "My town.")),
+      submitStudentText(student, form(assignmentId, "My town."), noTrigger),
       updateAssignment(teacher, assignmentId, { title: "My town", level: "B1", task: newTask }),
     ]);
     const stored = await db.select().from(submissions);

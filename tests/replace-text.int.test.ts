@@ -17,6 +17,7 @@ import {
   submitStudentText,
   type ReplaceTextState,
 } from "@/server/submissions/submissions";
+import { noTrigger } from "./helpers/triggers";
 
 // SUB-05: replace the submission while the teacher has neither changed nor
 // validated it, 2 times at most (Q3 [D]). CA1, CA3, CA4 here, with SUB-04
@@ -47,14 +48,14 @@ async function submitted() {
   if (!created.ok) throw new Error("Assignment not created");
   const first = await submitStudentText(student, {
     assignmentId: created.assignmentId, contentVersion: "1", requestId: randomUUID(), text: "First text.",
-  });
+  }, noTrigger);
   if (first.status !== "done") throw new Error(first.status);
   const [{ id }] = await db.select({ id: submissions.id }).from(submissions);
   return { teacher, student, classId: made.classId, assignmentId: created.assignmentId, submissionId: id };
 }
 
 const replace = (actor: Actor, assignmentId: string, text: string, requestId = randomUUID()) =>
-  replaceStudentText(actor, { assignmentId, requestId, text });
+  replaceStudentText(actor, { assignmentId, requestId, text }, noTrigger);
 
 /**
  * The teacher's first change or validation, as E7 and E8 will write it: it
