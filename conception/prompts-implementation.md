@@ -724,6 +724,8 @@ Si un texte adverse dépasse l'écart, ne retouche pas la consigne : propose les
 ```
 **Vous validez :** vous lisez le compte rendu ; CA3 est mesuré pour les 7 textes adverses, ou la cause est dite ; le coût lu dans la Console a l'ordre de grandeur du coût calculé. Ces textes sont écrits par des adultes : ils ne représentent pas de vraies copies d'élèves.
 
+Fait le 2026-10-19 : 60 appels, 60 propositions conformes, `end_turn` × 60, aucun refus ; CA3 mesuré sur les 21 comparaisons, dépassé une fois (a03, exécution 2, écart 2 sur `mechanics`) ; dispersion d'au plus 1 sur chaque critère ; coût estimé 0,065 $. Suites de a03 et `AI_CALL_TIMEOUT_MS` = 60 000 pour E6 proposés, non appliqués. Coût de la Console : à relever.
+
 Puis **E5.9** (ci-dessous, points étendus à l'adaptateur).
 
 #### E5.9 — Agent relecteur et revue en contexte neuf
