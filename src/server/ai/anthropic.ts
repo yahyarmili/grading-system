@@ -266,14 +266,14 @@ function classify(error: unknown, deadline: AbortSignal): EvaluatorError {
   if (error instanceof Anthropic.APIError && typeof error.status === "number") {
     const failure = errorForStatus(error.status, error.error, parseRetryAfter(error.headers?.get("retry-after")));
     const requestId = identifierOf(error.requestID);
-    return requestId ? withRequestId(failure, requestId) : failure;
+    return new EvaluatorError(failure.kind, failure.retryAfterMs, failure.providerCode, {
+      status: error.status,
+      ...(requestId ? { requestId } : {}),
+    });
   }
   // Network down, a body that is not JSON, anything else: the error itself is left behind.
   return new EvaluatorError("unavailable");
 }
-
-const withRequestId = (error: EvaluatorError, requestId: string) =>
-  new EvaluatorError(error.kind, error.retryAfterMs, error.providerCode, { requestId });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);

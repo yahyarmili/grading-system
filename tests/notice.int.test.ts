@@ -127,12 +127,19 @@ describe("the notice text (Q10, QNF-1)", () => {
     expect(all).toContain("if you write your name in it, your name is sent too");
   });
 
-  it("says what the app asks of OpenRouter and that it cannot check it, never more", () => {
-    expect(all).toContain("sent to OpenRouter");
-    expect(all).toContain("according to OpenRouter, keep nothing they receive");
+  it("says who receives the text, where, for how long and for what, as Anthropic's word, never more (version 4)", () => {
+    expect(STUDENT_NOTICE.version).toBe(4);
+    expect(all).toContain("sent to Anthropic, a company based in the United States");
+    expect(all).toContain("processed and stored in the United States");
+    expect(all).toContain("does not use them to train its models");
+    expect(all).toContain("deletes them within 30 days");
+    expect(all).toContain("kept for up to 2 years");
     expect(all).toContain("The app cannot check this itself.");
-    expect(all).toContain("It keeps details about each request");
-    expect(all).not.toMatch(/Mistral|is set so that|may (use|train)|improve its models|never (kept|stored)|guarantee/i);
+    expect(all).not.toMatch(/OpenRouter|Phala|Mistral|zero.data|ZDR|keep nothing|is set so that|may (use|train)|improve its models|never (kept|stored)|guarantee/i);
+  });
+
+  it("says nothing about images: only the text is sent until the reading of images (E9)", () => {
+    expect(all).not.toMatch(/image|photo|picture|handwrit/i);
   });
 
   it("says it is a demonstration with fictitious data, and leaves the undecided to be defined", () => {

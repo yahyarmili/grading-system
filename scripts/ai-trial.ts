@@ -167,13 +167,14 @@ async function connectionTrial(evaluator: Evaluator): Promise<number> {
   return 0;
 }
 
-/** What a failure says: its kind, or its class, never its message (it may carry the request or the answer). */
+/** What a failure says: its kind, HTTP status and request-id (and the provider code), or its class; never a message or a body. */
 function describeFailure(error: unknown): string {
   if (error instanceof EvaluatorError) {
     const wait = error.retryAfterMs === undefined ? "" : ` (retry after ${Math.ceil(error.retryAfterMs / 1000)} s)`;
     const code = error.providerCode ? ` [code: ${error.providerCode}]` : "";
     const id = error.requestId ? ` [request-id: ${error.requestId}]` : "";
-    return `${error.kind}: ${error.message}${wait}${code}${id}`;
+    const status = error.status === undefined ? "" : ` [status ${error.status}]`;
+    return `${error.kind}${status}${id}${code}${wait}`;
   }
   if (error instanceof AiConfigurationError) return error.message;
   return error instanceof Error ? error.name : "unknown error";

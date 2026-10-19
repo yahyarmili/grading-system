@@ -377,9 +377,9 @@ describe("each failure has a kind, and carries nothing (EVL-03 R3)", () => {
     expectNothingLeaked(error, log);
   });
 
-  it("keeps the wait asked and the request-id, both identifiers", async () => {
+  it("keeps the wait asked, the status and the request-id, all identifiers", async () => {
     const { evaluator } = adapter(() => json(429, failure("rate_limit_error"), { "retry-after": "7", "request-id": "req_011xyz" }));
-    expect(await failed(call(evaluator))).toMatchObject({ kind: "rate_limited", retryAfterMs: 7000, requestId: "req_011xyz" });
+    expect(await failed(call(evaluator))).toMatchObject({ kind: "rate_limited", retryAfterMs: 7000, status: 429, requestId: "req_011xyz" });
   });
 
   it("would see a leak (counter-proof): the check finds a marker in a code, an error or what is printed", () => {

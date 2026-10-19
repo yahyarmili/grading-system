@@ -110,12 +110,14 @@ export class EvaluatorError extends Error {
   readonly usage?: Usage;
   /** The provider's request-id, an identifier: shown by the commands on a failure, never stored [P]. */
   readonly requestId?: string;
+  /** The HTTP status of a failed answer: shown by the commands with the request-id, never stored [P]. */
+  readonly status?: number;
 
   constructor(
     kind: CallError,
     retryAfterMs?: number,
     providerCode?: string,
-    extra: { stopReason?: string; usage?: Usage; requestId?: string } = {},
+    extra: { stopReason?: string; usage?: Usage; requestId?: string; status?: number } = {},
   ) {
     super(MESSAGES[kind]);
     this.name = "EvaluatorError";
@@ -125,6 +127,7 @@ export class EvaluatorError extends Error {
     if (extra.stopReason !== undefined) this.stopReason = extra.stopReason;
     if (extra.usage !== undefined) this.usage = extra.usage;
     if (extra.requestId !== undefined) this.requestId = extra.requestId;
+    if (extra.status !== undefined) this.status = extra.status;
   }
 }
 

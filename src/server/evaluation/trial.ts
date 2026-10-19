@@ -50,6 +50,9 @@ export type TrialCall = {
   code?: EvaluationError | "daily_limit";
   /** The provider's code of a failure: error type, or `refusal/<category>` (`refusal/null` when none). */
   providerCode?: string;
+  /** HTTP status and request-id of a failed answer: identifiers, for the trial's files only. */
+  status?: number;
+  requestId?: string;
   levels?: Record<CriterionId, number>;
   alerts?: ProposalAlert[];
   /** HTTP requests sent for this text in this run, rate-limited ones included. */
@@ -176,6 +179,8 @@ async function callOnce(entry: TrialText, run: number, deps: TrialDeps, first: b
         code: error.kind,
         ...(error.providerCode === undefined ? {} : { providerCode: error.providerCode }),
         ...(error.stopReason === undefined ? {} : { stopReason: error.stopReason }),
+        ...(error.status === undefined ? {} : { status: error.status }),
+        ...(error.requestId === undefined ? {} : { requestId: error.requestId }),
         ...billed,
       };
     }
@@ -218,7 +223,12 @@ const n = (value: number | null) => (value === null ? "?" : String(value));
 
 /** One line per call, as the command prints it while the trial runs. */
 export function formatCallLine(c: TrialCall): string {
-  const result = c.outcome === "proposed" ? `proposed ${levelsText(c.levels)}` : `${c.outcome}: ${c.code}${c.providerCode ? ` [${c.providerCode}]` : ""}`;
+  const failure = [
+    c.status === undefined ? "" : ` [status ${c.status}]`,
+    c.requestId ? ` [request-id ${c.requestId}]` : "",
+    c.providerCode ? ` [${c.providerCode}]` : "",
+  ].join("");
+  const result = c.outcome === "proposed" ? `proposed ${levelsText(c.levels)}` : `${c.outcome}: ${c.code}${failure}`;
   if (c.outcome === "not_sent") return `run ${c.run} ${c.id}: ${result}`;
   const t = tokens(c.usage);
   const usage = c.usage ? `${n(t.input)} in / ${n(t.output)} out, cache ${n(t.cacheRead)} read / ${n(t.cacheWrite)} written, geo ${said(t.geo)}` : "usage (not said)";
