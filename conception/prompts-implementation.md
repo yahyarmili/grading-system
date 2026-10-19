@@ -713,7 +713,7 @@ Puis deux envois réels, pas plus : l'essai de connexion (npm run ai:trial -- --
 ```
 **Vous validez :** les deux réponses sont conformes, modèle `claude-haiku-5-5`, avec l'usage, le coût estimé et `inference_geo` `us` ; le journal a deux lignes `ai_request_sent`, sans le texte ; la Console montre les requêtes dans l'espace dédié ; vous approuvez la notice v4.
 
-Fait le 2026-10-19 : notice v4 ; procédure réécrite, rejeu daté ; deux envois conformes (connexion : 419 tokens, 0,000068 $ ; d01 par `evaluation-2` : 4 692 tokens, 0,0012 $, 10,4 s), deux lignes au journal. Ajout : `EvaluatorError.status` (statut HTTP, identifiant), affiché avec la classe, le `request-id` et le code du prestataire, jamais stocké. Notice v4 approuvée par l'utilisateur le 2026-10-19 ; Console relevée (clé, journaux, latence : `procedures.md`, rejeu) ; reste le coût affiché par la Console.
+Fait le 2026-10-19 : notice v4 ; procédure réécrite, rejeu daté ; deux envois conformes (connexion : 419 tokens, 0,000068 $ ; d01 par `evaluation-2` : 4 692 tokens, 0,0012 $, 10,4 s), deux lignes au journal. Ajout : `EvaluatorError.status` (statut HTTP, identifiant), affiché avec la classe, le `request-id` et le code du prestataire, jamais stocké. Notice v4 approuvée par l'utilisateur le 2026-10-19 ; Console relevée (clé, journaux, latence : `procedures.md`, rejeu) ; coût de la Console : voir E5.16 (0,07 $ pour les deux prompts).
 
 #### E5.16 — Second essai des jeux avec claude-haiku-5-5 (EVL-03 CA3, EVL-04 R2)
 ```
@@ -724,7 +724,7 @@ Si un texte adverse dépasse l'écart, ne retouche pas la consigne : propose les
 ```
 **Vous validez :** vous lisez le compte rendu ; CA3 est mesuré pour les 7 textes adverses, ou la cause est dite ; le coût lu dans la Console a l'ordre de grandeur du coût calculé. Ces textes sont écrits par des adultes : ils ne représentent pas de vraies copies d'élèves.
 
-Fait le 2026-10-19 : 60 appels, 60 propositions conformes, `end_turn` × 60, aucun refus ; CA3 mesuré sur les 21 comparaisons, dépassé une fois (a03, exécution 2, écart 2 sur `mechanics`) ; dispersion d'au plus 1 sur chaque critère ; coût estimé 0,065 $. Suites de a03 et `AI_CALL_TIMEOUT_MS` = 60 000 pour E6 proposés, non appliqués. Coût de la Console : à relever.
+Fait le 2026-10-19 : 60 appels, 60 propositions conformes, `end_turn` × 60, aucun refus ; CA3 mesuré sur les 21 comparaisons, dépassé une fois (a03, exécution 2, écart 2 sur `mechanics`) ; dispersion d'au plus 1 sur chaque critère ; coût estimé 0,065 $. Suites de a03 et `AI_CALL_TIMEOUT_MS` = 60 000 pour E6 proposés, non appliqués. Console : 0,07 $ dépensés ce mois, crédit 99,94 $ (même ordre de grandeur que les 0,066 $ estimés pour E5.15 et E5.16).
 
 Puis **E5.9** (ci-dessous, points étendus à l'adaptateur).
 
