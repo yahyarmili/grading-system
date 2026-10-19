@@ -662,6 +662,7 @@ Le plan fixe :
 - l'essai instrumenté (E5.14) et le premier envoi d'evaluation-2 (E5.15).
 Montre le découpage E5.12 à E5.16, puis E5.9, et ce qui reste hors E5 (plafond de coût et disjoncteur en E6, vote et variantes en E10, lecture en E9).
 ```
+Fait le 2026-10-19 : relevés consignés (annexe §8, `stack-technologique.md` §3), plan d'E5 révisé. Écart signalé, non tranché : la Console montre un crédit promotionnel qui expire le 2026-11-12 ; E5.15 et E5.16 se font avant.
 
 #### E5.12 — Socle additif : valeurs stockées, refus, pannes simulées (EVL-03, NFR-EXP-04)
 ```

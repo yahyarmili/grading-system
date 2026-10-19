@@ -13,15 +13,16 @@
 | Identifiant | fixe, sans date ni alias ; sorti le 2026-10-07 ; retrait pas avant le 2027-10-07 (engagement minimal publié) ; 1M tokens d'entrée, 128K de sortie | [Haiku 5.5] | L |
 | Prix | par MTok (prompt ≤ 100K) : entrée 0,10 $, sortie 0,50 $, lecture de cache 0,01 $ ; au-delà : 0,50 / 2,50 $. Tokenizer : +30 % de tokens par rapport à Haiku 4.5 | [Pricing], [Migration] | E, L |
 | Vision | JPEG, PNG, GIF, WebP ; 10 Mo par image, 8 000 px, 32 Mo par requête ; ⌈l/28⌉ × ⌈h/28⌉ tokens, haute résolution jusqu'à 2 576 px et 4 784 tokens ; manuscrit non mentionné | [Vision] | L |
-| Sortie structurée | GA, `output_config.format`, pas sur Bedrock ; `additionalProperties: false` obligatoire ; `integer` et `enum` acceptés ; refusés : `minimum`/`maximum`, `minLength`, `minItems` > 1 ; grammaire gardée 24 h (premier appel plus lent) ; incompatible avec Citations et le pré-remplissage | [Structured outputs] | E (`enum`, cache), sinon R |
-| Réflexion, effort | réflexion adaptative par défaut, comptée dans `max_tokens` (`stop_reason: "max_tokens"` possible avant tout texte), blocs à lire par `type` ; effort de `low` à `max`, défaut `medium` ; `thinking` désactivé accepté jusqu'à `high` | [Migration] | L |
-| Échantillonnage | 400 pour `temperature` ≠ 1, `top_p` ≠ 0,99, `top_k`, et le pré-remplissage | [Migration] | L |
+| Sortie structurée | GA, `output_config.format`, pas sur Bedrock ; `additionalProperties: false` obligatoire ; `integer` et `enum` (aussi de nombres) acceptés ; `minItems` seulement 0 ou 1 ; refusés : `minimum`/`maximum`, `minLength` ; au plus 24 paramètres optionnels ; schéma trop complexe : 400 ; grammaire gardée 24 h (premier appel plus lent) ; incompatible avec Citations et le pré-remplissage | [Structured outputs] | E (lu le 2026-10-19, fin de page non lue) |
+| Sortie sous refus ou troncature | `max_tokens` : sortie coupée, hors schéma possible ; `refusal` : 200, tokens facturés, sortie hors schéma possible ; un champ de raisonnement pas à pas peut déclencher `reasoning_extraction` | [Structured outputs] | E |
+| Réflexion, effort | réflexion adaptative par défaut, comptée dans `max_tokens` (`stop_reason: "max_tokens"` possible avant tout texte), blocs à lire par `type`, texte vide par défaut (`display: "omitted"`) ; effort de `low` à `max`, défaut `medium` ; `thinking` désactivé accepté jusqu'à `high` (400 à `xhigh` et `max`) | [Migration], [Errors] | L |
+| Échantillonnage | `temperature` seulement 1, `top_p` seulement 0,99, jamais les deux ; `top_k` et le pré-remplissage : 400 | [Migration] | L |
 | Refus | HTTP 200, `stop_reason: "refusal"` ; catégories `cyber`, `bio`, `frontier_llm`, `general_harms` pour Haiku 5.5, plus `reasoning_extraction` sur la page générale, et `null` ; aucun repli côté serveur ; la même requête est en général refusée à nouveau | [Prompting], [Refusals] | L/E |
 | Coût d'un refus | facturé avant toute sortie pour `bio`, `frontier_llm`, `reasoning_extraction`. Celle-ci vise un champ de raisonnement ou de trace dans une sortie JSON ; une courte explication reste admise (notre schéma a `justification`) | [Refusals] | E |
 
 ## 2. Données, conditions, lieu
 
-- **Conservation** : entrées et sorties supprimées sous 30 jours ([Conservation], R). La doc Platform dit autrement, à propos des fonctionnalités : contenu non conservé par défaut, sauf pour les « Covered Models » (30 jours) ([Data retention], E). À relever dans la Console (E5.11).
+- **Conservation** : entrées et sorties supprimées sous 30 jours ([Conservation], R). La doc Platform dit autrement, à propos des fonctionnalités : contenu non conservé par défaut, sauf pour les « Covered Models » (30 jours) ([Data retention], E). Console, 2026-10-19 : « On · 30 days », pas de ZDR (§8).
 - **Exceptions** : contenu signalé, jusqu'à 2 ans (scores de classification : 7 ans) ; obligation légale ; retours (pouce) : 5 ans ([Conservation], R ; [Data retention], E). Seul le schéma JSON, sans donnée d'élève, est gardé 24 h ([Data retention], E).
 - **Entraînement** : aucun par défaut ([Entraînement], R) ; interdit sur le contenu du client par les [Commercial Terms] (R), sauf retours envoyés ou accord explicite.
 - **ZDR** : seulement par accord commercial ; jamais pour les lots, la Files API ni Managed Agents ([Data retention], E). Le ZDR obtenu via OpenRouter (Phala) disparaît.
@@ -40,7 +41,8 @@
 - **Plafond du palier** : « $500 tier limit » est celui de Start, remis à zéro le 1er à 00:00 UTC ; atteint : 429 `rate_limit_error`, `error_code` `enforced_spend_limit_reached`, sans `retry-after` ([Rate limits], L).
 - **Limite de l'utilisateur** : par organisation ou par espace, avec alertes, impossible sur l'espace Default ; atteinte : **400 documenté** (`invalid_request_error`), message qui commence par « You have reached your specified API usage limits » (ou « …workspace API usage limits ») ([Rate limits], [Workspaces], L).
 - **Clés** : expiration choisie à la création, non modifiable (expirée : 401) ; compte de service conseillé pour un usage automatisé ; `x-api-key` hérité, encore pris en charge ; une clé non limitée à un espace exige l'en-tête `anthropic-workspace-id` (sinon 400) ; un compte de service a accès à l'espace Default et aux espaces où il est ajouté ([Authentication], E). Claude Code utilise une `ANTHROPIC_API_KEY` de l'environnement à la place de l'abonnement ([Claude Code env], E).
-- **Erreurs** : 400, 401, 402 `billing_error`, 403, 404, 409, 413, 429, 500, 504 `timeout_error`, 529 `overloaded_error` ; corps `{type:"error", error:{type, message}, request_id}`, en-tête `request-id` ; `retry-after` et `anthropic-ratelimit-*` ([Errors], [Rate limits], L).
+- **Erreurs** : 400, 401, 402 `billing_error`, 403, 404, 409 `conflict_error`, 413 (renvoyé par Cloudflare avant l'API), 429, 500, 504 `timeout_error`, 529 `overloaded_error` ; corps `{type:"error", error:{type, message}, request_id}`, en-tête `request-id` ; `retry-after` et `anthropic-ratelimit-*` ; plafond du palier : `error.details.error_code` = `enforced_spend_limit_reached` ; un SDK non-streaming refuse localement un `max_tokens` dont la durée prévue dépasse 10 min ([Errors], [Rate limits], L, relus le 2026-10-19).
+- **`inference_geo`** : une valeur hors de `allowed_inference_geos` de l'espace « returns an error », statut non dit ; limites de débit partagées entre `us` et `global` ; ×1,1 sur toutes les catégories de tokens ([Data residency], L).
 
 ## 4. Lots, cache, comptage, API Models
 
@@ -109,10 +111,18 @@ Consigne `evaluation-1` reconstruite et comptée localement (caractères / 4, +3
 - 100 $ ≈ 40 000 à 130 000 copies ; l'essai d'E5.16 (~60 appels) ≈ 0,05 à 0,15 $.
 - Valeurs réelles à mesurer en E5.16, par l'`usage` des réponses.
 
-## 8. À relever, non vérifié
+## 8. Relevés de la Console, non vérifié
 
-- **Console**, par l'utilisateur : palier et ligne `claude-haiku-5-5`, fin du cycle, conservation affichée, `inference_geo` autorisé et région de l'espace : à relever (E5.11). À vérifier aussi : aucun moyen de paiement, limite et alertes de l'espace, aucun accord d'entraînement, conditions acceptées ; expiration de la clé, notée à sa création.
-- **Non vérifié** : code HTTP du crédit épuisé ; conservation (30 jours, ou formulation de la doc Platform) ; Commercial Terms et Supplemental Credit Terms appliqués à cet usage ; champ de « Education and credentials » et règles sur les mineurs, à confirmer par un juriste ; catégories de refus (4 ou 5, plus `null`) ; points S du §5 ; empaquetage par Next 16 ; latence ; piste d'un texte passé en `tool_result` contre l'injection (skill local, `model-migration.md` L2371) ; fidélité de la lecture manuscrite (E9.0).
+- **Console**, relevée par l'utilisateur le 2026-10-19 :
+  - palier Start ; `claude-haiku-5-5` : 1 000 requêtes, 2 M tokens d'entrée et 400 K de sortie par minute ; plafond du palier 500 $ par mois ;
+  - **crédit promotionnel** de 100 $, accordé le 2026-10-17, qui expire le 2026-11-12 (UTC) ; aucun moyen de paiement. Écart avec le [D] « crédit mensuel, sans report » : non tranché ; renouvellement après le 2026-11-12 non observé, à relever alors ; E5.15 et E5.16 se font avant cette date ;
+  - espace `grading_system` limité à 10 $ par mois (remise à zéro le 1er), alertes à 5 et 8 $, limites de débit de l'organisation ;
+  - `inference_geo` autorisé : `us` seulement, défaut `us` ; région de l'espace : United States ;
+  - conservation de l'organisation : « On · 30 days », pas de ZDR ;
+  - programme partenaire non rejoint ; retours des utilisateurs désactivés.
+
+  Reste à vérifier : conditions acceptées ; expiration de la clé, notée à sa création (E5.15).
+- **Non vérifié** : code HTTP du crédit épuisé ; Commercial Terms et Supplemental Credit Terms appliqués à cet usage ; champ de « Education and credentials » et règles sur les mineurs, à confirmer par un juriste ; catégories de refus (4 ou 5, plus `null`) ; points S du §5 ; empaquetage par Next 16 ; latence ; piste d'un texte passé en `tool_result` contre l'injection (skill local, `model-migration.md` L2371) ; fidélité de la lecture manuscrite (E9.0).
 - **Skill local `claude-api`** : il annonce des en-têtes `x-ratelimit-*` au lieu de `anthropic-ratelimit-*` (`shared/error-codes.md` L150-154).
 - **Limites** : sans température, la stabilité se mesure, elle ne se règle pas ; des textes d'adultes ne représentent pas de vrais élèves ; un jeu adverse fini ne prouve rien ; l'IA plus la validation ne suppriment ni l'ancrage ni le halo ; recul de confidentialité par rapport à OpenRouter (§2) : le jeu adverse peut être signalé, donc gardé 2 ans.
 
