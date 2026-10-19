@@ -675,6 +675,8 @@ Selon le plan révisé, sans toucher à l'adaptateur OpenRouter encore en place 
 ```
 **Vous validez :** le SQL de `0012` n'ajoute que deux valeurs ; `npm test` passe ; `ai:evaluate --simulate refusal` donne « Evaluation failed », cause `refused`, une seule tentative.
 
+Fait le 2026-10-19 : SQL validé, `0012` appliquée sur dev ; `--simulate refusal` sur dev : `evaluation_failed`, 1 tentative, `refused`. Les champs optionnels `stopReason` (réponse et erreur) et `usage` (erreur) sont ajoutés dès E5.12, pour le simulateur.
+
 #### E5.13 — Adaptateur Anthropic durci, hors réseau (EVL-02, NFR-DON-05, NFR-EXP-04, NFR-QUA-02)
 ```
 Implémente selon le plan révisé le passage à Anthropic, sans envoi réel.

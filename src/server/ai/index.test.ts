@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { aiProviders, selectableAiProviders } from "@/lib/evaluation";
 import { evaluatorForCommand, getEvaluator, getSimulator, selectEvaluator, SimulatorEvaluator } from ".";
 import { AiConfigurationError } from "./types";
 
@@ -33,6 +34,7 @@ describe("selectEvaluator", () => {
     ["OpenRouter with a blank key", { AI_PROVIDER: "openrouter", OPENROUTER_API_KEY: "   " }],
     ["an unknown provider", { AI_PROVIDER: "openai", OPENROUTER_API_KEY: "k" }],
     ["the former provider, Mistral", { AI_PROVIDER: "mistral", OPENROUTER_API_KEY: "k" }],
+    ["Anthropic, stored but not selectable before its adapter", { AI_PROVIDER: "anthropic", OPENROUTER_API_KEY: "k" }],
     ["a provider in capitals", { AI_PROVIDER: "OpenRouter", OPENROUTER_API_KEY: "k" }],
   ])("refuses %s", (_label, env) => {
     expect(() => selectEvaluator({ NODE_ENV: "development", ...env })).toThrow(AiConfigurationError);
@@ -70,5 +72,14 @@ describe("evaluatorForCommand (E5.7)", () => {
     expect(evaluatorForCommand("openrouter", env).provider).toBe("openrouter");
     expect(() => evaluatorForCommand("openrouter", { NODE_ENV: "development" })).toThrow(AiConfigurationError);
     expect(() => evaluatorForCommand("mistral", env)).toThrow(AiConfigurationError);
+    expect(() => evaluatorForCommand("anthropic", env)).toThrow(AiConfigurationError);
+  });
+});
+
+describe("the stored and selectable providers (E5.12)", () => {
+  it("keeps every provider a run may name, and selects only some of them", () => {
+    expect(aiProviders).toEqual(["simulator", "openrouter", "anthropic"]);
+    expect(selectableAiProviders).toEqual(["simulator", "openrouter"]);
+    for (const name of selectableAiProviders) expect(aiProviders).toContain(name);
   });
 });

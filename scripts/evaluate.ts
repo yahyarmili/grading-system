@@ -13,7 +13,9 @@
 // quota (AI_DAILY_REQUEST_LIMIT, counted on the security log); the others
 // stay received.
 // --simulate <fault> makes every attempt fail with that fault (simulator only):
-//   invalid_output, missing_quote, error_500, error_429, error_401, timeout.
+//   invalid_output, missing_quote, error_500, error_429, error_401, timeout,
+//   refusal (stops at once, "refused"), max_tokens (a cut answer, "not_json"),
+//   overloaded (529), billing (402), spend_limit (the Console's limit).
 // Runs with --conditions=react-server so "server-only" modules load outside Next.
 
 import { parseArgs } from "node:util";
@@ -36,6 +38,11 @@ const FAULTS: Record<string, SimulatedFault> = {
   error_429: { kind: "error", status: 429 },
   error_401: { kind: "error", status: 401 },
   timeout: { kind: "timeout" },
+  refusal: { kind: "refusal", category: "general_harms" },
+  max_tokens: { kind: "max_tokens" },
+  overloaded: { kind: "error", status: 529 },
+  billing: { kind: "error", status: 402 },
+  spend_limit: { kind: "spend_limit" },
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

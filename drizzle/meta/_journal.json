@@ -85,6 +85,13 @@
       "when": 1792246119648,
       "tag": "0011_protect_evaluation_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792419596421,
+      "tag": "0012_add_anthropic_and_refused",
+      "breakpoints": true
     }
   ]
 }

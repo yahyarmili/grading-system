@@ -45,7 +45,7 @@ export type EvaluationOutcome =
   | { status: "skipped" }
   | { status: "to_review" | "evaluation_failed" | "not_assessable" | "stale"; attempts: number; durationMs: number; errors: EvaluationError[] };
 
-/** Failed calls retried: a later attempt may succeed. configuration and rejected stop at once. */
+/** Failed calls retried: a later attempt may succeed. configuration, rejected and refused stop at once. */
 const RETRIED = new Set<EvaluationError>(["timeout", "rate_limited", "unavailable"]);
 
 /** The three flags of the model, as information alerts (EVL-04), best effort; very_short is the system's own (alerts.ts). */
@@ -135,6 +135,8 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
         content = response.content;
       } catch (error) {
         if (!(error instanceof EvaluatorError)) throw error;
+        // A billed failure (a refusal) still counts in the run's usage.
+        usage = addUsage(usage, error.usage ?? null);
         errors.push(error.kind);
         if (!RETRIED.has(error.kind)) break;
         if (error.kind === "rate_limited") wait = Math.min(error.retryAfterMs ?? AI_RETRY_DELAY_MS, AI_RETRY_MAX_WAIT_MS);

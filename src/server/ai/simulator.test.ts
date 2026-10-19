@@ -76,6 +76,46 @@ describe("injected faults", () => {
     await expect(simulator.evaluate(request(TEXT), context())).resolves.toBeDefined();
   });
 
+  it.each([
+    [529, "unavailable", "overloaded_error"],
+    [402, "configuration", "billing_error"],
+  ] as const)("an HTTP %i fails as %s, with Anthropic's error type (E5.12)", async (status, kind, code) => {
+    const simulator = new SimulatorEvaluator();
+    simulator.failNext({ kind: "error", status });
+    await expect(simulator.evaluate(request(TEXT), context())).rejects.toMatchObject({ kind, providerCode: code });
+  });
+
+  it("fails on the Console's spending limit as a configuration", async () => {
+    const simulator = new SimulatorEvaluator();
+    simulator.failNext({ kind: "spend_limit" });
+    await expect(simulator.evaluate(request(TEXT), context())).rejects.toMatchObject({
+      kind: "configuration",
+      providerCode: "invalid_request_error/spend_limit",
+    });
+  });
+
+  it.each([
+    ["general_harms", "refusal/general_harms"],
+    [null, "refusal/null"],
+  ] as const)("refuses with category %s: refused, its stop reason and a billed usage, a fixed message", async (category, code) => {
+    const simulator = new SimulatorEvaluator();
+    simulator.failNext({ kind: "refusal", category });
+    const error = (await simulator.evaluate(request(TEXT), context()).catch((e: unknown) => e)) as EvaluatorError;
+    expect(error).toBeInstanceOf(EvaluatorError);
+    expect(error).toMatchObject({ kind: "refused", providerCode: code, stopReason: "refusal" });
+    expect(error.usage?.totalTokens).toBeGreaterThan(0);
+    expect(error.message).toBe("The AI declined to evaluate this text.");
+  });
+
+  it("cuts its answer at max_tokens: a 200 whose JSON is incomplete", async () => {
+    const simulator = new SimulatorEvaluator();
+    simulator.failNext({ kind: "max_tokens" });
+    const response = await simulator.evaluate(request(TEXT), context());
+    expect(response.stopReason).toBe("max_tokens");
+    expect(() => JSON.parse(response.content)).toThrow();
+    expect((await simulator.evaluate(request(TEXT), context())).stopReason).toBe("end_turn");
+  });
+
   it("fails as many times as asked, then answers", async () => {
     const simulator = new SimulatorEvaluator();
     simulator.failNext({ kind: "error", status: 500 }, 2);

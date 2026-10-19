@@ -1,12 +1,13 @@
 import { AI_CALL_TIMEOUT_MS } from "@/config/provisional";
 import { criterionIds, type CriterionId, type Level } from "@/lib/rubric";
-import { errorForStatus } from "./errors";
+import type { CallError } from "@/lib/evaluation";
 import {
   EvaluatorError,
   type EvaluationContext,
   type EvaluationRequest,
   type EvaluationResponse,
   type Evaluator,
+  type Usage,
 } from "./types";
 
 // The default evaluator everywhere (tests, development, E2E): nothing leaves
@@ -15,7 +16,14 @@ import {
 // and faults are injected on demand (NFR-EXP-04).
 
 export type SimulatedFault =
-  | { kind: "error"; status: 500 | 429 | 401; retryAfterMs?: number }
+  /** An HTTP error, classified by the table below: 529 is Anthropic's overload, 402 its billing error. */
+  | { kind: "error"; status: SimulatedStatus; retryAfterMs?: number }
+  /** The spending limit set in the Console is reached: a 400 that is a configuration, never retried. */
+  | { kind: "spend_limit" }
+  /** The model declines (HTTP 200, stop_reason "refusal"): billed, never retried; the category may be null. */
+  | { kind: "refusal"; category: string | null }
+  /** The answer is cut at max_tokens: a 200 whose JSON is incomplete, left to the validator. */
+  | { kind: "max_tokens" }
   /** Waits until the call is aborted (its deadline or the caller), then fails as a timeout. */
   | { kind: "timeout" }
   | {
@@ -26,6 +34,23 @@ export type SimulatedFault =
   | { kind: "missing_quote" };
 
 export type CapturedRequest = { request: EvaluationRequest; subjectId: string | null };
+
+/**
+ * Each simulated status, with its kind and Anthropic's error type: set here,
+ * not read from a provider's classifier, so that the faults stay the same
+ * when the adapter changes.
+ */
+const STATUS_FAULTS = {
+  500: ["unavailable", "api_error"],
+  529: ["unavailable", "overloaded_error"],
+  429: ["rate_limited", "rate_limit_error"],
+  401: ["configuration", "authentication_error"],
+  402: ["configuration", "billing_error"],
+} as const satisfies Record<number, readonly [CallError, string]>;
+type SimulatedStatus = keyof typeof STATUS_FAULTS;
+
+/** What a refusal is said to have cost: fictitious, only so that the run's usage is seen to add it. */
+const REFUSAL_USAGE: Usage = { promptTokens: 1000, completionTokens: 10, totalTokens: 1010 };
 
 /** At most this many requests are kept, in memory only: never on disk, never in the console. */
 const CAPTURE_LIMIT = 20;
@@ -93,14 +118,29 @@ export class SimulatorEvaluator implements Evaluator {
     if (hold) await Promise.race([hold, untilAborted(signal)]);
 
     const fault = this.faults.shift();
-    if (fault?.kind === "error") throw errorForStatus(fault.status, fault.retryAfterMs);
+    if (fault?.kind === "error") {
+      const [kind, type] = STATUS_FAULTS[fault.status];
+      throw new EvaluatorError(kind, kind === "rate_limited" ? fault.retryAfterMs : undefined, type);
+    }
+    if (fault?.kind === "spend_limit") throw new EvaluatorError("configuration", undefined, "invalid_request_error/spend_limit");
+    if (fault?.kind === "refusal") {
+      throw new EvaluatorError("refused", undefined, `refusal/${fault.category ?? "null"}`, {
+        stopReason: "refusal",
+        usage: REFUSAL_USAGE,
+      });
+    }
     if (fault?.kind === "timeout") return untilAborted(signal);
 
-    const content =
-      fault?.kind === "invalid_output" && fault.variant === "not_json"
-        ? "This is not JSON."
-        : JSON.stringify(this.answer(request, fault));
-    return { content, modelAnswered: this.model, providerAnswered: null, usage: null };
+    const answer = JSON.stringify(this.answer(request, fault));
+    const reply = (content: string, stopReason: string): EvaluationResponse => ({
+      content,
+      modelAnswered: this.model,
+      providerAnswered: null,
+      stopReason,
+      usage: null,
+    });
+    if (fault?.kind === "max_tokens") return reply(answer.slice(0, Math.floor(answer.length / 2)), "max_tokens");
+    return reply(fault?.kind === "invalid_output" && fault.variant === "not_json" ? "This is not JSON." : answer, "end_turn");
   }
 
   /** The next `times` calls fail with this fault, in order after any already queued. */

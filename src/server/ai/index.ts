@@ -1,4 +1,5 @@
 import "server-only";
+import { selectableAiProviders } from "@/lib/evaluation";
 import { createOpenRouterEvaluator } from "./openrouter";
 import { SimulatorEvaluator } from "./simulator";
 import { AiConfigurationError, type Evaluator } from "./types";
@@ -34,8 +35,10 @@ export function selectEvaluator(env: AiEnv): EvaluatorChoice {
   if (env.NODE_ENV === "test") return { provider: "simulator" };
   const provider = env.AI_PROVIDER?.trim() ?? "";
   if (provider === "" || provider === "simulator") return { provider: "simulator" };
-  if (provider !== "openrouter") {
-    throw new AiConfigurationError('AI_PROVIDER must be "simulator" or "openrouter", or be left empty.');
+  // A stored provider is not a selectable one: "anthropic" waits for its adapter (E5.13).
+  if (!(selectableAiProviders as readonly string[]).includes(provider)) {
+    const names = selectableAiProviders.map((name) => `"${name}"`).join(" or ");
+    throw new AiConfigurationError(`AI_PROVIDER must be ${names}, or be left empty.`);
   }
   const apiKey = env.OPENROUTER_API_KEY?.trim() ?? "";
   if (apiKey === "") throw new AiConfigurationError("AI_PROVIDER=openrouter needs OPENROUTER_API_KEY.");

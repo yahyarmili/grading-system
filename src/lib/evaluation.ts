@@ -1,16 +1,26 @@
 // Closed lists of the evaluation by the AI (E5). Kept free of imports: the
 // database schema will read them (E5.5), and drizzle-kit loads the schema alone.
 
-/** Where an evaluation request goes: the simulator by default, OpenRouter only on demand. */
-export const aiProviders = ["simulator", "openrouter"] as const;
+/**
+ * Every provider a run may name, base of the ai_provider enum: a value is
+ * never removed (a stored run is immutable), so openrouter stays after it
+ * stops being selectable.
+ */
+export const aiProviders = ["simulator", "openrouter", "anthropic"] as const;
 export type AiProvider = (typeof aiProviders)[number];
+
+/** The providers the environment or a command may select now: the simulator by default, a real one only on demand. */
+export const selectableAiProviders = ["simulator", "openrouter"] as const satisfies readonly AiProvider[];
+export type SelectableAiProvider = (typeof selectableAiProviders)[number];
 
 /**
  * Why a call to the AI failed, without content (EVL-03 R3). Retried:
  * timeout, rate_limited, unavailable. Final: rejected (the request itself was
- * refused), configuration (key, model or access).
+ * refused), configuration (key, model, access or budget), refused (the model
+ * declined to evaluate the text; billed, so never retried automatically, but
+ * the teacher may ask again, transition 6).
  */
-export const callErrors = ["timeout", "rate_limited", "unavailable", "rejected", "configuration"] as const;
+export const callErrors = ["timeout", "rate_limited", "unavailable", "rejected", "configuration", "refused"] as const;
 export type CallError = (typeof callErrors)[number];
 
 /** What one evaluation run gave (E5.5): a proposal, a failure, or a blocking alert before any request. */

@@ -39,6 +39,8 @@ export type EvaluationResponse = {
   modelAnswered: string | null;
   /** The company that ran the model, when OpenRouter names it (undocumented field); null otherwise. */
   providerAnswered: string | null;
+  /** Why the model stopped, when the provider says (`end_turn`, `max_tokens`); undefined otherwise. */
+  stopReason?: string | null;
   usage: Usage | null;
 };
 
@@ -71,6 +73,7 @@ const MESSAGES: Record<CallError, string> = {
   unavailable: "The AI could not be reached or failed.",
   rejected: "The AI refused the request.",
   configuration: "The AI refused the access: key, model or account.",
+  refused: "The AI declined to evaluate this text.",
 };
 
 /** A failed call, by kind only (EVL-03 R3). No cause attached: the provider's error stays behind. */
@@ -84,13 +87,24 @@ export class EvaluatorError extends Error {
    * quota from a capacity limit, without content.
    */
   readonly providerCode?: string;
+  /** Why the model stopped, for an answer that is a failure (`refusal`). */
+  readonly stopReason?: string;
+  /** What the provider counted for a failed call it billed (a refusal): added to the run. */
+  readonly usage?: Usage;
 
-  constructor(kind: CallError, retryAfterMs?: number, providerCode?: string) {
+  constructor(
+    kind: CallError,
+    retryAfterMs?: number,
+    providerCode?: string,
+    extra: { stopReason?: string; usage?: Usage } = {},
+  ) {
     super(MESSAGES[kind]);
     this.name = "EvaluatorError";
     this.kind = kind;
     if (retryAfterMs !== undefined) this.retryAfterMs = retryAfterMs;
     if (providerCode !== undefined) this.providerCode = providerCode;
+    if (extra.stopReason !== undefined) this.stopReason = extra.stopReason;
+    if (extra.usage !== undefined) this.usage = extra.usage;
   }
 }
 
