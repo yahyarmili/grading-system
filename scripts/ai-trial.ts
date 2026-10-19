@@ -7,12 +7,15 @@
 //    to check the key, the answer format and the access to the pinned model.
 //      docker compose exec web npm run ai:trial [-- --provider anthropic]
 //
-// 2. Trial sets (E5.7, EVL-03 CA3): the texts of scripts/fixtures/ai/, through
-//    the evaluation's request builder and validator, `--runs` times. Writes
-//    the report (Markdown) and every call, raw answers included (JSON), to
-//    --out (trial-results/ by default, not committed).
-//      docker compose exec web npm run ai:trial -- --set all --runs 2 --provider anthropic
-//    --set dev | adversarial (with its base texts) | all. With Anthropic, it
+// 2. Trial sets (E5.7, EVL-03 CA3; instrumented in E5.14): the texts of
+//    scripts/fixtures/ai/, through the evaluation's request builder and
+//    validator, `--runs` times. Prints each call as it ends (model that
+//    answered, stop_reason, usage, estimated cost), then writes the report
+//    (Markdown) and every call, raw answers included (JSON), to --out
+//    (trial-results/ by default, not committed).
+//      docker compose exec web npm run ai:trial -- --set all --runs 3 --provider anthropic
+//    --set dev | adversarial (with its base texts) | sensitive | all;
+//    --limit <n> sends only the first n texts of the set. With Anthropic, it
 //    stops before going over the daily guard (AI_DAILY_REQUEST_LIMIT, counted
 //    on the security log): the texts left are "not sent".
 // Runs with --conditions=react-server so "server-only" modules load outside Next.
@@ -30,16 +33,19 @@ import {
 import { AiConfigurationError, EvaluatorError, evaluatorForCommand, type EvaluationRequest, type Evaluator } from "@/server/ai";
 import { countAiRequestsToday } from "@/server/data/auth/security-events";
 import { closeDatabase } from "@/server/data/lifecycle";
+import { estimateCostUsd, PRICES } from "@/server/evaluation/prices";
 import {
+  formatCallLine,
   formatTrialReport,
   runTrial,
-  trialTexts,
-  type AdversarialText,
-  type DevText,
+  selectTexts,
+  TRIAL_SETS,
+  type TrialSet,
+  type TrialSets,
 } from "@/server/evaluation/trial";
 
 const FIXTURES = path.join(process.cwd(), "scripts/fixtures/ai");
-const SETS = ["dev", "adversarial", "all"] as const;
+const read = <T,>(file: string) => JSON.parse(readFileSync(path.join(FIXTURES, file), "utf8")) as T;
 
 /** A fixed request: fictitious text, a minimal answer schema. Not the evaluation prompt (E5.4). */
 const TRIAL: EvaluationRequest = {
@@ -72,6 +78,7 @@ async function main(): Promise<number> {
       provider: { type: "string" },
       set: { type: "string" },
       runs: { type: "string", default: "2" },
+      limit: { type: "string" },
       out: { type: "string", default: "trial-results" },
     },
   });
@@ -79,19 +86,17 @@ async function main(): Promise<number> {
   console.log(`Provider: ${evaluator.provider}; model requested: ${evaluator.model}`);
   if (values.set === undefined) return connectionTrial(evaluator);
 
-  const set = values.set as (typeof SETS)[number];
+  const set = values.set as TrialSet;
   const runs = Number(values.runs);
-  if (!SETS.includes(set) || !Number.isInteger(runs) || runs < 1) {
-    console.error(`Usage: npm run ai:trial -- --set ${SETS.join("|")} [--runs <n>] [--provider simulator|anthropic] [--out <dir>]`);
+  const limit = values.limit === undefined ? undefined : Number(values.limit);
+  if (!TRIAL_SETS.includes(set) || !Number.isInteger(runs) || runs < 1 || (limit !== undefined && (!Number.isInteger(limit) || limit < 1))) {
+    console.error(
+      `Usage: npm run ai:trial -- --set ${TRIAL_SETS.join("|")} [--runs <n>] [--limit <n>] [--provider simulator|anthropic] [--out <dir>]`,
+    );
     return 2;
   }
-  const dev = JSON.parse(readFileSync(path.join(FIXTURES, "dev.json"), "utf8")) as DevText[];
-  const adversarial = JSON.parse(readFileSync(path.join(FIXTURES, "adversarial.json"), "utf8")) as AdversarialText[];
-  const bases = new Set(adversarial.map((entry) => entry.baseId));
-  const texts = trialTexts(
-    set === "adversarial" ? dev.filter((entry) => bases.has(entry.id)) : dev,
-    set === "dev" ? [] : adversarial,
-  );
+  const sets: TrialSets = { dev: read("dev.json"), adversarial: read("adversarial.json"), sensitive: read("sensitive.json") };
+  const texts = selectTexts(set, sets, limit);
 
   const remaining = async () => {
     if (evaluator.provider === "simulator") return Number.POSITIVE_INFINITY;
@@ -106,6 +111,7 @@ async function main(): Promise<number> {
     remaining,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     pauseMs: evaluator.provider === "simulator" ? 0 : AI_TRIAL_PAUSE_MS,
+    onCall: (call) => console.log(formatCallLine(call)),
   });
   const date = new Date().toISOString();
   const report = formatTrialReport(texts, calls, { date, provider: evaluator.provider, model: evaluator.model, runs });
@@ -113,8 +119,11 @@ async function main(): Promise<number> {
   mkdirSync(values.out!, { recursive: true });
   const base = path.join(values.out!, `trial-${set}-${evaluator.provider}-${stamp}`);
   writeFileSync(`${base}.md`, `${report}\n`);
-  writeFileSync(`${base}.json`, `${JSON.stringify({ date, provider: evaluator.provider, model: evaluator.model, set, runs, calls }, null, 2)}\n`);
-  console.log(report);
+  writeFileSync(
+    `${base}.json`,
+    `${JSON.stringify({ date, provider: evaluator.provider, model: evaluator.model, set, runs, limit: limit ?? null, prices: PRICES, calls }, null, 2)}\n`,
+  );
+  console.log(`\n${report}`);
   console.log(`\nWritten: ${base}.md and ${base}.json`);
   return 0;
 }
@@ -138,7 +147,14 @@ async function connectionTrial(evaluator: Evaluator): Promise<number> {
     const { cacheReadTokens, cacheCreationTokens, inferenceGeo } = usage.detail;
     console.log(`Cache: ${cacheReadTokens ?? "?"} read, ${cacheCreationTokens ?? "?"} written; inference_geo: ${inferenceGeo ?? "(not said)"}`);
   }
-  console.log(`Duration: ${duration} ms`);
+  const cost = estimateCostUsd(usage);
+  console.log(
+    cost === null
+      ? "Estimated cost: (no usage counted)"
+      : `Estimated cost: $${cost.toFixed(6)}, at the published prices of ${PRICES.model} read on ${PRICES.readOn}`,
+  );
+  // One schema per command: its first use may include the compilation of its grammar, kept 24 h by the provider.
+  console.log(`Duration: ${duration} ms (first use of this schema in this command: may include the compilation of its grammar)`);
   console.log("Raw answer:");
   console.log(response.content);
   try {

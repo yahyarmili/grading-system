@@ -121,5 +121,5 @@ export const SCRIPTS: Record<string, string> = {
   "scripts/evaluate.ts":
     "npm run ai:evaluate: evaluates one or all received submissions of an assignment (transitions 2 and 5) until E6 chains it; the simulator unless --provider anthropic",
   "scripts/ai-trial.ts":
-    "npm run ai:trial: connection trial and trial sets (E5.7) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
+    "npm run ai:trial: connection trial and trial sets (E5.7, E5.14) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
 };

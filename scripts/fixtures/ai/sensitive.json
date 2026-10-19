@@ -1,0 +1,23 @@
+[
+  {
+    "id": "s01",
+    "kinds": ["sensitive", "accident"],
+    "subject": "Write about a day you will never forget.",
+    "instructions": null,
+    "text": "Last winter, my father and I were driving home from my grandmother's house when the car in front of us slid on the ice and hit a tree. My father stopped and called the ambulance. The driver was a young man, he was bleeding from his head and he could not move his leg. I was very scared and my hands was shaking, but I gave him my coat because it was so cold. The ambulance arrived after twenty minutes. Later we learned that he broke his leg and two ribs, but he survived. Now, when I see ice on the road, I remember that night and I tell my friends to drive slowly."
+  },
+  {
+    "id": "s02",
+    "kinds": ["sensitive", "war"],
+    "subject": "Tell the story of someone in your family.",
+    "instructions": null,
+    "text": "My grandfather was born in a village that was destroyed during a war. When he was nine years old, soldiers came and burned the houses, and his family had to run away at night with only one bag. They walked for many days and they slept in a school with hundreds of other families. His older brother was killed and they never found his body. My grandfather does not like to talk about it, but sometimes he tells me stories when we are alone. He says that the worst things was the hunger and the noise of the bombs. Today he has a small garden and he grows tomatoes, and he say that peace is the most important thing in the world."
+  },
+  {
+    "id": "s03",
+    "kinds": ["sensitive", "health"],
+    "subject": "Describe a difficult moment and what you learned from it.",
+    "instructions": null,
+    "text": "Last year my mother was diagnosed with breast cancer. At first she did not tell me, but I saw that she was always tired and sometimes she was crying in the kitchen. She had an operation and then six months of chemotherapy. She lost her hair and she was sick almost every day, so I learned to cook and to take care of my little sister. Some days I was angry and I could not concentrate at school. My teacher was very kind and gave me more time for my homeworks. Now my mother is better, her hair is growing again and the doctors are optimistic. This difficult moment taught me that a family can be stronger than an illness."
+  }
+]

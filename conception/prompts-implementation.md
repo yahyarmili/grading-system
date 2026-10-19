@@ -702,6 +702,8 @@ Instrumente l'essai selon le plan, sans envoi réel :
 ```
 **Vous validez :** `ai:trial --set all --runs 3` sur le simulateur produit le rapport complet ; `--set dev --limit 1` n'envoie qu'un texte ; `npm test` passe.
 
+Fait le 2026-10-19 : prix dans `src/server/evaluation/prices.ts` (source et date ; au-delà de 100 K tokens de prompt, coût non estimé s'il y a du cache, prix non lus) ; le premier appel signalé est le premier de l'essai avec son schéma (un seul schéma par essai) ; `--limit` garde les n premiers textes du jeu, dans son ordre (`adversarial` : les bases d'abord). Sur le simulateur, l'usage n'est pas compté (sauf pour un refus simulé) : colonnes d'usage et de coût à « – ».
+
 #### E5.15 — Notice v4, procédure et premiers envois réels (NFR-DON-03, NFR-DON-05, NFR-EXP-03)
 Préalable : la clé dans `.env.local`, puis `docker compose up -d`.
 ```

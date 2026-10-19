@@ -55,7 +55,7 @@ Node ne tourne que dans Docker.
 | `docker compose exec web npm run db:generate -- --name=<verbe_objet>` | Nouvelle migration (relire le SQL, puis commiter) |
 | `docker compose exec web npm run admin:create -- --email <email> --first-name <prénom> --last-name <nom>` | Premier administrateur : reçoit un lien pour choisir son mot de passe |
 | `docker compose exec web npm run ai:trial [-- --provider anthropic]` | Essai de l'IA : un texte fictif, la réponse brute ; le simulateur sans `--provider anthropic` |
-| `docker compose exec web npm run ai:trial -- --set all --runs 2 [--provider anthropic]` | Jeux d'essai de `scripts/fixtures/ai/` (E5.7) ; rapport dans `trial-results/` ; s'arrête avant 200 requêtes par jour UTC |
+| `docker compose exec web npm run ai:trial -- --set all --runs 3 [--limit <n>] [--provider anthropic]` | Jeux d'essai de `scripts/fixtures/ai/` (`dev`, `adversarial`, `sensitive`, `all`) ; chaque appel affiché (modèle, `stop_reason`, usage, coût estimé) ; rapport dans `trial-results/` ; s'arrête avant 200 requêtes par jour UTC |
 | `docker compose exec web npm run ai:evaluate -- --submission <id> \| --assignment <id> [--provider anthropic]` | Évalue une remise ou les remises « Received » d'un devoir, hors interface ; le simulateur par défaut |
 
 ## Déploiement (Vercel)
