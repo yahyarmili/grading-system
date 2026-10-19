@@ -622,6 +622,8 @@ Préalables :
   - relevez le palier, la fin du cycle, la conservation affichée et `inference_geo` autorisé ;
   - créez un espace de travail dédié avec une limite mensuelle, des alertes et `inference_geo` `us` ;
   - relisez les conditions et la politique d'usage.
+
+  Fait le 2026-10-19 (relevés dans le bloc d'E5.11) ; reste la lecture des conditions.
 - **Vous, avant E5.15** : une clé limitée à l'espace, expiration notée, dans `.env.local` sous `GRADING_ANTHROPIC_API_KEY`, puis `docker compose up -d`.
 - **Vous, après E5.13** : retirez `AI_PROVIDER=openrouter` et `OPENROUTER_API_KEY` de `.env.local` (et de Vercel s'ils y sont), puis révoquez la clé OpenRouter.
 - **Données** : textes fictifs seulement. Aucune copie réelle avant que le client ait validé la fiche DON-02 d'Anthropic.
@@ -644,7 +646,7 @@ Fait le 2026-10-19 (session d'analyse) : décisions consignées, `conception/ann
 
 #### E5.11 — Réviser le plan d'E5 pour Anthropic (EVL-02, EVL-03, NFR-DON-05, NFR-EXP-04) · Plan
 ```
-Relevés de la Console : palier <…>, fin du cycle <…>, conservation affichée <…>, inference_geo autorisé <…> ; consigne-les d'abord dans conception/annexe-ia-anthropic.md §8 et stack-technologique.md §3, datés.
+Relevés de la Console (2026-10-19) : palier Start (Haiku 5.5 : 1 000 requêtes/min, 2 M tokens d'entrée/min, 400 K de sortie/min, plafond de 500 $/mois) ; crédit promotionnel de 100 $ accordé le 2026-10-17, expire le 2026-11-12 (UTC), aucun moyen de paiement ; espace grading_system limité à 10 $/mois (remise à zéro le 1er), alertes à 5 et 8 $, limites de débit de l'organisation ; inference_geo autorisé US seulement, par défaut US, région de l'espace United States ; conservation de l'organisation On · 30 days, pas de ZDR ; programme partenaire non rejoint, retours des utilisateurs désactivés. Consigne-les d'abord dans conception/annexe-ia-anthropic.md §8 et stack-technologique.md §3, datés.
 Révise le plan d'E5 (~/.claude/plans/partir-de-l-enqu-te-witty-eagle.md) d'après la conception consignée en E5.10 et conception/annexe-ia-anthropic.md. Sections qui dépendent du prestataire : Contexte, §1 à §5, §7, §9 à §11, « Valeurs à consigner » ; « Changement de prestataire » passe en historique. Corrige ce qui a dérivé depuis E5.7 (délai 120 000 ms, pause 4 000 ms, AI_DAILY_REQUEST_LIMIT).
 Lis d'abord le skill claude-api et la documentation officielle de claude-haiku-5-5 (migration, sortie structurée, erreurs, limites, data residency) ; cite les liens.
 Le plan fixe :
