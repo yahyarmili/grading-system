@@ -690,6 +690,8 @@ Garde : request.ts hors génération et schéma, output.ts, quotes.ts, alerts.ts
 ```
 **Vous validez :** `npm test` et les E2E passent hors réseau ; retirer une protection fait échouer son test ; `ai:evaluate` sur le simulateur donne « To review » ; `--provider openrouter` est refusé ; `src/` ne cite plus OpenRouter, hors l'enum stocké et la notice v3.
 
+Fait le 2026-10-19 : 927 tests et 26 E2E passent ; `ai:evaluate` sur le simulateur donne « To review », `--provider openrouter` est refusé. Écarts au plan : `Usage` garde les trois sommes stockées et met le détail d'Anthropic dans `detail` (`evaluate.ts` intouché) ; les commandes affichent `request-id`, pas le statut HTTP ; `guardedFetch` et l'option `maxRetries` sont exposés pour les tests seulement.
+
 #### E5.14 — Essai instrumenté et jeu sensible, sur le simulateur (NFR-EXP-01, EVL-03 CA3)
 ```
 Instrumente l'essai selon le plan, sans envoi réel :

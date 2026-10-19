@@ -43,21 +43,17 @@ export const SUBMISSION_MAX_REPLACEMENTS = 2;
 export const GRADE_SCALE = 20;
 
 /**
- * [D, 2026-10-17] The AI model, chosen by the user among OpenRouter's free
- * models: never the openrouter/free router, which draws a model at random
- * (NFR-QUA-02). The ":free" identifier carries no date (its canonical slug
- * was xingchen-agi/xing4.0-29b-a4b-20261015 on 2026-10-17): OpenRouter may
- * move it, so the model that answered is recorded with each result. A new
- * model is a new decision (stack-technologique.md §3).
+ * [D, 2026-10-19] The AI model: Anthropic's Claude Haiku 5.5, through
+ * Anthropic's API directly. A fixed identifier, without a date or an alias;
+ * not retired before 2027-10-07 (conception/annexe-ia-anthropic.md §1). The
+ * model that answered is still recorded with each result. A new model is a
+ * new decision (stack-technologique.md §3).
  */
-export const AI_MODEL = "xingchen-agi/xing4.0-29b-a4b:free";
+export const AI_MODEL = "claude-haiku-5-5";
 
 /**
- * [D, 2026-10-17] OpenRouter's routing, sent with each request (provider
- * selection): only endpoints that support every parameter sent, the answer
- * schema included (require_parameters), and only endpoints OpenRouter lists
- * as keeping nothing (zdr). The rule: zdr when the model has such an
- * endpoint, otherwise data_collection: "deny", whose effect on retention is
- * not verified. Fallbacks are left to OpenRouter, among these endpoints only.
+ * [D, 2026-10-19] Where the model runs, sent with each request: the United
+ * States, the only value the workspace allows (Console, 2026-10-19). Its
+ * price is 1.1 times the global one.
  */
-export const AI_ROUTING = Object.freeze({ require_parameters: true, zdr: true } as const);
+export const AI_INFERENCE_GEO = "us";

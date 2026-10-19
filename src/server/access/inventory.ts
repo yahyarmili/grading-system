@@ -86,7 +86,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/auth/invitations.ts#createFirstAdmin": "local script only (Q2), never a screen",
   "src/server/data/auth/security-events.ts#recordSecurityEvent": "internal: writes the security log",
   "src/server/data/auth/security-events.ts#countAiRequestsToday":
-    "scripts only (ai:evaluate, ai:trial): counts today's ai_request_sent rows, reads none, for the free model's daily quota",
+    "scripts only (ai:evaluate, ai:trial): counts today's ai_request_sent rows, reads none, for the daily guard of the commands (AI_DAILY_REQUEST_LIMIT)",
   "src/server/data/auth/throttle.ts#countAttempt": "internal: attempt counters",
   "src/server/data/auth/throttle.ts#isLocked": "internal: attempt counters",
   "src/server/data/auth/throttle.ts#recordFailure": "internal: attempt counters",
@@ -119,7 +119,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
 export const SCRIPTS: Record<string, string> = {
   "scripts/create-admin.ts": "npm run admin:create: the first administrator (Q2), local script only, never a screen",
   "scripts/evaluate.ts":
-    "npm run ai:evaluate: evaluates one or all received submissions of an assignment (transitions 2 and 5) until E6 chains it; the simulator unless --provider openrouter",
+    "npm run ai:evaluate: evaluates one or all received submissions of an assignment (transitions 2 and 5) until E6 chains it; the simulator unless --provider anthropic",
   "scripts/ai-trial.ts":
-    "npm run ai:trial: connection trial and trial sets (E5.7) on fictitious texts; stores nothing but the security log; the simulator unless --provider openrouter",
+    "npm run ai:trial: connection trial and trial sets (E5.7) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
 };

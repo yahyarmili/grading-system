@@ -1,19 +1,19 @@
 // Manual trials of the AI, fictitious data only (DON-02). Nothing is stored
 // but the security log line of each real sending (DON-05). Run inside the
-// container; the simulator by default, OpenRouter only with --provider
-// openrouter and OPENROUTER_API_KEY (AI_PROVIDER in the environment is ignored).
+// container; the simulator by default, Anthropic only with --provider
+// anthropic and GRADING_ANTHROPIC_API_KEY (AI_PROVIDER in the environment is ignored).
 //
-// 1. Connection trial (E5.3, E5.4b): one fixed text, the raw answer printed,
+// 1. Connection trial (E5.3, E5.13): one fixed text, the raw answer printed,
 //    to check the key, the answer format and the access to the pinned model.
-//      docker compose exec web npm run ai:trial [-- --provider openrouter]
+//      docker compose exec web npm run ai:trial [-- --provider anthropic]
 //
 // 2. Trial sets (E5.7, EVL-03 CA3): the texts of scripts/fixtures/ai/, through
 //    the evaluation's request builder and validator, `--runs` times. Writes
 //    the report (Markdown) and every call, raw answers included (JSON), to
 //    --out (trial-results/ by default, not committed).
-//      docker compose exec web npm run ai:trial -- --set all --runs 2 --provider openrouter
-//    --set dev | adversarial (with its base texts) | all. With OpenRouter, it
-//    stops before going over the daily quota (AI_DAILY_REQUEST_LIMIT, counted
+//      docker compose exec web npm run ai:trial -- --set all --runs 2 --provider anthropic
+//    --set dev | adversarial (with its base texts) | all. With Anthropic, it
+//    stops before going over the daily guard (AI_DAILY_REQUEST_LIMIT, counted
 //    on the security log): the texts left are "not sent".
 // Runs with --conditions=react-server so "server-only" modules load outside Next.
 
@@ -23,8 +23,8 @@ import { parseArgs } from "node:util";
 import {
   AI_DAILY_REQUEST_LIMIT,
   AI_MAX_OUTPUT_TOKENS,
-  AI_REASONING_EFFORT,
-  AI_TEMPERATURE,
+  AI_EFFORT,
+  AI_THINKING,
   AI_TRIAL_PAUSE_MS,
 } from "@/config/provisional";
 import { AiConfigurationError, EvaluatorError, evaluatorForCommand, type EvaluationRequest, type Evaluator } from "@/server/ai";
@@ -62,7 +62,8 @@ const TRIAL: EvaluationRequest = {
     required: ["language", "sentences", "summary"],
     additionalProperties: false,
   },
-  generation: { temperature: AI_TEMPERATURE, maxOutputTokens: AI_MAX_OUTPUT_TOKENS, reasoningEffort: AI_REASONING_EFFORT },
+  // No temperature: Haiku 5.5 refuses any but 1.
+  generation: { effort: AI_EFFORT, thinking: AI_THINKING, maxOutputTokens: AI_MAX_OUTPUT_TOKENS },
 };
 
 async function main(): Promise<number> {
@@ -81,7 +82,7 @@ async function main(): Promise<number> {
   const set = values.set as (typeof SETS)[number];
   const runs = Number(values.runs);
   if (!SETS.includes(set) || !Number.isInteger(runs) || runs < 1) {
-    console.error(`Usage: npm run ai:trial -- --set ${SETS.join("|")} [--runs <n>] [--provider simulator|openrouter] [--out <dir>]`);
+    console.error(`Usage: npm run ai:trial -- --set ${SETS.join("|")} [--runs <n>] [--provider simulator|anthropic] [--out <dir>]`);
     return 2;
   }
   const dev = JSON.parse(readFileSync(path.join(FIXTURES, "dev.json"), "utf8")) as DevText[];
@@ -93,7 +94,7 @@ async function main(): Promise<number> {
   );
 
   const remaining = async () => {
-    if (evaluator.provider !== "openrouter") return Number.POSITIVE_INFINITY;
+    if (evaluator.provider === "simulator") return Number.POSITIVE_INFINITY;
     return AI_DAILY_REQUEST_LIMIT - (await countAiRequestsToday());
   };
   const left = await remaining();
@@ -104,7 +105,7 @@ async function main(): Promise<number> {
     evaluator,
     remaining,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    pauseMs: evaluator.provider === "openrouter" ? AI_TRIAL_PAUSE_MS : 0,
+    pauseMs: evaluator.provider === "simulator" ? 0 : AI_TRIAL_PAUSE_MS,
   });
   const date = new Date().toISOString();
   const report = formatTrialReport(texts, calls, { date, provider: evaluator.provider, model: evaluator.model, runs });
@@ -119,19 +120,24 @@ async function main(): Promise<number> {
 }
 
 async function connectionTrial(evaluator: Evaluator): Promise<number> {
-  if (evaluator.provider === "openrouter") console.log("Sending one fictitious text to OpenRouter…");
+  if (evaluator.provider === "anthropic") console.log("Sending one fictitious text to Anthropic…");
 
   const started = performance.now();
   const response = await evaluator.evaluate(TRIAL, { signal: new AbortController().signal, subjectId: null });
   const duration = Math.round(performance.now() - started);
 
   console.log(`Model answered: ${response.modelAnswered ?? "(not said)"}`);
-  console.log(`Provider answered: ${response.providerAnswered ?? "(not said)"}`);
+  console.log(`Stop reason: ${response.stopReason ?? "(not said)"}`);
+  const usage = response.usage;
   console.log(
-    response.usage
-      ? `Tokens: ${response.usage.promptTokens ?? "?"} in, ${response.usage.completionTokens ?? "?"} out, ${response.usage.totalTokens ?? "?"} in all`
+    usage
+      ? `Tokens: ${usage.promptTokens ?? "?"} in, ${usage.completionTokens ?? "?"} out (thinking included), ${usage.totalTokens ?? "?"} in all`
       : "Tokens: (not said)",
   );
+  if (usage?.detail) {
+    const { cacheReadTokens, cacheCreationTokens, inferenceGeo } = usage.detail;
+    console.log(`Cache: ${cacheReadTokens ?? "?"} read, ${cacheCreationTokens ?? "?"} written; inference_geo: ${inferenceGeo ?? "(not said)"}`);
+  }
   console.log(`Duration: ${duration} ms`);
   console.log("Raw answer:");
   console.log(response.content);
@@ -149,8 +155,9 @@ async function connectionTrial(evaluator: Evaluator): Promise<number> {
 function describeFailure(error: unknown): string {
   if (error instanceof EvaluatorError) {
     const wait = error.retryAfterMs === undefined ? "" : ` (retry after ${Math.ceil(error.retryAfterMs / 1000)} s)`;
-    const code = error.providerCode ? ` [OpenRouter: ${error.providerCode}]` : "";
-    return `${error.kind}: ${error.message}${wait}${code}`;
+    const code = error.providerCode ? ` [code: ${error.providerCode}]` : "";
+    const id = error.requestId ? ` [request-id: ${error.requestId}]` : "";
+    return `${error.kind}: ${error.message}${wait}${code}${id}`;
   }
   if (error instanceof AiConfigurationError) return error.message;
   return error instanceof Error ? error.name : "unknown error";

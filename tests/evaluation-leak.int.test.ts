@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { criterionIds, publishedRubric, RUBRIC_VERSIONS } from "@/lib/rubric";
 import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
-import { createOpenRouterEvaluator } from "@/server/ai/openrouter";
+import { createAnthropicEvaluator } from "@/server/ai/anthropic";
 import { buildEvaluationRequest, OUTPUT_SCHEMA } from "@/server/ai/request";
 import { EvaluatorError, type Evaluator } from "@/server/ai/types";
 import { createAssignment } from "@/server/data/assignments/assignments";
@@ -27,7 +27,7 @@ import { replaceStudentText, submitStudentText } from "@/server/submissions/subm
 
 // EVL-02 CA1 and CA2, SUB-04 CA3: what leaves for the AI, read from the
 // database by the real path (submission → whitelist → builder → the real
-// OpenRouter adapter), captured at the HTTP layer (the final Request the adapter
+// Anthropic adapter), captured at the HTTP layer (the final Request the adapter
 // would send), with the real security log. Runs at each npm test (NFR-EXP-04).
 
 const KEY = `test-key-${randomBytes(6).toString("hex")}`;
@@ -76,23 +76,29 @@ const CONFORM = JSON.stringify({
   flags: { other_language: false, off_topic: false, addressed_to_marker: false },
 });
 
-const completion = (content = "{}") =>
+/** An Anthropic message with this text, or with these fields replaced. */
+const completion = (content = "{}", extra: Record<string, unknown> = {}) =>
   new Response(
     JSON.stringify({
-      id: "gen-1",
-      object: "chat.completion",
-      model: "xingchen-agi/xing4.0-29b-a4b:free",
-      provider: "Phala",
-      created: 1_760_000_000,
-      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-      choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+      id: "msg_01",
+      type: "message",
+      role: "assistant",
+      model: "claude-haiku-5-5",
+      content: [{ type: "text", text: content }],
+      stop_reason: "end_turn",
+      stop_details: null,
+      usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, inference_geo: "us" },
+      ...extra,
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
 
+/** The headers that carry a fixed value by design: the key, and the API version (a date). */
+const FIXED_HEADERS = ["x-api-key", "anthropic-version"];
+
 /** The real adapter, its HTTP requests captured and answered by `answer`, with the real security log. */
 const adapter = (answer: () => Response | Promise<Response> = completion) =>
-  createOpenRouterEvaluator({
+  createAnthropicEvaluator({
     apiKey: KEY,
     env: {},
     fetcher: async (req) => {
@@ -229,32 +235,32 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     });
 
     expect(captured).toHaveLength(1);
-    // Exactly two headers set by the adapter: no attribution, no user. Only authorization carries the key.
+    // Exactly four headers: no User-Agent, no X-Stainless-*, no attribution, no user. Only x-api-key carries the key.
     const [sent] = captured;
-    expect(sent.headers.map(([k]) => k).sort()).toEqual(["authorization", "content-type"]);
+    expect(sent.headers.map(([k]) => k).sort()).toEqual(["accept", "anthropic-version", "content-type", "x-api-key"]);
     const withoutKey = Object.fromEntries(Object.entries(markers).filter(([name]) => name !== "api key"));
     expect(leaks(captured, withoutKey)).toEqual([]);
-    expect(sent.headers.filter(([, v]) => v.includes(KEY)).map(([k]) => k)).toEqual(["authorization"]);
-    expect(leaks([{ ...sent, headers: sent.headers.filter(([k]) => k !== "authorization") }], markers)).toEqual([]);
+    expect(sent.headers.filter(([, v]) => v.includes(KEY)).map(([k]) => k)).toEqual(["x-api-key"]);
+    expect(leaks([{ ...sent, headers: sent.headers.filter(([k]) => k !== "x-api-key") }], markers)).toEqual([]);
+    expect(Object.fromEntries(sent.headers)["anthropic-version"]).toBe("2023-06-01");
 
-    // Exactly the expected fields, at both levels.
+    // Exactly the expected fields, at both levels; never metadata.
     const body = JSON.parse(sent.body);
     expect(Object.keys(body).sort()).toEqual(
-      ["max_tokens", "messages", "model", "provider", "reasoning", "response_format", "stream", "temperature"].sort(),
+      ["inference_geo", "max_tokens", "messages", "model", "output_config", "system", "thinking"].sort(),
     );
+    expect(body).not.toHaveProperty("metadata");
     // The messages and the schema are the builder's, untouched: nothing added on the way.
-    expect(body.messages).toEqual([
-      { role: "system", content: request.system },
-      { role: "user", content: request.user },
-    ]);
-    expect(body.response_format).toEqual({ type: "json_schema", json_schema: { name: "evaluation", schema: OUTPUT_SCHEMA, strict: true } });
-    expect(body.provider).toEqual({ require_parameters: true, zdr: true });
-    expect(body.reasoning).toEqual({ effort: "none" });
-    // No identifier or date in any form, wherever it would hide; never the replaced text.
-    const withoutAuthorization = { ...sent, headers: sent.headers.filter(([k]) => k !== "authorization") };
-    expect(seen(withoutAuthorization)).not.toMatch(ANY_ID_OR_DATE);
+    expect(body.system).toBe(request.system);
+    expect(body.messages).toEqual([{ role: "user", content: request.user }]);
+    expect(body.output_config).toEqual({ format: { type: "json_schema", schema: OUTPUT_SCHEMA }, effort: "low" });
+    expect(body.thinking).toEqual({ type: "adaptive", display: "omitted" });
+    expect(body.inference_geo).toBe("us");
+    // No identifier or date in any form, wherever it would hide (the API version, a date, checked above); never the replaced text.
+    const withoutFixed = { ...sent, headers: sent.headers.filter(([k]) => !FIXED_HEADERS.includes(k)) };
+    expect(seen(withoutFixed)).not.toMatch(ANY_ID_OR_DATE);
     expect(seen(sent)).not.toContain(FIRST_TEXT.toLowerCase());
-    const user = JSON.parse(body.messages[1].content);
+    const user = JSON.parse(body.messages[0].content);
     expect(user).toEqual({ task: { subject: SUBJECT, instructions: INSTRUCTIONS }, language: "en", student_text: TEXT });
     // Positive control: the whitelist did leave.
     expect(sent.body).toContain(JSON.stringify(TEXT).slice(1, -1));
@@ -276,7 +282,7 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     const { markers, teacher, students, classId } = await world();
     const assignmentId = await assignment(teacher, classId, markers, "C1", "one");
     await submit(students[0], assignmentId, markers, "one");
-    const sent = { method: "POST", url: "https://openrouter.ai/api/v1/chat/completions", headers: [] as [string, string][], body: "{}" };
+    const sent = { method: "POST", url: "https://api.anthropic.com/v1/messages", headers: [] as [string, string][], body: "{}" };
     expect(leaks([{ ...sent, headers: [["x-trace", markers["one submission id"]]] }], markers)).toEqual(["one submission id"]);
     expect(leaks([{ ...sent, url: `${sent.url}?who=${encodeURIComponent(markers["stuone email"])}` }], markers)).toEqual(
       expect.arrayContaining(["stuone email", "stuone email local part", "stuone email domain"]),
@@ -289,17 +295,18 @@ describe("EVL-02 CA1: nothing identifying leaves, only the whitelist", () => {
     }
   });
 
-  it("leaks nothing either when the call fails, whatever OpenRouter answers", async () => {
+  it("leaks nothing either when the call fails, whatever Anthropic answers", async () => {
     const { markers, teacher, students, classId } = await world();
     const assignmentId = await assignment(teacher, classId, markers, "C1", "one");
     const submissionId = await submit(students[0], assignmentId, markers, "one");
     const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
       new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
     const answers: [string, () => Response | Promise<Response>][] = [
-      ["500", () => json(500, { message: TEXT })],
-      ["429", () => json(429, { message: TEXT }, { "retry-after": "3" })],
-      ["400 echoing the input", () => json(400, { error: { code: 400, message: TEXT, metadata: { raw: TEXT } } })],
-      ["an error inside a 200, echoing the input", () => json(200, { error: { code: 403, message: TEXT, metadata: { moderation: { reasons: [TEXT], flagged_input: TEXT } } } })],
+      ["500", () => json(500, { type: "error", error: { type: "api_error", message: TEXT } })],
+      ["429", () => json(429, { type: "error", error: { type: "rate_limit_error", message: TEXT } }, { "retry-after": "3" })],
+      ["400 echoing the input", () => json(400, { type: "error", error: { type: "invalid_request_error", message: TEXT, details: { raw: TEXT } } })],
+      ["a refusal, its text echoing the input", () => completion(TEXT, { stop_reason: "refusal", stop_details: { category: TEXT } })],
+      ["a 200 that is not a message, echoing the input", () => json(200, { error: { message: TEXT } })],
       ["not JSON", () => new Response(TEXT, { status: 200, headers: { "content-type": "text/plain" } })],
       ["network down", () => Promise.reject(new TypeError(`fetch failed ${TEXT}`))],
     ];
@@ -338,9 +345,9 @@ describe("each request that leaves is logged first", () => {
     expect(lines).toHaveLength(2);
     expect(lines.every((line) => line.subjectId === submissionId)).toBe(true);
     const [run] = await db.select().from(evaluationRuns).where(eq(evaluationRuns.submissionId, submissionId));
-    // The model and the provider that answered, and the tokens summed over the answers that said them.
+    // The model that answered, and the tokens summed over the answers that said them.
     expect(run).toMatchObject({
-      provider: "openrouter", modelAnswered: "xingchen-agi/xing4.0-29b-a4b:free", providerAnswered: "Phala", totalTokens: 2,
+      provider: "anthropic", modelAnswered: "claude-haiku-5-5", providerAnswered: null, promptTokens: 1, completionTokens: 1, totalTokens: 2,
     });
     expect(printed.filter((line) => [TEXT, KEY, ...Object.values(markers)].some((m) => line.includes(m)))).toEqual([]);
   });
@@ -369,6 +376,6 @@ describe("EVL-02 CA2, SUB-04 CA3: the level, the deadline and lateness change no
     expect(second.headers).toEqual(first.headers);
     expect(second.body).toBe(first.body);
     // And neither carries the level.
-    for (const r of captured) expect(JSON.parse(r.body).messages[1].content).not.toMatch(/\b[ABC][12]\b/);
+    for (const r of captured) expect(JSON.parse(r.body).messages[0].content).not.toMatch(/\b[ABC][12]\b/);
   });
 });

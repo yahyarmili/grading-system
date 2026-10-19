@@ -10,7 +10,7 @@ export const aiProviders = ["simulator", "openrouter", "anthropic"] as const;
 export type AiProvider = (typeof aiProviders)[number];
 
 /** The providers the environment or a command may select now: the simulator by default, a real one only on demand. */
-export const selectableAiProviders = ["simulator", "openrouter"] as const satisfies readonly AiProvider[];
+export const selectableAiProviders = ["simulator", "anthropic"] as const satisfies readonly AiProvider[];
 export type SelectableAiProvider = (typeof selectableAiProviders)[number];
 
 /**

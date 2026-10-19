@@ -205,7 +205,7 @@ type AssignmentOutcome = EvaluationOutcome | { status: "error"; kind: string } |
 /**
  * Evaluates, one after the other, the received submissions of an assignment;
  * one failure never stops the others. `mayStart`, asked before each one (the
- * daily quota of the free model), leaves the rest received, "postponed".
+ * daily guard of the commands, AI_DAILY_REQUEST_LIMIT), leaves the rest received, "postponed".
  */
 export async function evaluateAssignment(
   assignmentId: string,

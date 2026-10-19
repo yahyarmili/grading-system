@@ -1,8 +1,8 @@
 import {
+  AI_EFFORT,
   AI_MAX_OUTPUT_TOKENS,
   AI_MAX_QUOTES_PER_CRITERION,
-  AI_REASONING_EFFORT,
-  AI_TEMPERATURE,
+  AI_THINKING,
 } from "@/config/provisional";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { criterionIds, levels, type RubricVersion } from "@/lib/rubric";
@@ -26,7 +26,7 @@ import type { EvaluationRequest, JsonSchema } from "./types";
  * layout, schema or generation. tests/ai-request.test.ts freezes the
  * requests built for a fixed input, in each language, under this version (NFR-QUA-02).
  */
-export const PROMPT_VERSION = "evaluation-1";
+export const PROMPT_VERSION = "evaluation-2";
 
 /** The whitelist (EVL-02): what the AI may receive about a submission. */
 export type EvaluationInput = {
@@ -40,9 +40,10 @@ export type EvaluationInput = {
 export const OUTPUT_SCHEMA_NAME = "evaluation";
 
 /**
- * The answer's shape (the plan's output contract), kept simple: the keywords
- * the provider honours in strict mode are not documented, so the server
- * validates everything again (E5.5).
+ * The answer's shape (the plan's output contract), kept simple: Anthropic's
+ * structured output accepts an enum of numbers, not minimum, maximum or
+ * minLength, and a refusal or a cut answer may leave the schema anyway, so
+ * the server validates everything again (E5.5).
  */
 export const OUTPUT_SCHEMA: JsonSchema = {
   type: "object",
@@ -55,7 +56,7 @@ export const OUTPUT_SCHEMA: JsonSchema = {
           {
             type: "object",
             properties: {
-              level: { type: "integer" },
+              level: { type: "integer", enum: [...levels] },
               justification: { type: "string" },
               quotes: { type: "array", items: { type: "string" } },
             },
@@ -142,6 +143,6 @@ export function buildEvaluationRequest(input: EvaluationInput, rubric: RubricVer
     user: JSON.stringify({ task: { subject, instructions }, language, student_text: text }),
     schemaName: OUTPUT_SCHEMA_NAME,
     schema: OUTPUT_SCHEMA,
-    generation: { temperature: AI_TEMPERATURE, maxOutputTokens: AI_MAX_OUTPUT_TOKENS, reasoningEffort: AI_REASONING_EFFORT },
+    generation: { effort: AI_EFFORT, thinking: AI_THINKING, maxOutputTokens: AI_MAX_OUTPUT_TOKENS },
   };
 }

@@ -5,12 +5,12 @@
 // Run inside the container:
 //   docker compose exec web npm run ai:evaluate -- --submission <id>
 //   docker compose exec web npm run ai:evaluate -- --assignment <id>
-// The simulator by default. OpenRouter only when named on the command line,
-// with OPENROUTER_API_KEY (conception/procedures.md, "Activer l'envoi réel"):
-//   docker compose exec web npm run ai:evaluate -- --assignment <id> --provider openrouter
-// AI_PROVIDER in the environment is ignored here. With OpenRouter, a
+// The simulator by default. Anthropic only when named on the command line,
+// with GRADING_ANTHROPIC_API_KEY (conception/procedures.md, "Activer l'envoi réel"):
+//   docker compose exec web npm run ai:evaluate -- --assignment <id> --provider anthropic
+// AI_PROVIDER in the environment is ignored here. With Anthropic, a
 // submission starts only if its attempts fit in what is left of the daily
-// quota (AI_DAILY_REQUEST_LIMIT, counted on the security log); the others
+// guard (AI_DAILY_REQUEST_LIMIT, counted on the security log); the others
 // stay received.
 // --simulate <fault> makes every attempt fail with that fault (simulator only):
 //   invalid_output, missing_quote, error_500, error_429, error_401, timeout,
@@ -47,7 +47,7 @@ const FAULTS: Record<string, SimulatedFault> = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const USAGE =
-  "Usage: npm run ai:evaluate -- --submission <id> | --assignment <id> [--provider simulator|openrouter] [--simulate <fault>]";
+  "Usage: npm run ai:evaluate -- --submission <id> | --assignment <id> [--provider simulator|anthropic] [--simulate <fault>]";
 
 async function main(): Promise<number> {
   const { values } = parseArgs({
@@ -81,7 +81,7 @@ async function main(): Promise<number> {
 
   // A submission may take AI_MAX_ATTEMPTS requests: it starts only if they all fit today.
   const mayStart = async () => {
-    if (evaluator.provider !== "openrouter") return true;
+    if (evaluator.provider === "simulator") return true;
     const sent = await countAiRequestsToday();
     console.log(`Requests sent to the AI today (UTC): ${sent} of ${AI_DAILY_REQUEST_LIMIT}`);
     return sent + AI_MAX_ATTEMPTS <= AI_DAILY_REQUEST_LIMIT;

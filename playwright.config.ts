@@ -37,7 +37,7 @@ export default defineConfig({
       MAIL_CAPTURE_DIR: E2E_MAIL_DIR,
       // The journeys never reach the AI, whatever .env.local says (E5).
       AI_PROVIDER: "simulator",
-      OPENROUTER_API_KEY: "",
+      GRADING_ANTHROPIC_API_KEY: "",
     },
   },
 });

@@ -2,9 +2,9 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // Every test runs on the simulator and without network, whatever .env.local
-// says: AI_PROVIDER and OPENROUTER_API_KEY are overridden, and fetch() is refused
+// says: AI_PROVIDER and GRADING_ANTHROPIC_API_KEY are overridden, and fetch() is refused
 // (tests/setup/network-guard.ts).
-const aiEnv = { AI_PROVIDER: "simulator", OPENROUTER_API_KEY: "" };
+const aiEnv = { AI_PROVIDER: "simulator", GRADING_ANTHROPIC_API_KEY: "" };
 
 export default defineConfig({
   resolve: {

@@ -59,11 +59,13 @@ export const TO_BE_DEFINED = "To be defined.";
  * retention and contact wait for QNF-1 and QNF-4.
  * Version 3 (E5.4b, 2026-10-17): OpenRouter instead of Mistral. Each sentence
  * rests on what was read that day (stack-technologique.md §3): every request
- * asks for zero-data-retention endpoints only (AI_ROUTING, decisions.ts); the
- * model's one such endpoint is Phala's, as OpenRouter lists it, without a
- * guarantee; OpenRouter's own collection page (metadata kept, a few prompts
- * sampled anonymously to be sorted). Nothing more is promised. A new model, a
- * new routing or a change of these pages: change the sentence, raise the version.
+ * asked for zero-data-retention endpoints only (OpenRouter's routing, removed
+ * in E5.13); the model's one such endpoint is Phala's, as OpenRouter lists it,
+ * without a guarantee; OpenRouter's own collection page (metadata kept, a few
+ * prompts sampled anonymously to be sorted). Nothing more is promised. A new
+ * model, a new routing or a change of these pages: change the sentence, raise
+ * the version. Out of date since the move to Anthropic (E5.13): replaced by
+ * version 4 in E5.15, before any real sending.
  */
 export const STUDENT_NOTICE = {
   version: 3,

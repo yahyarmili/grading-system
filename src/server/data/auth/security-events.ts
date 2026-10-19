@@ -21,8 +21,8 @@ export async function recordSecurityEvent(
 
 /**
  * Requests sent to the AI since 00:00 UTC, as the security log counts them
- * (one ai_request_sent per HTTP request, retries included): the free models'
- * daily quota is per UTC day. Counts rows, reads none. Only what this
+ * (one ai_request_sent per HTTP request, retries included), for the daily
+ * guard of the commands (AI_DAILY_REQUEST_LIMIT). Counts rows, reads none. Only what this
  * database logged: another database or key is not seen.
  */
 export async function countAiRequestsToday(): Promise<number> {

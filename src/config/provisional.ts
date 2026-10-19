@@ -88,7 +88,10 @@ export const ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 
 // ---------------------------------------------------------------------------
 // Evaluation by the AI (E5). PROVISIONAL, [P] arbitrary: to be confirmed on
-// the trial sets (E5.7). The model itself is decided (AI_MODEL, decisions.ts).
+// the trial sets (E5.7, E5.16). The model and where it runs are decided
+// (AI_MODEL, AI_INFERENCE_GEO, decisions.ts). The key's variable is
+// GRADING_ANTHROPIC_API_KEY [P], read by src/server/ai/index.ts alone: never
+// ANTHROPIC_API_KEY, which Claude Code would take instead of its subscription.
 
 /**
  * [PROVISIONAL, [P]] Longest wait for one call to the AI, answer read
@@ -100,14 +103,26 @@ export const ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH = 4000;
  */
 export const AI_CALL_TIMEOUT_MS = 120_000;
 
-/** [PROVISIONAL, [P]] Sampling temperature: 0, for answers as stable as the model allows (EVL-03 CA3). */
-export const AI_TEMPERATURE = 0;
+/**
+ * [PROVISIONAL, [P] arbitrary] How much effort the model spends (low to max;
+ * its default is medium): low, for a short task repeated over many texts. To
+ * be measured on the trial sets (E5.16). No temperature is sent: Haiku 5.5
+ * refuses any other than 1, so stability is measured, not set.
+ */
+export const AI_EFFORT = "low" as const;
 
-/** [PROVISIONAL, [P] arbitrary] Most tokens of an answer: room for five justifications, a comment and next steps. */
-export const AI_MAX_OUTPUT_TOKENS = 2_000;
+/**
+ * [PROVISIONAL, [P]] Adaptive thinking: the model may skip it on a simple
+ * text. Its blocks are never shown nor stored (display "omitted").
+ */
+export const AI_THINKING = "adaptive" as const;
 
-/** [PROVISIONAL, [P]] No reasoning: the answer is the JSON alone. The model reasons by default, and its reasoning shares max_tokens. */
-export const AI_REASONING_EFFORT = "none" as const;
+/**
+ * [PROVISIONAL, [P] arbitrary] Most tokens of an answer, thinking included:
+ * about 950 for the JSON (annexe-ia-anthropic.md §7) and room to think. A cut
+ * answer ends at the validator. 2 000 before E5.13.
+ */
+export const AI_MAX_OUTPUT_TOKENS = 4_000;
 
 /** [PROVISIONAL, [P] arbitrary] Most quotes the AI gives per criterion (at least 1). */
 export const AI_MAX_QUOTES_PER_CRITERION = 3;
@@ -137,14 +152,19 @@ export const QUOTE_MAX_ERROR_RATE = 0.15;
 export const SHORT_TEXT_MIN_WORDS = 50;
 
 /**
- * Not a choice: OpenRouter's limit for its free models at 0 credit bought,
- * per UTC day, retries included (conception/stack-technologique.md §3, read
- * 2026-10-17). The scripts stop before going over it.
+ * [PROVISIONAL, [P] arbitrary] Most requests the internal commands send to
+ * the AI per UTC day, retries included: a guard of the credit, no longer a
+ * provider's quota (50 before E5.13, OpenRouter's). The trial of E5.16 needs
+ * 60 calls, 180 at worst. The scripts stop before going over it.
  */
-export const AI_DAILY_REQUEST_LIMIT = 50;
+export const AI_DAILY_REQUEST_LIMIT = 200;
 
-/** [PROVISIONAL, [P] arbitrary] Pause between two requests of the trial sets: under 20 requests a minute. */
-export const AI_TRIAL_PAUSE_MS = 4_000;
+/**
+ * [PROVISIONAL, [P] arbitrary] Pause between two requests of the trial sets:
+ * caution only, far under the 1 000 requests a minute of the tier (4 000
+ * before E5.13).
+ */
+export const AI_TRIAL_PAUSE_MS = 1_000;
 
 /**
  * [PROVISIONAL, [P] arbitrary] Largest level gap, on any criterion, between

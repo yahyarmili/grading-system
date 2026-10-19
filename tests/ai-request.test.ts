@@ -20,6 +20,11 @@ const PUBLISHED_PROMPTS: Record<string, Record<"en" | "fr", string>> = {
     en: "4c5069b79290cc5f60a0876cd3e6c7476bfd492d41cbdc6d4663f643cdb489a2",
     fr: "935e4bd9a5bc1b8cbdae69790de1fb6b7e7f190af1324fb500d55781477b7fd0",
   },
+  // E5.13: Anthropic's generation (effort, thinking, max tokens), the levels as an enum.
+  "evaluation-2": {
+    en: "caa79a848d41f880ea6937473922ead73a20b381ae90c6d5ac774271fc649fbb",
+    fr: "6d46b56b7b558d36052a590fd0cb8cbf179f43a3beee2b82ac68773c68446f63",
+  },
 };
 
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -31,6 +36,20 @@ describe("the prompt version", () => {
       fr: digest(buildEvaluationRequest({ ...input, language: "fr" }, en1)),
     };
     expect({ [PROMPT_VERSION]: built }).toEqual({ [PROMPT_VERSION]: PUBLISHED_PROMPTS[PROMPT_VERSION] });
+  });
+
+  it("asks for no reasoning anywhere, key or text: a reasoning field may set off the reasoning_extraction refusal", () => {
+    for (const language of ["en", "fr"] as const) {
+      const { system, schema, schemaName } = buildEvaluationRequest({ ...input, language }, en1);
+      expect(JSON.stringify({ system, schema, schemaName }).toLowerCase()).not.toContain("reasoning");
+    }
+  });
+
+  it("sends the levels as an enum, the only bound Anthropic's structured output accepts", () => {
+    const { schema } = buildEvaluationRequest(input, en1);
+    const criteria = (schema.properties as { criteria: { properties: Record<string, { properties: { level: unknown } }> } }).criteria;
+    for (const id of criterionIds) expect(criteria.properties[id].properties.level).toEqual({ type: "integer", enum: [0, 1, 2, 3, 4] });
+    expect(JSON.stringify(schema)).not.toMatch(/"(minimum|maximum|minLength|minItems)"/);
   });
 });
 

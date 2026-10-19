@@ -11,7 +11,7 @@ const request = (studentText: string, language: "en" | "fr" = "en"): EvaluationR
   user: JSON.stringify({ task: { subject: "My town", instructions: null }, language, student_text: studentText }),
   schemaName: "evaluation",
   schema: { type: "object" },
-  generation: { temperature: 0, maxOutputTokens: 2000, reasoningEffort: "none" },
+  generation: { effort: "low", thinking: "adaptive", maxOutputTokens: 4000 },
 });
 
 const TEXT = "My town is small but it is beatiful. There is a market every friday.";

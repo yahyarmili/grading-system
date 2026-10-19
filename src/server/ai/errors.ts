@@ -1,63 +1,60 @@
 import { EvaluatorError } from "./types";
 
-// OpenRouter's errors (https://openrouter.ai/docs/api_reference/errors-and-debugging):
-// a body {error: {code, message, metadata?}}, with the HTTP status, or inside
-// a 200 when the failure came after the provider accepted the request. Only
-// identifiers are kept: the message, metadata.raw and the moderation details
-// may hold our input.
-
-/**
- * The kind of a failed answer (EVL-03 R3), from its HTTP status (or the code
- * of an error inside a 200) and OpenRouter's error object, with a default for
- * any other status: an unknown status never escapes as a provider error.
- */
-export function errorForStatus(status: number, retryAfterMs?: number, error?: unknown): EvaluatorError {
-  const code = providerCodeOf(error);
-  if (status === 408) return new EvaluatorError("timeout", undefined, code);
-  if (status === 429) return new EvaluatorError("rate_limited", retryAfterMs, code);
-  // 402: no credit left (a negative balance, even on a free model).
-  if (status === 401 || status === 402 || status === 404) return new EvaluatorError("configuration", undefined, code);
-  // 403: a budget of the account, or our request refused (moderation, guardrail).
-  if (status === 403) return new EvaluatorError(isBudgetBlock(error) ? "configuration" : "rejected", undefined, code);
-  if (status >= 400 && status < 500) return new EvaluatorError("rejected", undefined, code);
-  return new EvaluatorError("unavailable", undefined, code);
-}
+// Anthropic's errors (https://platform.claude.com/docs/en/api/errors, read
+// 2026-10-19): a body {type: "error", error: {type, message, details?},
+// request_id}, with the HTTP status. Only identifiers are kept: the message
+// may hold our input. It is read only to compare a documented beginning
+// (the spending limits, https://platform.claude.com/docs/en/api/rate-limits),
+// then forgotten.
 
 /** An identifier: letters, digits and _ . : - only, at most 64 characters. Anything else could be content. */
-const IDENTIFIER = /^[A-Za-z0-9_.:-]{1,64}$/;
+export const IDENTIFIER = /^[A-Za-z0-9_.:-]{1,64}$/;
 
-const metadataOf = (error: unknown): Record<string, unknown> | undefined => {
-  const metadata = error && typeof error === "object" ? (error as { metadata?: unknown }).metadata : undefined;
-  return metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : undefined;
-};
+/** The value when it is an identifier; undefined otherwise. */
+export const identifierOf = (value: unknown): string | undefined =>
+  typeof value === "string" && IDENTIFIER.test(value) ? value : undefined;
 
-const isBudgetBlock = (error: unknown) => typeof metadataOf(error)?.limit_source === "string";
+/** The limit set in the Console (workspace or organization): a 400, never retried. */
+const SPEND_LIMIT = ["You have reached your specified API usage limits", "You have reached your specified workspace API usage limits"];
+/** No credit left; its status is not documented. */
+const CREDIT_EXHAUSTED = "Your credit balance is too low";
 
-/**
- * OpenRouter's error_type and the upstream provider_code from an error
- * object's metadata, joined by "/", each kept only when it is an identifier;
- * undefined otherwise. Never the message.
- */
-export function providerCodeOf(error: unknown): string | undefined {
-  const metadata = metadataOf(error);
-  if (!metadata) return undefined;
-  const parts = [metadata.error_type, metadata.provider_code]
-    .map((v) => (typeof v === "number" ? String(v) : v))
-    .filter((v): v is string => typeof v === "string" && IDENTIFIER.test(v));
-  return parts.length > 0 ? parts.join("/") : undefined;
-}
-
-/** The error object of an OpenRouter body (its "error" field), or undefined when the body is not one. */
-export function errorObjectOf(body: unknown): unknown {
+/** The error object of an Anthropic body (its "error" field), or undefined when the body is not one. */
+export function errorObjectOf(body: unknown): Record<string, unknown> | undefined {
   if (!body || typeof body !== "object" || Array.isArray(body)) return undefined;
   const error = (body as { error?: unknown }).error;
-  return error && typeof error === "object" && !Array.isArray(error) ? error : undefined;
+  return error && typeof error === "object" && !Array.isArray(error) ? (error as Record<string, unknown>) : undefined;
 }
 
-/** The HTTP-like code of an error object (OpenRouter's error.code), when it is one. */
-export function errorCodeOf(error: unknown): number | undefined {
-  const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
-  return typeof code === "number" && Number.isInteger(code) ? code : undefined;
+const startsWithAny = (message: unknown, beginnings: readonly string[]) =>
+  typeof message === "string" && beginnings.some((beginning) => message.startsWith(beginning));
+
+/**
+ * The kind of a failed answer (EVL-03 R3), from its HTTP status and
+ * Anthropic's error object (plan §3, point 7). An unknown status never
+ * escapes as a provider error.
+ */
+export function errorForStatus(status: number, body?: unknown, retryAfterMs?: number): EvaluatorError {
+  const error = errorObjectOf(body);
+  const type = identifierOf(error?.type);
+  const details = error?.details && typeof error.details === "object" ? (error.details as Record<string, unknown>) : undefined;
+  const errorCode = identifierOf(details?.error_code);
+  const fail = (kind: EvaluatorError["kind"], code = type, wait?: number) => new EvaluatorError(kind, wait, code);
+
+  if (status === 400) {
+    if (startsWithAny(error?.message, SPEND_LIMIT)) return fail("configuration", "invalid_request_error/spend_limit");
+    if (startsWithAny(error?.message, [CREDIT_EXHAUSTED])) return fail("configuration", `${type ?? "invalid_request_error"}/credit_exhausted`);
+    return fail("configuration");
+  }
+  if (status === 401 || status === 402 || status === 403 || status === 404) return fail("configuration");
+  if (status === 429) {
+    if (errorCode === "enforced_spend_limit_reached") return fail("configuration", `${type ?? "rate_limit_error"}/${errorCode}`);
+    return fail("rate_limited", type, retryAfterMs);
+  }
+  if (status === 504) return fail("timeout");
+  if (status === 409 || status >= 500) return fail("unavailable");
+  if (status >= 400) return fail("rejected");
+  return fail("unavailable");
 }
 
 /** Retry-After in milliseconds, from seconds or an HTTP date; undefined when absent or unreadable. */

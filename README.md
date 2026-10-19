@@ -1,6 +1,6 @@
 # Grading System
 
-Application web de notation de productions écrites d'élèves, en anglais et en français. L'élève remet un texte ou des images de sa copie ; une IA (modèle gratuit via OpenRouter) propose des niveaux sur une rubrique fixe ; le professeur relit, modifie, valide puis publie. Projet académique de démonstration, données fictives. La spécification est dans [`conception/`](conception/).
+Application web de notation de productions écrites d'élèves, en anglais et en français. L'élève remet un texte ou des images de sa copie ; une IA (`claude-haiku-5-5` d'Anthropic) propose des niveaux sur une rubrique fixe ; le professeur relit, modifie, valide puis publie. Projet académique de démonstration, données fictives. La spécification est dans [`conception/`](conception/).
 
 ## Démo en ligne
 
@@ -34,7 +34,7 @@ Node ne tourne que dans Docker.
    | `BETTER_AUTH_SECRET` | Secret de session (32 caractères ou plus) |
    | `BETTER_AUTH_URL` | `http://localhost:3000` (base des liens envoyés par email) |
    | `SMTP_USER`, `SMTP_PASSWORD` | Facultatif : Gmail et mot de passe d'application. Sans eux, les emails sont écrits dans `.mail-capture/` |
-   | `AI_PROVIDER`, `OPENROUTER_API_KEY` | Facultatif : `openrouter` et une clé OpenRouter pour un envoi réel à l'IA, données fictives seulement ([procédure](conception/procedures.md)). Sans eux, le simulateur répond |
+   | `AI_PROVIDER`, `GRADING_ANTHROPIC_API_KEY` | Facultatif : `anthropic` et une clé d'Anthropic pour un envoi réel à l'IA, données fictives seulement ([procédure](conception/procedures.md), réécrite en E5.15). Jamais `ANTHROPIC_API_KEY` : toute variable `ANTHROPIC_*` et `NODE_DEBUG` font refuser l'envoi. Sans eux, le simulateur répond |
 
 2. Lancer :
 
@@ -54,9 +54,9 @@ Node ne tourne que dans Docker.
 | `docker compose exec web npm run lint` | ESLint |
 | `docker compose exec web npm run db:generate -- --name=<verbe_objet>` | Nouvelle migration (relire le SQL, puis commiter) |
 | `docker compose exec web npm run admin:create -- --email <email> --first-name <prénom> --last-name <nom>` | Premier administrateur : reçoit un lien pour choisir son mot de passe |
-| `docker compose exec web npm run ai:trial [-- --provider openrouter]` | Essai de l'IA : un texte fictif, la réponse brute ; le simulateur sans `--provider openrouter` |
-| `docker compose exec web npm run ai:trial -- --set all --runs 2 [--provider openrouter]` | Jeux d'essai de `scripts/fixtures/ai/` (E5.7) ; rapport dans `trial-results/` ; s'arrête avant 50 requêtes par jour UTC |
-| `docker compose exec web npm run ai:evaluate -- --submission <id> \| --assignment <id> [--provider openrouter]` | Évalue une remise ou les remises « Received » d'un devoir, hors interface ; le simulateur par défaut |
+| `docker compose exec web npm run ai:trial [-- --provider anthropic]` | Essai de l'IA : un texte fictif, la réponse brute ; le simulateur sans `--provider anthropic` |
+| `docker compose exec web npm run ai:trial -- --set all --runs 2 [--provider anthropic]` | Jeux d'essai de `scripts/fixtures/ai/` (E5.7) ; rapport dans `trial-results/` ; s'arrête avant 200 requêtes par jour UTC |
+| `docker compose exec web npm run ai:evaluate -- --submission <id> \| --assignment <id> [--provider anthropic]` | Évalue une remise ou les remises « Received » d'un devoir, hors interface ; le simulateur par défaut |
 
 ## Déploiement (Vercel)
 

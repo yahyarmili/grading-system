@@ -37,6 +37,6 @@
 
 ## Activer l'envoi réel à l'IA (NFR-DON-02, NFR-DON-05)
 
-**Historique, OpenRouter (jusqu'au 2026-10-19) ; ne plus l'appliquer ; la procédure Anthropic sera écrite en E5.15.** Jusque-là, aucun envoi réel n'est prévu : n'utilisez pas `--provider openrouter`, encore accepté jusqu'à E5.13 (clé révoquée ensuite) ; par défaut, le simulateur répond et rien ne quitte la machine.
+**Historique, OpenRouter (jusqu'au 2026-10-19) ; ne plus l'appliquer ; la procédure Anthropic sera écrite en E5.15.** Jusque-là, aucun envoi réel n'est prévu : `--provider openrouter` est refusé depuis E5.13 (adaptateur retiré), et `--provider anthropic` attend la notice v4 et cette procédure (E5.15) ; par défaut, le simulateur répond et rien ne quitte la machine.
 - Elle envoyait les évaluations, sur données fictives, à OpenRouter (modèle `xingchen-agi/xing4.0-29b-a4b:free`, relayé à Phala, endpoint ZDR), avec `AI_PROVIDER=openrouter` ou `--provider openrouter`, `OPENROUTER_API_KEY`, `NODE_DEBUG` refusé et une garde à 50 requêtes par jour UTC.
 - Rejouée en partie le 2026-10-17 (essai et contrôle du journal : réponse conforme, fournisseur Phala, 11,4 s). Texte complet : ce fichier au commit `85b60c4`.

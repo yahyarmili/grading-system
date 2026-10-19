@@ -7,7 +7,7 @@ import { canTransition } from "@/lib/submission-status";
 import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
 import { SimulatorEvaluator, type Evaluator } from "@/server/ai";
-import { createOpenRouterEvaluator } from "@/server/ai/openrouter";
+import { createAnthropicEvaluator } from "@/server/ai/anthropic";
 import { getCurrentProposal } from "@/server/data/evaluation/proposals";
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
@@ -282,7 +282,7 @@ describe("EVL-03 CA2 and R3: a non-conform answer is never stored; attempts are 
   it("ends on internal when the security log fails: nothing is sent, the submission is not left evaluating", async () => {
     const w = await world();
     const fetcher = vi.fn(async () => new Response("{}"));
-    const adapter = createOpenRouterEvaluator({
+    const adapter = createAnthropicEvaluator({
       apiKey: "test-key", env: {}, fetcher,
       journal: async () => {
         throw new Error("log down");
@@ -292,7 +292,7 @@ describe("EVL-03 CA2 and R3: a non-conform answer is never stored; attempts are 
       status: "evaluation_failed", attempts: 1, errors: ["internal"],
     });
     expect(fetcher).not.toHaveBeenCalled();
-    expect((await runsOf(w.submissionId))[0]).toMatchObject({ outcome: "failed", provider: "openrouter", attemptErrors: ["internal"] });
+    expect((await runsOf(w.submissionId))[0]).toMatchObject({ outcome: "failed", provider: "anthropic", attemptErrors: ["internal"] });
   });
 });
 
