@@ -39,6 +39,14 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
   - limite de dépense fixée par vous : impossible sur l'espace Default ([espaces](https://platform.claude.com/docs/en/manage-claude/workspaces)). Console (2026-10-19) : espace `grading_system` limité à 10 $ par mois (remise à zéro le 1er), alertes à 5 et 8 $, limites de débit de l'organisation. [P] : garde des commandes à 200 requêtes par jour UTC.
 
   Le lot de 100 copies (NFR-TRT-01) n'est plus borné par le prestataire, mais par Workflows Hobby et Neon.
+- **Valeurs [P] de la reprise**, consignées après E5.16 (2026-10-19), dans `src/config/provisional.ts` :
+  - génération (`evaluation-2`) : effort `low`, réflexion adaptative (`display: "omitted"`), `max_tokens` 4 000 ; E5.16 : sortie au plus 2 073 tokens ;
+  - délai par appel 120 s ; E5.16 : au plus 11,3 s, médiane 7,4 s ; **proposé pour E6, non appliqué : 60 s** (3 tentatives de 60 s et 2 attentes de 30 s font 240 s, sous les 300 s de Vercel) ;
+  - 3 tentatives, attente de 2 s, `Retry-After` honoré jusqu'à 30 s ; remise libérée en échec après 12 min en « en cours » (dérivé, E5.9) ;
+  - garde des commandes à 200 requêtes par jour UTC, essai de connexion compris ; pause de 1 s entre deux appels d'essai ;
+  - écart adverse permis : 1 niveau ; E5.16 : dépassé une fois sur 21 (a03, écart 2), suites proposées dans [l'essai](annexe-essais-ia.md) ;
+  - `refused` jamais relancé ; budget (limite de dépense, plafond du palier, crédit) classé `configuration`, jamais relancé ; clé `GRADING_ANTHROPIC_API_KEY`.
+- **Mesures d'E5.16** (2026-10-19, [essai](annexe-essais-ia.md)) : 60 appels, 60 propositions conformes, aucun refus (jeu sensible compris) ; coût estimé 0,065 $, soit environ 0,0011 $ par copie ; Console : 0,07 $ dépensés, crédit 99,94 $.
 - **Fiche DON-02 d'Anthropic**, lue le 2026-10-19 (« résumé » : page lue en résumé seulement) :
   - **conditions** : une organisation de la Console relève des [Commercial Terms](https://www.anthropic.com/legal/commercial-terms) (résumé), ses crédits des [Supplemental Credit Terms](https://www.anthropic.com/legal/credit-terms) ; que l'API payée par le crédit Max relève des premières est une déduction, à vérifier ;
   - **entraînement** : aucun sur les données de l'API par défaut, sauf retour envoyé ou accord explicite ([entraînement](https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training), résumé) ;
