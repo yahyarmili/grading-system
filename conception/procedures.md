@@ -72,11 +72,11 @@
 - Révoquer la clé dans la Console (page des clés de l'espace) et la retirer de `.env.local` : toute requête restante répond 401 (`configuration`, sans relance).
 - Les lignes `ai_request_sent` et les résultats déjà stockés restent (journal et propositions immuables).
 
-**Rejeu.** 2026-10-19 (E5.15), étapes 1 à 3, sur dev :
-- conditions 3 à 5 vérifiées par noms seulement (clé présente dans `web`, aucune variable `ANTHROPIC_*`, `NODE_DEBUG` ni `AI_PROVIDER`) ; l'espace et l'expiration de la clé ne sont pas visibles d'ici, à noter par le développeur ; contrôles de la Console : à faire par le développeur ;
+**Rejeu.** 2026-10-19 (E5.15), étapes 1 à 4, sur dev :
+- conditions 3 à 5 vérifiées par noms seulement (clé présente dans `web`, aucune variable `ANTHROPIC_*`, `NODE_DEBUG` ni `AI_PROVIDER`) ; Console, relevée par l'utilisateur le 2026-10-19 : une seule clé, limitée à l'espace `grading_system`, liée à son compte (pas un compte de service), créée le 2026-10-19, expire le 2026-11-18 (après la fin du crédit, le 2026-11-12) ;
 - étape 1 : `claude-haiku-5-5`, `end_turn`, `inference_geo` `us`, 370 tokens en entrée et 49 en sortie, coût estimé 0,000068 $, 4,3 s, JSON valide ;
 - étape 2 (d01) : proposition conforme, `end_turn`, `us`, 3 143 en entrée et 1 549 en sortie (réflexion comprise), coût estimé 0,0012 $, 10,4 s (premier usage du schéma) ;
 - étape 3 : deux lignes `ai_request_sent` (sujet nul, aucun contenu), compteur du jour passé de 0 à 2 ;
-- étape 4 : coût de la Console à relever par le développeur.
+- étape 4, Console (relevée par l'utilisateur le 2026-10-19, vers 20 h 37 UTC) : page Logs, exactement deux requêtes « OK », `claude-haiku-5-5`, palier Standard, tokens identiques aux nôtres (370 / 49 et 3 143 / 1 549) ; latence 0,99 s et 7,17 s, contre 4,3 s et 10,4 s mesurées par la commande (écart d'environ 3,2 s par appel, cause non vérifiée) ; page Usage filtrée sur l'espace et colonne Cost de la clé encore vides (0 et « — ») une quinzaine de minutes après : coût à relever plus tard.
 
 **Historique, OpenRouter (jusqu'au 2026-10-19).** Envoi des évaluations à OpenRouter (modèle `xingchen-agi/xing4.0-29b-a4b:free`, relayé à Phala, endpoint ZDR), avec `OPENROUTER_API_KEY` et une garde à 50 requêtes par jour UTC ; rejoué en partie le 2026-10-17. Adaptateur retiré en E5.13. Texte complet : ce fichier au commit `85b60c4`.

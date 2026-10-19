@@ -121,7 +121,7 @@ Consigne `evaluation-1` reconstruite et comptée localement (caractères / 4, +3
   - conservation de l'organisation : « On · 30 days », pas de ZDR ;
   - programme partenaire non rejoint ; retours des utilisateurs désactivés.
 
-  Reste à vérifier : conditions acceptées ; expiration de la clé, notée à sa création (E5.15).
+  Reste à vérifier : conditions acceptées ; expiration de la clé : 2026-11-18, relevée le 2026-10-19 (clé limitée à `grading_system`, liée au compte du développeur).
 - **Non vérifié** : code HTTP du crédit épuisé ; Commercial Terms et Supplemental Credit Terms appliqués à cet usage ; champ de « Education and credentials » et règles sur les mineurs, à confirmer par un juriste ; catégories de refus (4 ou 5, plus `null`) ; points S du §5 ; empaquetage par Next 16 ; latence ; piste d'un texte passé en `tool_result` contre l'injection (skill local, `model-migration.md` L2371) ; fidélité de la lecture manuscrite (E9.0).
 - **Skill local `claude-api`** : il annonce des en-têtes `x-ratelimit-*` au lieu de `anthropic-ratelimit-*` (`shared/error-codes.md` L150-154).
 - **Limites** : sans température, la stabilité se mesure, elle ne se règle pas ; des textes d'adultes ne représentent pas de vrais élèves ; un jeu adverse fini ne prouve rien ; l'IA plus la validation ne suppriment ni l'ancrage ni le halo ; recul de confidentialité par rapport à OpenRouter (§2) : le jeu adverse peut être signalé, donc gardé 2 ans.
