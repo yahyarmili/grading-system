@@ -3,13 +3,14 @@ import { AI_INFERENCE_GEO } from "@/config/decisions";
 import {
   ADVERSARIAL_MAX_LEVEL_GAP,
   AI_CALL_TIMEOUT_MS,
+  AI_DAILY_REQUEST_LIMIT,
   AI_EFFORT,
   AI_MAX_OUTPUT_TOKENS,
   AI_RETRY_DELAY_MS,
   AI_RETRY_MAX_WAIT_MS,
   AI_THINKING,
 } from "@/config/provisional";
-import type { EvaluationError, ProposalAlert } from "@/lib/evaluation";
+import type { EvaluationError, ProposalAlert, SelectableAiProvider } from "@/lib/evaluation";
 import { criterionIds, publishedRubric, type CriterionId } from "@/lib/rubric";
 import { EvaluatorError, type Evaluator, type Usage } from "@/server/ai";
 import { parseProposalOutput } from "@/server/ai/output";
@@ -185,6 +186,19 @@ async function callOnce(entry: TrialText, run: number, deps: TrialDeps, first: b
       };
     }
   }
+}
+
+/**
+ * Requests still allowed today (the commands' daily guard, AI_DAILY_REQUEST_LIMIT,
+ * counted on the security log): the simulator sends nothing, so it is never limited
+ * and the log is not read. Asked before every real request, the connection trial's included.
+ */
+export async function requestsLeftToday(
+  provider: SelectableAiProvider,
+  sentToday: () => Promise<number>,
+  limit: number = AI_DAILY_REQUEST_LIMIT,
+): Promise<number> {
+  return provider === "simulator" ? Number.POSITIVE_INFINITY : limit - (await sentToday());
 }
 
 /** `runs` runs over the texts, one after the other; a run never stops on a failure, only on the daily limit. */

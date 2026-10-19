@@ -3,7 +3,7 @@
 // container; the simulator by default, Anthropic only with --provider
 // anthropic and GRADING_ANTHROPIC_API_KEY (AI_PROVIDER in the environment is ignored).
 //
-// 1. Connection trial (E5.3, E5.13): one fixed text, the raw answer printed,
+// 1. Connection trial (E5.3, E5.13; under the daily guard since E5.9): one fixed text, the raw answer printed,
 //    to check the key, the answer format and the access to the pinned model.
 //      docker compose exec web npm run ai:trial [-- --provider anthropic]
 //
@@ -37,6 +37,7 @@ import { estimateCostUsd, PRICES } from "@/server/evaluation/prices";
 import {
   formatCallLine,
   formatTrialReport,
+  requestsLeftToday,
   runTrial,
   selectTexts,
   TRIAL_SETS,
@@ -84,7 +85,8 @@ async function main(): Promise<number> {
   });
   const evaluator = evaluatorForCommand(values.provider);
   console.log(`Provider: ${evaluator.provider}; model requested: ${evaluator.model}`);
-  if (values.set === undefined) return connectionTrial(evaluator);
+  const remaining = () => requestsLeftToday(evaluator.provider, countAiRequestsToday);
+  if (values.set === undefined) return connectionTrial(evaluator, remaining);
 
   const set = values.set as TrialSet;
   const runs = Number(values.runs);
@@ -98,10 +100,6 @@ async function main(): Promise<number> {
   const sets: TrialSets = { dev: read("dev.json"), adversarial: read("adversarial.json"), sensitive: read("sensitive.json") };
   const texts = selectTexts(set, sets, limit);
 
-  const remaining = async () => {
-    if (evaluator.provider === "simulator") return Number.POSITIVE_INFINITY;
-    return AI_DAILY_REQUEST_LIMIT - (await countAiRequestsToday());
-  };
   const left = await remaining();
   console.log(`${texts.length} texts × ${runs} run(s) = ${texts.length * runs} requests at least; left today: ${left}.`);
   if (left < texts.length * runs) console.log("Not enough for all of them today: the trial stops at the limit.");
@@ -128,7 +126,12 @@ async function main(): Promise<number> {
   return 0;
 }
 
-async function connectionTrial(evaluator: Evaluator): Promise<number> {
+async function connectionTrial(evaluator: Evaluator, remaining: () => Promise<number>): Promise<number> {
+  // The daily guard holds for this one request too.
+  if ((await remaining()) <= 0) {
+    console.log(`Not sent: the daily limit of ${AI_DAILY_REQUEST_LIMIT} requests (UTC) is reached.`);
+    return 1;
+  }
   if (evaluator.provider === "anthropic") console.log("Sending one fictitious text to Anthropic…");
 
   const started = performance.now();

@@ -10,6 +10,8 @@ import { IMPORT_RESTRICTIONS } from "../eslint.config.mjs";
 const SDK = `import Anthropic from "@anthropic-ai/sdk";\nexport const client = Anthropic;\n`;
 const SDK_DEEP = `import type { Message } from "@anthropic-ai/sdk/resources/messages";\nexport type M = Message;\n`;
 const DATABASE = `import { db } from "@/server/db/client";\nexport const database = db;\n`;
+const SYSTEM = `import { readEvaluationInput } from "@/server/data/evaluation/system";\nexport const read = readEvaluationInput;\n`;
+const SYSTEM_RELATIVE = `import { readEvaluationInput } from "../data/evaluation/system";\nexport const read = readEvaluationInput;\n`;
 
 const eslint = new ESLint();
 
@@ -39,18 +41,32 @@ describe("each import is allowed where the table says, refused everywhere else",
   );
 
   it.each([
+    ["src/app/x.ts", SYSTEM],
+    ["src/server/data/x.ts", SYSTEM],
+    ["src/server/ai/x.ts", SYSTEM_RELATIVE],
+    ["scripts/x.ts", SYSTEM],
+  ])("refuses the evaluation's system functions in %s", { timeout: 30_000 }, async (path, text) => {
+    expect(await restricted(path, text)).toEqual([expect.stringContaining("Only the evaluation service")]);
+  });
+
+  it.each([
     ["src/server/data/x.ts", DATABASE],
     ["src/server/db/x.ts", DATABASE],
     ["tests/x.ts", DATABASE],
     ["src/server/ai/anthropic.ts", SDK],
     ["src/server/ai/anthropic.ts", SDK_DEEP],
+    ["src/server/evaluation/x.ts", SYSTEM],
+    ["tests/x.ts", SYSTEM],
   ])("lets %s through", { timeout: 30_000 }, async (path, text) => {
     expect(await restricted(path, text)).toEqual([]);
   });
 
-  it("has allowed globs that never overlap: a file matched by two blocks would keep only the last", () => {
-    const globs = IMPORT_RESTRICTIONS.flatMap((r) => r.allowed);
-    expect(new Set(globs).size).toBe(globs.length);
+  it("still refuses the SDK in tests, allowed by two entries: one block per glob", { timeout: 30_000 }, async () => {
+    expect(await restricted("tests/x.ts", SDK)).toEqual([expect.stringContaining("Only src/server/ai/anthropic.ts imports")]);
+  });
+
+  it("has distinct allowed globs that never overlap: a file matched by two blocks would keep only the last", () => {
+    const globs = [...new Set(IMPORT_RESTRICTIONS.flatMap((r) => r.allowed))];
     for (const glob of globs) {
       const prefix = glob.replace(/\*\*$/, "");
       expect(globs.filter((other) => other !== glob && other.startsWith(prefix))).toEqual([]);

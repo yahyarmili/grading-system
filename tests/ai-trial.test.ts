@@ -10,6 +10,7 @@ import { estimateCostUsd, PRICES } from "@/server/evaluation/prices";
 import {
   formatCallLine,
   formatTrialReport,
+  requestsLeftToday,
   runTrial,
   selectTexts,
   TRIAL_RATE_LIMIT_RETRIES,
@@ -263,5 +264,16 @@ describe("the command's line for a postponed submission", () => {
     expect(formatOutcomeLine("submission 3", { status: "postponed" })).toBe(
       "submission 3: postponed, still received (daily AI request limit)",
     );
+  });
+});
+
+describe("requestsLeftToday, the daily guard of every real request (the connection trial's included)", () => {
+  it("counts the log for a real provider, and never reads it for the simulator", async () => {
+    let reads = 0;
+    const sentToday = async () => (reads++, 198);
+    expect(await requestsLeftToday("anthropic", sentToday, 200)).toBe(2);
+    expect(await requestsLeftToday("anthropic", async () => 200, 200)).toBe(0);
+    expect(await requestsLeftToday("simulator", sentToday, 200)).toBe(Number.POSITIVE_INFINITY);
+    expect(reads).toBe(1);
   });
 });

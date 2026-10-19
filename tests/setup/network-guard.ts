@@ -1,9 +1,11 @@
 import { afterEach, expect } from "vitest";
 
-// No test touches the network (E5: the Anthropic adapter runs only with an
-// injected fetch). Every fetch() is refused and recorded, and the test that
-// made it fails even if it caught the error. The database (pg, over TCP) does
-// not use fetch and is not concerned.
+// No test calls fetch() (E5: the Anthropic adapter runs only with an injected
+// fetch, and reads the global one at each call). Every fetch() is refused and
+// recorded, and the test that made it fails even if it caught the error.
+// Only fetch() is guarded: the database (pg, over TCP) is meant to be
+// reached, email goes to the capture transport in tests, and a module that
+// opened node:http or a socket by itself would not be caught here.
 
 const blocked: string[] = [];
 

@@ -169,8 +169,8 @@ export function createAnthropicEvaluator({
   };
 }
 
-/** The body sent (plan §4): the whitelist request, the pinned model and region, nothing else. */
-function bodyOf(request: EvaluationRequest): Anthropic.MessageCreateParamsNonStreaming {
+/** The body sent (plan §4): the whitelist request, the pinned model and region, nothing else. Exported for its digest test only (tests/ai-request.test.ts). */
+export function bodyOf(request: EvaluationRequest): Anthropic.MessageCreateParamsNonStreaming {
   const { effort, thinking, maxOutputTokens } = request.generation;
   return {
     model: AI_MODEL,

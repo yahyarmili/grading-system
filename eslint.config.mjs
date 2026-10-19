@@ -7,7 +7,7 @@ import nextTs from "eslint-config-next/typescript";
  * the import patterns it forbids and the files allowed to use them. In a flat
  * config the last block that sets a rule replaces it whole, so every block
  * below is derived from this table: a block that lifts one restriction keeps
- * all the others. The allowed globs never overlap (tests/eslint-restrictions.test.ts).
+ * all the others. Distinct allowed globs never overlap (tests/eslint-restrictions.test.ts).
  */
 export const IMPORT_RESTRICTIONS = [
   {
@@ -22,6 +22,12 @@ export const IMPORT_RESTRICTIONS = [
     message: "Only src/server/ai/anthropic.ts imports Anthropic's SDK, hardened by its options.",
     allowed: ["src/server/ai/anthropic.ts"],
   },
+  {
+    // The evaluation's system functions take no Actor and read the student's text: the evaluation service only.
+    group: ["@/server/data/evaluation/system", "**/data/evaluation/system", "**/evaluation/system"],
+    message: "Only the evaluation service (src/server/evaluation/) uses these system functions, which take no Actor.",
+    allowed: ["src/server/evaluation/**", "tests/**"],
+  },
 ];
 
 const restrictedImports = (restrictions) => [
@@ -29,15 +35,16 @@ const restrictedImports = (restrictions) => [
   { patterns: restrictions.map(({ group, message }) => ({ group, message })) },
 ];
 
-/** One block for every file, then one per allowed glob, with every restriction that glob is not allowed. */
+/**
+ * One block for every file, then one per allowed glob (once, even when
+ * several entries allow it), with every restriction that glob is not allowed.
+ */
 export const importRestrictionBlocks = (restrictions = IMPORT_RESTRICTIONS) => [
   { files: ["**/*.{ts,tsx}"], rules: { "no-restricted-imports": restrictedImports(restrictions) } },
-  ...restrictions.flatMap(({ allowed }) =>
-    allowed.map((glob) => ({
-      files: [glob],
-      rules: { "no-restricted-imports": restrictedImports(restrictions.filter((r) => !r.allowed.includes(glob))) },
-    })),
-  ),
+  ...[...new Set(restrictions.flatMap(({ allowed }) => allowed))].map((glob) => ({
+    files: [glob],
+    rules: { "no-restricted-imports": restrictedImports(restrictions.filter((r) => !r.allowed.includes(glob))) },
+  })),
 ];
 
 const eslintConfig = defineConfig([

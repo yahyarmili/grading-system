@@ -796,6 +796,11 @@ Il faut :
 - un disjoncteur [P] : N échecs configuration ou rejected sur des remises différentes coupent les appels et alertent l'administrateur ;
 - la mesure par traitement (durées, tentatives, usage), sans identité ni contenu (EXP-01) ;
 - un point d'attache typé pour la lecture des images (interface Reader, E9), non implémenté.
+Tranche aussi les constats reportés de la revue d'E5.9 :
+- une sortie tronquée (max_tokens) ou not_json, et un stop_reason inconnu (classé unavailable), sont relancés, donc facturés jusqu'à AI_MAX_ATTEMPTS fois : relancer ou non (E5.16 : sortie au plus à 52 % de max_tokens) ;
+- un Retry-After au-delà d'AI_RETRY_MAX_WAIT_MS est ramené à ce plafond puis relancé trop tôt : s'arrêter en rate_limited, ou reporter l'étape ;
+- le statut du crédit épuisé n'est pas documenté (400 probable) : s'il arrivait en 429 sans error_code, il serait relancé comme une limite de débit ; le classer avec les autres codes de budget (« AI unavailable ») ;
+- la migration de la cause « AI unavailable » : ALTER TYPE … ADD VALUE ne permet pas d'utiliser la nouvelle valeur dans la même transaction ; ne pas s'en servir dans la même migration, et vérifier si le migrateur de Drizzle passe plusieurs migrations en une transaction.
 Montre : flux, fichiers, étapes et leurs garanties, réglages provisoires, comportement en développement, en test et sur la preview, et la vérification sous pannes.
 ```
 
