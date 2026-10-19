@@ -1,6 +1,6 @@
 # Procédures sans écran (NFR-EXP-03)
 
-> Opérations faites hors de l'application. NFR-EXP-03 en demande six écrites ; en démonstration, trois sont rejouées ([besoins-non-fonctionnels.md](besoins-non-fonctionnels.md) §2.8) : créer le premier administrateur, activer le français, activer l'envoi réel à l'IA. **[P]**, écrit en E5.2 et E5.3 (2026-10-16). Les quatre autres procédures restent à écrire.
+> Opérations faites hors de l'application. NFR-EXP-03 en demande six écrites ; en démonstration, trois sont rejouées ([besoins-non-fonctionnels.md](besoins-non-fonctionnels.md) §2.8) : créer le premier administrateur, activer le français, activer l'envoi réel à l'IA. **[P]**, écrit en E5.2 et E5.3 (2026-10-16). Les quatre autres procédures restent à écrire. « Activer l'envoi réel à l'IA » : historique OpenRouter depuis le 2026-10-19, à réécrire et rejouer pour Anthropic en E5.15.
 
 ## Activer le français (EVL-01 R4, Q6)
 
@@ -37,23 +37,6 @@
 
 ## Activer l'envoi réel à l'IA (NFR-DON-02, NFR-DON-05)
 
-**Quand.** Seulement sur des données fictives (DON-02) : la démonstration n'envoie jamais un vrai texte d'élève. Par défaut, partout, c'est le simulateur qui répond, et rien ne quitte la machine.
-
-**Effet.** Les évaluations partent chez OpenRouter, vers le modèle `xingchen-agi/xing4.0-29b-a4b:free` [D, 2026-10-17], épinglé dans `decisions.ts` avec le routage (`require_parameters`, `zdr`). OpenRouter les relaie au fournisseur du modèle, Phala au 2026-10-17, le seul endpoint ZDR listé. Chaque requête qui part laisse d'abord une ligne `ai_request_sent` au journal de sécurité, sans contenu ; si cette ligne ne peut pas être écrite, rien ne part. Limites : 20 requêtes par minute, 50 par jour UTC, tentatives comprises (`stack-technologique.md` §3).
-
-**Conditions (vérifiées au premier usage de l'IA dans le processus, et à chaque lancement d'une commande ; sinon refus, jamais de repli silencieux).**
-- Application (serveur Next) : `AI_PROVIDER=openrouter` exactement ; toute autre valeur non vide, `mistral` comprise, est refusée. Commandes internes (`ai:trial`, `ai:evaluate`) [P, E5.7] : `--provider openrouter` sur la ligne de commande ; elles ignorent `AI_PROVIDER`, pour qu'une valeur laissée dans `.env.local` ne fasse jamais partir un envoi réel. Avec OpenRouter, elles s'arrêtent avant de dépasser 50 requêtes dans le jour UTC, comptées sur le journal de sécurité de la base visée.
-- `OPENROUTER_API_KEY` non vide. L'adaptateur reçoit la clé, il ne la lit jamais lui-même dans l'environnement.
-- `NODE_DEBUG` non défini, quelle que soit sa valeur : il fait écrire à Node les requêtes envoyées.
-- Les tests et l'E2E restent sur le simulateur, quoi que dise `.env.local`.
-
-**Étapes.**
-1. Vérifier que le modèle a encore un endpoint ZDR et pas de date de retrait : [`/endpoints`](https://openrouter.ai/api/v1/models/xingchen-agi/xing4.0-29b-a4b:free/endpoints) (`expiration_date`, fournisseurs) et [`/endpoints/zdr`](https://openrouter.ai/api/v1/endpoints/zdr). Sinon : nouvelle décision de modèle, et nouvelle version de la notice élève.
-2. Vérifier dans les réglages de confidentialité du compte OpenRouter que la journalisation des prompts et l'usage des entrées par OpenRouter restent désactivés.
-3. Essai, en local : `docker compose exec web npm run ai:trial -- --provider openrouter`. Attendu : une réponse JSON conforme au schéma, le modèle et le fournisseur qui ont répondu (ou « (not said) »), l'usage. En cas d'échec, seuls s'affichent le type d'erreur et le code d'OpenRouter (`error_type`, `provider_code`), jamais le message.
-4. Contrôler le journal : une ligne `ai_request_sent` par requête partie, sans acteur ni contenu.
-5. Pour la démonstration : ajouter `AI_PROVIDER=openrouter` (et `OPENROUTER_API_KEY`) dans l'environnement visé, dev (`.env.local`, puis `docker compose up -d`) ou Vercel **Preview** (par l'utilisateur).
-
-**Retour arrière.** Retirer `AI_PROVIDER` (ou le mettre à `simulator`) : le simulateur répond de nouveau. Selon la liste d'OpenRouter, sans garantie vérifiable, rien n'est conservé chez Phala ; OpenRouter garde les métadonnées des requêtes, et peut-être quelques prompts échantillonnés, anonymes (fiche DON-02).
-
-**Rejeu.** Étapes 3 et 4 le 2026-10-17, en local : réponse JSON conforme au schéma de l'essai, modèle `xingchen-agi/xing4.0-29b-a4b:free` et fournisseur `Phala` donnés par la réponse, 129 tokens, 11,4 s. Étapes 1 et 2 vérifiées par l'utilisateur. Le rejeu partiel du 2026-10-16 avec Mistral (quota à 0) est dans l'historique git.
+**Historique, OpenRouter (jusqu'au 2026-10-19) ; ne plus l'appliquer ; la procédure Anthropic sera écrite en E5.15.** Jusque-là, aucun envoi réel n'est prévu : n'utilisez pas `--provider openrouter`, encore accepté jusqu'à E5.13 (clé révoquée ensuite) ; par défaut, le simulateur répond et rien ne quitte la machine.
+- Elle envoyait les évaluations, sur données fictives, à OpenRouter (modèle `xingchen-agi/xing4.0-29b-a4b:free`, relayé à Phala, endpoint ZDR), avec `AI_PROVIDER=openrouter` ou `--provider openrouter`, `OPENROUTER_API_KEY`, `NODE_DEBUG` refusé et une garde à 50 requêtes par jour UTC.
+- Rejouée en partie le 2026-10-17 (essai et contrôle du journal : réponse conforme, fournisseur Phala, 11,4 s). Texte complet : ce fichier au commit `85b60c4`.

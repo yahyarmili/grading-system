@@ -4,7 +4,7 @@ Consignes durables pour Claude Code dans ce dépôt. Réponds en français.
 
 ## Produit
 
-Notation de productions écrites d'élèves (anglais, français). L'élève remet un texte ou des images de sa copie ; le système transcrit sans corriger ; une IA (modèle gratuit d'OpenRouter) propose un niveau de 0 à 4 sur les 5 critères d'une rubrique fixe, avec des remarques, sans l'identité de l'élève. Le professeur relit, modifie, valide, publie ; l'élève ne voit que le publié. Acteurs : administrateur, professeur, élève. Projet académique de démonstration, budget 0 MAD, données fictives.
+Notation de productions écrites d'élèves (anglais, français). L'élève remet un texte ou des images de sa copie ; le système transcrit sans corriger ; une IA (`claude-haiku-5-5` d'Anthropic) propose un niveau de 0 à 4 sur les 5 critères d'une rubrique fixe, avec des remarques, sans l'identité de l'élève. Le professeur relit, modifie, valide, publie ; l'élève ne voit que le publié. Acteurs : administrateur, professeur, élève. Projet académique de démonstration, données fictives, 0 MAD décaissé : l'IA est payée par le crédit API mensuel de l'abonnement Max du développeur [D, 2026-10-19].
 
 ## Suivi et branche
 
@@ -13,25 +13,29 @@ Notation de productions écrites d'élèves (anglais, français). L'élève reme
 - **Branche** [D] : tout se fait sur `preview`. Fin de chaque prompt : commit sur `preview`, **sans pousser** ; pousser seulement à la demande. `main` n'avance pas.
 - **T5 en attente** : `.claude/a-consigner.md`, à consigner dans `conception/` à la demande.
 
-## État (2026-10-17)
+## État (2026-10-19)
 
-- E1 à E4 livrées. Plans approuvés dans `~/.claude/plans/` : E3 `…typed-meerkat.md`, E4 `…happy-petal.md`, E5 `partir-de-l-enqu-te-witty-eagle.md` (découpage E5.2 à E5.7, « Valeurs à consigner », écart E5.3 en fin de plan).
-- **E5 en cours** (E5.0 à E5.7 faits ; essai CA3 à reprendre, voir `conception/annexe-essais-ia.md`) :
+- E1 à E4 livrées. Plans approuvés dans `~/.claude/plans/` : E3 `…typed-meerkat.md`, E4 `…happy-petal.md`, E5 `partir-de-l-enqu-te-witty-eagle.md` (découpage E5.2 à E5.7, « Valeurs à consigner », écart E5.3 en fin de plan ; à réviser pour Anthropic en E5.11).
+- **E5 en cours** : E5.0 à E5.7 faits (Mistral jusqu'à E5.3, OpenRouter depuis E5.4b) ; E5.8 : script écrit (`85b60c4`), essai non lancé, repris en E9.0 ; essai CA3 à refaire en E5.16 (`conception/annexe-essais-ia.md`). Faits durables :
   - rubrique : registre `RUBRIC_VERSIONS` (`src/lib/rubric.ts`, `en-1` = texte du client, gelée par empreinte) ; note = somme des niveaux sur 20 ;
   - `src/server/ai/` : interface `Evaluator`, simulateur à pannes (défaut partout), adaptateur réel qui journalise lui-même `ai_request_sent` avant chaque envoi ; requête : `buildEvaluationRequest` (liste blanche, `PROMPT_VERSION` figée par empreinte), `readEvaluationInput`, test d'étanchéité `tests/evaluation-leak.int.test.ts` ;
-  - **Prestataire [D, 2026-10-16]** : OpenRouter (Mistral abandonné). **E5.4b fait (2026-10-17)** : `src/server/ai/openrouter.ts`, `fetch` sans bibliothèque ; `AI_MODEL = "xingchen-agi/xing4.0-29b-a4b:free"` et `AI_ROUTING` (`require_parameters`, `zdr`) dans `decisions.ts` ; `AI_PROVIDER=openrouter` + `OPENROUTER_API_KEY` ; jamais `openrouter/free`, aucun en-tête d'attribution ni champ `user`. `ai_provider` vaut `simulator` | `openrouter`.
-  - Garanties de l'adaptateur : journal avant envoi (rien ne part s'il échoue), durée bornée lecture comprise, `NODE_DEBUG` refusé au démarrage, clé jamais lue implicitement, erreurs classées sans contenu (y compris dans un 200).
-  - Limites des modèles gratuits : 20 requêtes par minute, 50 par jour UTC à 0 crédit acheté. Notice élève v3 (OpenRouter, Phala, ZDR selon la liste d'OpenRouter) ; essai `ai:trial` réel et notice validés le 2026-10-17 (la réponse donne `provider`, ici Phala).
+  - garanties de l'adaptateur, à garder avec Anthropic : journal avant envoi (rien ne part s'il échoue), durée bornée lecture comprise, variables de débogage refusées au démarrage, clé jamais lue implicitement, erreurs classées sans contenu, aucune relance cachée, aucun identifiant d'utilisateur ni en-tête d'attribution (jamais `metadata`) [P] ;
+  - ancien adaptateur OpenRouter (E5.4b) : `src/server/ai/openrouter.ts`, `AI_ROUTING` : encore dans le code, supprimé en E5.13 ; notice élève v3 (OpenRouter, Phala) en place jusqu'à la v4 (E5.15) ; `ai_provider` vaut `simulator` | `openrouter` jusqu'à `0012` ;
   - **E5.5 fait** : `evaluation_runs` et `ai_proposals` (`0010`), immuables par trigger (`0011`, `forbid_change`) ; validateur `src/server/ai/output.ts` et `quotes.ts` ; service `src/server/evaluation/evaluate.ts` (claim, tentatives bornées, `recordEvaluation`, résultat `stale` conservé non courant) ; seul `src/server/data/evaluation/system.ts` insère ces tables (`tests/evaluation-writes.test.ts`) ; `getCurrentProposal` ; commande `npm run ai:evaluate -- --submission|--assignment <id> [--simulate <faute>]`.
   - **E5.6 fait** : alertes (EVL-04) dans `src/server/evaluation/alerts.ts` ; bloquantes avant toute requête, `no_content` puis `rubric_unavailable` ; `very_short` sous `SHORT_TEXT_MIN_WORDS` [P] ; rubrique française `fr-test` réservée aux tests (`tests/fixtures/rubric-fr-test.ts`, injectée par `registry`).
-  - **E5.7 fait (2026-10-17)** : commandes `ai:evaluate` et `ai:trial` sur le simulateur sauf `--provider openrouter` (elles ignorent `AI_PROVIDER`), arrêt avant 50 requêtes par jour UTC comptées au journal (`countAiRequestsToday`) ; `SCRIPTS` dans `inventory.ts` ; jeux `scripts/fixtures/ai/` (10 + 7) ; lanceur `src/server/evaluation/trial.ts`. Essai réel : 27 appels sur 34 au-delà de 60 s (`AI_CALL_TIMEOUT_MS`), CA3 non mesurable ; résultats bruts dans `conception/annexe-essais-ia.md`.
+  - **E5.7 fait (2026-10-17)** : commandes `ai:evaluate` et `ai:trial` sur le simulateur sauf `--provider <réel>` (elles ignorent `AI_PROVIDER`), arrêt quotidien compté au journal (`countAiRequestsToday`, `AI_DAILY_REQUEST_LIMIT`) ; `SCRIPTS` dans `inventory.ts` ; jeux `scripts/fixtures/ai/` (10 + 7) ; lanceur `src/server/evaluation/trial.ts`.
+- **Reprise d'E5 avec Anthropic [D, 2026-10-19]** : prompts E5.10 à E5.16 puis E5.9 ; décisions dans `conception/stack-technologique.md` §3, faits et sources dans `conception/annexe-ia-anthropic.md`. E5.10 fait ; prochain : E5.11 (`/plan`), après les relevés de la Console par l'utilisateur. À tenir dans le code :
+  - `claude-haiku-5-5` en direct, `inference_geo: "us"` ; chaîne fixe d'appels spécialisés orchestrée par le code, ni agent ni framework ;
+  - `@anthropic-ai/sdk` en version exacte, importé par `src/server/ai/anthropic.ts` seul, durci par des options explicites et le refus de variables au démarrage ; détail [P] (`annexe-ia-anthropic.md` §5), fixé au plan d'E5.11, dont `messages.create` au lieu de `messages.parse` ;
+  - Haiku 5.5 : aucune `temperature` (≠ 1 → 400) ; réflexion adaptative par défaut, comptée dans `max_tokens`, blocs lus par type ; refus = HTTP 200 + `stop_reason: "refusal"`, sans repli ;
+  - `openrouter` reste dans l'enum stocké (lignes immuables) et sera refusé par `AI_PROVIDER` dès E5.13 ; `0012` en ajouts seulement (`anthropic` ; `refused` [P]), en E5.12.
 - Base dev : un compte par rôle (E1.8), migrations jusqu'à `0011`.
 
 ## Environnement
 
 - Node uniquement dans Docker : `docker compose up` (http://localhost:3000) ; npm via `docker compose exec -T web npm …`, lancé depuis l'outil Bash (PowerShell 5.1 casse les guillemets), avec `MSYS_NO_PATHCONV=1` pour un chemin du conteneur.
 - Next.js 16 (`proxy.ts`, `cacheComponents`) : lis `node_modules/next/dist/docs/` avant d'utiliser une API (`AGENTS.md`).
-- Secrets : l'utilisateur crée comptes et secrets ; le code lit `process.env`. **Ne lis jamais `.env*`.** Après modification de `.env.local` : `docker compose up -d`.
+- Secrets : l'utilisateur crée comptes et secrets ; le code lit `process.env`. **Ne lis jamais `.env*`.** Après modification de `.env.local` : `docker compose up -d`. Clé d'Anthropic [P] : `GRADING_ANTHROPIC_API_KEY`, jamais `ANTHROPIC_API_KEY` (Claude Code la prendrait à la place de l'abonnement) ; toute variable `ANTHROPIC_*` et `NODE_DEBUG` est refusée au démarrage.
 - **Tests** : `npm test` (projets `unit` et `integration`). Les `*.int.test.ts` tournent en séquence sur `DATABASE_URL_TEST`, remise à zéro et migrée. Lents (Neon `us-east-2`, ~175 ms par requête).
 - **E2E** : `docker compose run --rm e2e` (serveur Next sur le port 3100, `DATABASE_URL_TEST`, email capturé). Le premier test après une modification peut dépasser 15 s : relance avant de chercher un bug. **Intégration et E2E partagent la base de test : jamais en même temps.**
 - **Build** : jamais dans `web`, seulement dans `e2e` ; puis `docker compose restart web` (`next-env.d.ts` réécrit).

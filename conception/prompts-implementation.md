@@ -16,7 +16,7 @@
 | Langue | Prompts en français ; **contenu de l'application en anglais** (interface, emails, messages) ; code en anglais. |
 | Design | Référence visuelle : [refine app-crm-minimal](https://github.com/refinedev/refine/tree/master/examples/app-crm-minimal) ([démo](https://example.minimal-crm.refine.dev)). Elle utilise Ant Design ; on en reprend les principes en Tailwind, sans Ant Design ni refine. |
 | Maquettes | Deux écrans clés en données fictives avant la base : liste des remises et écran de copie. |
-| Sous-choix techniques | Better Auth (avec son skill officiel), Zod, Vitest et Playwright, Nodemailer (Gmail SMTP), SDK TypeScript officiel de Mistral (Mistral et son SDK remplacés le 2026-10-16 par OpenRouter [D] ; client à choisir au plan d'E5.4b). Chacun reste confirmé dans le `/plan` de son étape. |
+| Sous-choix techniques | Better Auth (avec son skill officiel), Zod, Vitest et Playwright, Nodemailer (Gmail SMTP), SDK officiel `@anthropic-ai/sdk` en version exacte (0.135.0, lue le 2026-10-19) [D, 2026-10-19]. *Historique : SDK TypeScript officiel de Mistral, remplacé le 2026-10-16 par OpenRouter [D], appelé par `fetch` sans bibliothèque (E5.4b) ; OpenRouter remplacé le 2026-10-19.* Chacun reste confirmé dans le `/plan` de son étape. |
 | Emplacement | L'application est créée à la racine du dossier `grading_system`, à côté de `conception/`, qui reste lisible par Claude. |
 
 ## 2. Mode d'emploi
@@ -26,7 +26,7 @@
 3. Les prompts marqués **Plan** se lancent après `/plan` : on relit le plan, on le simplifie s'il en fait trop (T2), puis on lance l'implémentation.
 4. Une valeur non décidée (durée d'un lien, N essais, format de la note…) est codée comme **valeur provisoire** dans un fichier de configuration unique, marquée comme telle. Elle ne devient pas une décision.
 5. Quand un choix change en cours de route, utilisez T5 : la conception, ce document et CLAUDE.md sont mis à jour avant de continuer.
-6. Vous créez vous-même les comptes et les secrets (Neon, Gmail, OpenRouter, Vercel). Claude lit les variables par `process.env`, jamais le fichier `.env.local`.
+6. Vous créez vous-même les comptes et les secrets (Neon, Gmail, Anthropic dans sa Console, Vercel ; OpenRouter jusqu'au 2026-10-19). Claude lit les variables par `process.env`, jamais le fichier `.env.local`.
 
 ## 3. Prompts transverses (réutilisés à chaque étape)
 
@@ -474,10 +474,8 @@ Puis **T1**, et **T5** pour les nouvelles valeurs provisoires.
 ## E5 — Rubrique et proposition d'évaluation par l'IA (EVL-01 à EVL-04)
 
 Préalables :
-- **Prestataire d'IA [D, 2026-10-16]** : OpenRouter, avec un modèle gratuit (`:free`), à la place de Mistral, dont l'offre Free n'active pas les clés d'API (`stack-technologique.md` §3). Les préalables Mistral ci-dessous (clé, limites, refus d'entraînement, modèle) sont de l'historique. **Vous**, avant E5.4b :
-  - créez une clé OpenRouter, ajoutez-la dans `.env.local` (`OPENROUTER_API_KEY`, fixé en E5.4b), puis `docker compose up -d` ;
-  - relevez dans les réglages de confidentialité du compte ce qui est permis pour les modèles gratuits (entraînement, publication des prompts) ;
-  - choisissez le modèle. Critères [P] : sortie structurée par schéma JSON annoncée ; politique d'entraînement et de conservation de son fournisseur, que la notice élève dira telle quelle ; pas de date de retrait proche ; un identifiant précis, jamais le routeur `openrouter/free` (NFR-QUA-02) : l'identifiant exact du modèle `:free`, avec sa version quand il en porte une. Sinon, l'écart est assumé par écrit, comme pour Mistral, et le modèle qui a répondu est enregistré avec chaque résultat.
+- **Prestataire d'IA [D, 2026-10-19]** : Anthropic, `claude-haiku-5-5` ; voir la reprise d'E5 (E5.10 à E5.16). Les préalables OpenRouter et Mistral ci-dessous sont de l'historique.
+- **Historique, OpenRouter (2026-10-16 au 2026-10-19)** (détail : ces préalables et `stack-technologique.md` §3 au commit `85b60c4`) : modèle gratuit (`:free`) à la place de Mistral, dont l'offre Free n'activait pas les clés d'API ; clé `OPENROUTER_API_KEY` dans `.env.local` ; réglages de confidentialité relevés ; modèle choisi selon des critères [P] (sortie structurée, politique du fournisseur dite par la notice, identifiant précis, jamais `openrouter/free`) : `xingchen-agi/xing4.0-29b-a4b:free` (E5.4b).
 - **Historique, Mistral** (détail : `stack-technologique.md` §3 au commit `a7aaf44`) :
   - créez une clé API Mistral (offre gratuite) et ajoutez `MISTRAL_API_KEY` dans `.env.local`, puis `docker compose up -d` ;
   - limites de débit relevées le 2026-10-15 ;
@@ -488,12 +486,12 @@ Préalables :
   - **Q5** : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA et mention « note ajustée » affichées à l'élève (E8) ;
   - **Q6** : devoirs en français créables, aucune proposition IA jusqu'à la validation de la rubrique française par le client ; « IA indisponible » et correction à la main d'ici là.
 - **Tranchés après l'enquête E5.0 [D, 2026-10-15]** (le modèle par vous ; les quatre autres points délégués à Claude) :
-  - **Modèle** : `mistral-medium-3-5`. *Remplacé le 2026-10-16 : modèle gratuit d'OpenRouter, à choisir (ci-dessus, et E5.4b).*
-  - **Activation** : `AI_PROVIDER` vaut `simulator` (défaut) ou la valeur du prestataire réel ; toujours le simulateur sous `NODE_ENV=test` et dans le serveur E2E (`AI_PROVIDER: "simulator"` dans `webServer.env` de `playwright.config.ts`, comme `EMAIL_TRANSPORT`). Le prestataire réel sans clé est une erreur, jamais un repli silencieux. La clé est passée explicitement au client, jamais lue par lui dans l'environnement ; elle est vidée dans Vitest et dans le serveur E2E. *Depuis le 2026-10-16, la valeur `mistral` et `MISTRAL_API_KEY` deviennent `openrouter` et `OPENROUTER_API_KEY` [P], fixés en E5.4b.*
+  - **Modèle** : `mistral-medium-3-5`. *Remplacé le 2026-10-16 par un modèle gratuit d'OpenRouter (`xingchen-agi/xing4.0-29b-a4b:free`, E5.4b), puis le 2026-10-19 par `claude-haiku-5-5` (reprise d'E5).*
+  - **Activation** : `AI_PROVIDER` vaut `simulator` (défaut) ou la valeur du prestataire réel ; toujours le simulateur sous `NODE_ENV=test` et dans le serveur E2E (`AI_PROVIDER: "simulator"` dans `webServer.env` de `playwright.config.ts`, comme `EMAIL_TRANSPORT`). Le prestataire réel sans clé est une erreur, jamais un repli silencieux. La clé est passée explicitement au client, jamais lue par lui dans l'environnement ; elle est vidée dans Vitest et dans le serveur E2E. *Depuis le 2026-10-19, la valeur réelle devient `anthropic` et la clé `GRADING_ANTHROPIC_API_KEY` [P], fixées en E5.13 ; `openrouter` est alors refusé [D]. Historique : `mistral` et `MISTRAL_API_KEY`, puis `openrouter` et `OPENROUTER_API_KEY` du 2026-10-16 au 2026-10-19 (E5.4b).*
   - **Proposition courante** : un pointeur dans `submissions`, posé par la transition 5 via `applyTransition` et remis à vide par la transition 11 dans `replaceText`. C'est une modification d'E4, à retester.
   - **Rubrique** : dans le code, sous la forme d'un registre de versions publiées figé par un test d'empreinte. La rubrique française « test only » n'est injectable que dans les tests. Activer le français revient à publier une version dans le code et à déployer, selon la procédure écrite (NFR-EXP-03).
   - **Test d'étanchéité (EVL-02 CA1)** : la capture va jusqu'au corps HTTP sérialisé par le client de l'adaptateur (vrai adaptateur, client HTTP de capture), en plus de l'interface. Une garde réseau sans dépendance remplace `globalThis.fetch` : tout appel bloqué fait échouer le test.
-- **Données** : textes fictifs seulement (NFR-DON-02). Aucune copie réelle n'est envoyée à l'IA, ni à OpenRouter ni au fournisseur du modèle.
+- **Données** : textes fictifs seulement (NFR-DON-02). Aucune copie réelle n'est envoyée à l'IA, donc à Anthropic.
 
 #### E5.0 — Enquête par sous-agents
 ```
@@ -504,6 +502,7 @@ Avant de planifier l'évaluation par l'IA, enquête avec trois sous-agents sépa
 Chacun renvoie : comportement actuel, fichiers concernés, risques, recommandation. Fais-en ensuite une synthèse courte.
 ```
 **Vous validez :** la synthèse est claire ; le modèle recommandé a un identifiant daté, pas un alias « latest » (NFR-QUA-02).
+Fait (enquête Mistral ; décisions du 2026-10-15 dans les préalables). Critère « identifiant daté » remplacé le 2026-10-19 [D] : NFR-QUA-02 reformulé (identifiant fixe, sans date ni alias, retrait pas avant le 2027-10-07, modèle qui a répondu enregistré).
 
 #### E5.1 — Planifier · Plan
 ```
@@ -521,6 +520,7 @@ Déjà tranchés (préalables d'E5) : le modèle, AI_PROVIDER, le pointeur de pr
 Valeurs non décidées (tentatives, tolérance des citations, seuil de copie courte, écart maximal du jeu adverse) : provisional.ts.
 Montre : tables et contraintes (dont l'immuabilité), interface et simulateur, constructeur de requête, validateur, lignes de matrice et d'inventaire, commande interne, et la vérification.
 ```
+Fait : plan `~/.claude/plans/partir-de-l-enqu-te-witty-eagle.md`. Adaptateur Mistral remplacé en E5.4b (OpenRouter, 2026-10-16), puis par Anthropic (reprise d'E5, 2026-10-19) ; plan révisé en E5.11.
 
 #### E5.2 — Rubrique versionnée et note (EVL-01)
 ```
@@ -558,6 +558,7 @@ Réécris la notice élève selon la politique du fournisseur retenu (version 3)
 ```
 **Vous validez :** les tests passent hors réseau ; `ai:trial` avec `AI_PROVIDER=openrouter` obtient une réponse conforme au schéma ; le journal montre l'envoi, sans le texte ; vous approuvez le texte de la notice v3.
 Fait le 2026-10-17 : modèle `xingchen-agi/xing4.0-29b-a4b:free` épinglé, client `fetch`, notice v3 ; tests hors réseau passés. Validé par vous le 2026-10-17 : essai `ai:trial` réel (réponse conforme, fournisseur Phala donné par la réponse) et notice v3.
+Remplacé le 2026-10-19 par la reprise d'E5 (E5.10 à E5.16) ; l'adaptateur OpenRouter est retiré en E5.13.
 
 #### E5.5 — Contrat de sortie et proposition immuable (EVL-03)
 ```
@@ -583,6 +584,7 @@ Constitue dans le dépôt le jeu de développement synthétique (textes fictifs 
 Fais tourner ces jeux une fois avec le modèle OpenRouter retenu, dans la limite de 50 requêtes par jour, tentatives comprises, et consigne les résultats tels quels : sorties rejetées, stabilité sur deux exécutions, écarts du jeu adverse (EVL-03 CA3). Aucune conclusion de qualité.
 ```
 **Vous validez :** vous lisez le compte rendu. Ces textes sont écrits par des adultes : ils ne représentent pas de vraies copies d'élèves.
+Essai fait le 2026-10-17 avec OpenRouter (CA3 non mesurable, `annexe-essais-ia.md`) ; refait en E5.16 avec `claude-haiku-5-5` [D, 2026-10-19] ; commande et jeux gardés.
 
 #### E5.8 — Essai exploratoire de lecture manuscrite (hors produit)
 Préalable : quelques photos de textes manuscrits fictifs, écrits par des adultes volontaires, sans nom.
@@ -591,8 +593,130 @@ Hors produit, écris un script qui fait lire ces photos par un ou deux modèles 
 Consigne les résultats tels quels dans une courte annexe de conception/, avec les versions de modèle et cette limite : écriture d'adultes, pas d'élèves. Aucune intégration dans l'application (E9).
 ```
 **Vous validez :** l'annexe existe et ne tire aucune conclusion au-delà de ce qui a été observé.
+Script écrit (`85b60c4`), essai non lancé. Repris en E9.0 avec `claude-haiku-5-5` [D, 2026-10-19] ; script gardé, à réécrire.
+
+### Reprise d'E5 — Anthropic, `claude-haiku-5-5` [D, 2026-10-19]
+
+Préalables :
+- **Décisions [D, 2026-10-19]** :
+  - prestataire : Anthropic en direct, `claude-haiku-5-5` ;
+  - budget : crédit API mensuel de l'abonnement Max, sans moyen de paiement, donc 0 MAD décaissé ; ensuite, clé du client ou simulateur ;
+  - QUA-02 reformulé ;
+  - appels spécialisés fixes, sans agent ni framework ;
+  - SDK officiel durci ;
+  - `inference_geo` `us` ;
+  - OpenRouter retiré du code du produit ;
+  - E5.8 repris en E9.0.
+
+  Les préalables OpenRouter d'E5 deviennent de l'historique.
+- **Remplacé** : E5.4b ; l'essai d'E5.7, refait en E5.16 (la commande et les jeux restent) ; E5.8, repris en E9.0. E5.9 se lance après E5.16.
+- **Gardé tel quel** :
+  - E5.2, E5.4, E5.5, E5.6 et la commande d'E5.7 ;
+  - la rubrique `en-1` ;
+  - la liste blanche et le cadrage de `request.ts`, `output.ts`, `quotes.ts`, `alerts.ts` ;
+  - le cœur d'`evaluate.ts`, `data/evaluation`, `0010`/`0011` ;
+  - les jeux 10 + 7, le simulateur par défaut, le journal avant envoi, `selectEvaluator` ;
+  - `--provider` sur la ligne de commande seulement.
+- **Vous, avant E5.11** :
+  - réclamez le crédit et vérifiez qu'aucun moyen de paiement n'est enregistré ;
+  - relevez le palier, la fin du cycle, la conservation affichée et `inference_geo` autorisé ;
+  - créez un espace de travail dédié avec une limite mensuelle, des alertes et `inference_geo` `us` ;
+  - relisez les conditions et la politique d'usage.
+- **Vous, avant E5.15** : une clé limitée à l'espace, expiration notée, dans `.env.local` sous `GRADING_ANTHROPIC_API_KEY`, puis `docker compose up -d`.
+- **Vous, après E5.13** : retirez `AI_PROVIDER=openrouter` et `OPENROUTER_API_KEY` de `.env.local` (et de Vercel s'ils y sont), puis révoquez la clé OpenRouter.
+- **Données** : textes fictifs seulement. Aucune copie réelle avant que le client ait validé la fiche DON-02 d'Anthropic.
+
+#### E5.10 — Consigner le passage à Anthropic (T5 ; QNF-5, NFR-DON-02, NFR-TRT-01, NFR-QUA-02)
+```
+Nous changeons la décision suivante [D, 2026-10-19] : le prestataire d'IA devient l'API d'Anthropic en direct, modèle claude-haiku-5-5, à la place d'OpenRouter ; payée par le crédit API mensuel de mon abonnement Max (100 $, sans report), sans moyen de paiement : 0 MAD décaissé. Mes autres choix : les autres décisions [D, 2026-10-19] des préalables ci-dessus. Relevés de la Console : reportés à E5.11.
+Mets à jour, en restant bref, chaque [D] daté et chaque fait avec sa source (lien ; « résumé seulement » s'il y a lieu) :
+- crée conception/annexe-ia-anthropic.md : faits datés sur l'API et Haiku 5.5, confiance, audit du SDK 0.135.0 avec ses liens au tag, options écartées (agents, frameworks, lots, Files API) ;
+- stack-technologique.md §1 (budget), §2, §3 (OpenRouter en historique par son commit, comme Mistral ; fiche DON-02 d'Anthropic : entraînement, pays, conservation et exceptions, plus de ZDR, schéma gardé 24 h, sous-traitants à définir, transfert à confirmer par la CNDP ou un juriste, AUP « Education and credentials » et mineurs, élèves de 18 ans [D] avec QNF-1 à confirmer), §5, et la ligne 22 (essai d'écriture) ;
+- besoins-non-fonctionnels.md : lignes 6, 19, 35, QNF-5 (IA payée par le crédit du développeur pendant le projet ; ensuite clé du client, simulateur ou évaluation manuelle), TRT-01, EXP-01, EXP-02 (branche payante), QUA-02, §2.8 ;
+- fonctionnalites.md : §8.2 E5 (essai d'écriture déplacé, coût par copie à mesurer), §8.2 E9 (essai repris en E9.0), ligne 720 ;
+- acteurs.md:110 ; procedures.md (« Activer l'envoi réel » marquée à réécrire en E5.15) ;
+- prompts-implementation.md : §1, §2, §4 ; préalables d'E5 en historique ; la reprise fournie, insérée sous E5.8 ; sous E5.4b « Remplacé le 2026-10-19 » ; sous E5.7 « Essai refait en E5.16 » ; sous E5.8 « Repris en E9.0 » ; points de revue d'E5.9 étendus à l'adaptateur, lancé après E5.16 (un seul titre E5.9) ; préalables d'E6, E6.0, E6.2, E6.4, E6.5 ; lignes E7, E8, E9, E10, E11 du squelette ;
+- CLAUDE.md et .claude/a-consigner.md.
+Vérifie par un grep de « OpenRouter|gratuit|50 requêtes|ZDR|Phala » dans conception/, CLAUDE.md et a-consigner.md que plus rien d'OpenRouter n'est présenté comme en vigueur. Ne consigne en [D] que ce que j'ai tranché ; les [P] restent pour le plan. Ne touche pas au code : liste le code qui contredit, sans le modifier.
+```
+**Vous validez :** chaque section porte un [D] daté ; le grep ne trouve plus OpenRouter en vigueur ; l'annexe donne une source à chaque fait ; aucun fichier de `src/` n'a changé.
+Fait le 2026-10-19 (session d'analyse) : décisions consignées, `conception/annexe-ia-anthropic.md` créée ; relevés de la Console reportés à E5.11.
+
+#### E5.11 — Réviser le plan d'E5 pour Anthropic (EVL-02, EVL-03, NFR-DON-05, NFR-EXP-04) · Plan
+```
+Relevés de la Console : palier <…>, fin du cycle <…>, conservation affichée <…>, inference_geo autorisé <…> ; consigne-les d'abord dans conception/annexe-ia-anthropic.md §8 et stack-technologique.md §3, datés.
+Révise le plan d'E5 (~/.claude/plans/partir-de-l-enqu-te-witty-eagle.md) d'après la conception consignée en E5.10 et conception/annexe-ia-anthropic.md. Sections qui dépendent du prestataire : Contexte, §1 à §5, §7, §9 à §11, « Valeurs à consigner » ; « Changement de prestataire » passe en historique. Corrige ce qui a dérivé depuis E5.7 (délai 120 000 ms, pause 4 000 ms, AI_DAILY_REQUEST_LIMIT).
+Lis d'abord le skill claude-api et la documentation officielle de claude-haiku-5-5 (migration, sortie structurée, erreurs, limites, data residency) ; cite les liens.
+Le plan fixe :
+- anthropic.ts, seul à importer @anthropic-ai/sdk 0.135.0 (version exacte ; une seule entrée no-restricted-imports qui réunit ce motif et celui de @/server/db, avec contre-épreuve) : options explicites (apiKey, authToken et webhookKey à null, baseURL, maxRetries 0, logLevel "off", openTelemetry false, User-Agent et X-Stainless-* à null, no-store) ; fetch injecté (globalThis.fetch lu à l'appel, seul POST https://api.anthropic.com/v1/messages, 4 en-têtes transmis, ai_request_sent avant chaque requête) ; comment ce fetch connaît le sujet du journal ; un échec du journal qui remonte en erreur interne, pas en erreur de connexion relancée ; signal par appel et untilDeadline ; NODE_DEBUG et toute variable ANTHROPIC_* refusés au démarrage ;
+- le corps : model, max_tokens, system, un seul message user, output_config (format json_schema OUTPUT_SCHEMA, effort), thinking, inference_geo ; jamais temperature, top_p, top_k, pré-remplissage, metadata, tools, stream, cache_control ;
+- la réponse : stop_reason lu avant le contenu (refusal → refused, catégorie gardée en code filtré, null compris ; max_tokens → validateur) ; blocs lus par type, thinking jamais stocké ; stopReason et usage (entrée, sortie, cache, inference_geo) portés par la réponse, et par l'erreur refused, facturée pour certaines catégories ; providerAnswered null ;
+- les erreurs, par statut, type et code filtrés, jamais par le message stocké : 400, 401, 402, 403, 404, 429 enforced_spend_limit_reached → configuration, avec un code budget repéré par début de message documenté (limite de dépense, crédit épuisé) sans rien stocker ; autre 429 → rate_limited ; 504 et délai local → timeout ; 409, 500, 529, connexion, 200 qui n'est pas un message → unavailable ; 413 et autres 4xx → rejected ;
+- la migration 0012, en ajouts seulement (E5.12) ; listes stockée et sélectionnable séparées ;
+- evaluation-2 : génération (effort, thinking, max_tokens) et level en enum, rien d'autre ; aucun champ ni mot « reasoning » (catégorie de refus reasoning_extraction) ;
+- les valeurs : AI_MODEL et AI_INFERENCE_GEO dans decisions.ts ; prix publiés rangés comme un fait (source et date), pas en [D] ; AI_ROUTING et AI_TEMPERATURE retirés ; [P] dans provisional.ts : AI_EFFORT, AI_THINKING, AI_MAX_OUTPUT_TOKENS, AI_CALL_TIMEOUT_MS, AI_DAILY_REQUEST_LIMIT, AI_TRIAL_PAUSE_MS, nom de la clé ;
+- le test d'étanchéité : anthropic-version vérifié égal à 2023-06-01, puis seul exclu du contrôle des dates, avec x-api-key ; l'expression ANY_ID_OR_DATE inchangée ;
+- un tableau garantie → test hors réseau, chacun avec sa contre-épreuve ;
+- l'essai instrumenté (E5.14) et le premier envoi d'evaluation-2 (E5.15).
+Montre le découpage E5.12 à E5.16, puis E5.9, et ce qui reste hors E5 (plafond de coût et disjoncteur en E6, vote et variantes en E10, lecture en E9).
+```
+
+#### E5.12 — Socle additif : valeurs stockées, refus, pannes simulées (EVL-03, NFR-EXP-04)
+```
+Selon le plan révisé, sans toucher à l'adaptateur OpenRouter encore en place :
+- migration 0012 (npm run db:generate -- --name=add_anthropic_and_refused) : anthropic dans ai_provider, refused dans evaluation_error, rien d'autre ; montre-moi le SQL avant db:migrate sur dev (une valeur d'enum ne se retire pas) ;
+- aiProviders : liste stockée (simulator, openrouter, anthropic) séparée de la liste sélectionnable ;
+- refused : échec final, jamais relancé automatiquement, message fixe ; la relance manuelle (transition 6) reste permise ;
+- simulateur et ai:evaluate --simulate : pannes refusal (avec catégorie), sortie tronquée (max_tokens), 529, 402, limite de dépense ;
+- tests à jour.
+```
+**Vous validez :** le SQL de `0012` n'ajoute que deux valeurs ; `npm test` passe ; `ai:evaluate --simulate refusal` donne « Evaluation failed », cause `refused`, une seule tentative.
+
+#### E5.13 — Adaptateur Anthropic durci, hors réseau (EVL-02, NFR-DON-05, NFR-EXP-04, NFR-QUA-02)
+```
+Implémente selon le plan révisé le passage à Anthropic, sans envoi réel.
+- Installe @anthropic-ai/sdk en version exacte 0.135.0 ; règle ESLint unique et tests/ai-send-point.test.ts : seul src/server/ai/anthropic.ts l'importe, adresse api.anthropic.com ; les autres paquets d'IA restent interdits.
+- Remplace openrouter.ts et son test par anthropic.ts et anthropic.test.ts, même plan (ce qui part, le journal, chaque échec, le refus de démarrer). errors.ts : forme d'erreur d'Anthropic ; garde parseRetryAfter, IDENTIFIER, les messages fixes.
+- Configuration et types selon le plan ; Generation devient effort, thinking, maxOutputTokens ; EvaluationResponse porte stopReason et usage ; PROMPT_VERSION evaluation-2, empreintes refaites ; AI_PROVIDER vaut simulator ou anthropic (openrouter, mistral refusés) ; la clé, lue par index.ts sous son nom, passée explicitement, vidée dans Vitest et dans le serveur E2E.
+- ai:evaluate et ai:trial : --provider anthropic, garde quotidienne, essai de connexion sans temperature.
+- Tests hors réseau, un par garantie, chacun avec sa contre-épreuve : journal en échec → aucun appel et erreur interne ; une seule requête HTTP sur 408, 409, 429, 500, 529, délai avant les en-têtes, erreur de connexion, et un 400 avec x-should-retry: true ; corps qui cale après les en-têtes → timeout ; environnement piégé (ANTHROPIC_API_KEY, _AUTH_TOKEN, _BASE_URL, _LOG=debug, _CUSTOM_HEADERS, variables OpenTelemetry, NODE_DEBUG) → refus au démarrage ; client construit avant la garde réseau → bloqué ; aucune écriture console ; un marqueur dans un corps d'erreur ou un 200 cassé ne ressort ni dans l'erreur, ni au journal, ni en base ; bloc thinking avant le texte ; refusal et max_tokens ; ^ ou ~ devant la version → échec.
+- Test d'étanchéité adapté comme prévu au plan (4 en-têtes, clé dans x-api-key seulement, anthropic-version, clés exactes du corps, aucun metadata, A1 = C1) ; evaluation.int, index.test, errors.test, inventory.ts, README, commentaires, état d'E5 dans CLAUDE.md.
+Garde : request.ts hors génération et schéma, output.ts, quotes.ts, alerts.ts, evaluate.ts (commentaires seulement), data/evaluation, 0010 à 0012, les jeux.
+```
+**Vous validez :** `npm test` et les E2E passent hors réseau ; retirer une protection fait échouer son test ; `ai:evaluate` sur le simulateur donne « To review » ; `--provider openrouter` est refusé ; `src/` ne cite plus OpenRouter, hors l'enum stocké et la notice v3.
+
+#### E5.14 — Essai instrumenté et jeu sensible, sur le simulateur (NFR-EXP-01, EVL-03 CA3)
+```
+Instrumente l'essai selon le plan, sans envoi réel :
+- TrialCall garde stop_reason, usage (avec inference_geo) et code fournisseur ; ai:trial affiche par appel le modèle qui a répondu, stop_reason, l'usage et le coût estimé (prix rangés avec leur source et leur date) ; le premier appel après un nouveau schéma est signalé (compilation de la grammaire) ;
+- le rapport lit la version de rubrique au lieu d'« en-1 » écrit en dur, donne les refus par catégorie (null compris) et la dispersion des niveaux par critère sur N exécutions, à la place de « run 1 against run 2 » (tests/ai-trial.test.ts mis à jour) ;
+- option --limit <n> pour n'envoyer que n textes d'un jeu, par buildEvaluationRequest ;
+- jeu sensible : trois textes fictifs (accident, guerre, santé) dans scripts/fixtures/ai/, --set sensitive, compris dans all ; les jeux 10 + 7 restent intacts.
+```
+**Vous validez :** `ai:trial --set all --runs 3` sur le simulateur produit le rapport complet ; `--set dev --limit 1` n'envoie qu'un texte ; `npm test` passe.
+
+#### E5.15 — Notice v4, procédure et premiers envois réels (NFR-DON-03, NFR-DON-05, NFR-EXP-03)
+Préalable : la clé dans `.env.local`, puis `docker compose up -d`.
+```
+Réécris la notice élève (version 4) d'après la fiche DON-02 d'Anthropic consignée en E5.10 : Anthropic, entreprise des États-Unis ; inférence et stockage aux États-Unis ; conservation relevée dans la Console, et jusqu'à 2 ans pour un contenu signalé ; pas d'entraînement par défaut ; plus de mention d'OpenRouter, de Phala ni de ZDR ; garde la phrase sur le nom écrit dans le texte (Q10) ; rien sur les images, rien de non vérifié. Mets à jour tests/notice.int.test.ts et e2e/submit-text.spec.ts (version attendue de la notice).
+Réécris « Activer l'envoi réel à l'IA » (procedures.md) : conditions, contrôles dans la Console (crédit et fin du cycle, limite de l'espace, conservation), essai, contrôle du journal et du coût, retour arrière (AI_PROVIDER retiré, clé révoquée), ligne « Rejeu » datée.
+Puis deux envois réels, pas plus : l'essai de connexion (npm run ai:trial -- --provider anthropic), puis un seul texte par evaluation-2 (--set dev --limit 1). En cas d'échec, affiche seulement la classe, le statut et le request-id.
+```
+**Vous validez :** les deux réponses sont conformes, modèle `claude-haiku-5-5`, avec l'usage, le coût estimé et `inference_geo` `us` ; le journal a deux lignes `ai_request_sent`, sans le texte ; la Console montre les requêtes dans l'espace dédié ; vous approuvez la notice v4.
+
+#### E5.16 — Second essai des jeux avec claude-haiku-5-5 (EVL-03 CA3, EVL-04 R2)
+```
+Fais tourner les jeux de développement, adverse et sensible, sous la garde quotidienne : npm run ai:trial -- --set all --runs 3 --provider anthropic. Ne change ni evaluation-2 ni les valeurs [P] pendant l'essai.
+Consigne les résultats tels quels dans conception/annexe-essais-ia.md, section datée sous celle du 2026-10-17, qui reste intacte ; données brutes dans annexe-essais-ia-<date>.json. Le compte rendu donne : le rapport du lanceur ; les versions (modèle demandé et qui a répondu, consigne, rubrique, effort, thinking, max_tokens, inference_geo, SDK) ; les durées (minimum, médiane, maximum, premier appel à part) ; les stop_reason ; les refus par catégorie, dont ceux du jeu sensible et les reasoning_extraction avec leur coût ; les sorties rejetées avec leur code ; l'usage total et le coût aux prix publiés (lien, date).
+EVL-03 CA3 : pour chaque texte adverse, l'écart maximal avec sa base dans la même exécution face à ADVERSARIAL_MAX_LEVEL_GAP [P], et le drapeau addressed_to_marker ; puis la dispersion par critère sur 3 exécutions. Aucune conclusion de qualité au-delà des chiffres.
+Si un texte adverse dépasse l'écart, ne retouche pas la consigne : propose les suites (evaluation-3, texte transmis autrement, vote) sans rien appliquer. Propose aussi, sans l'appliquer, une valeur d'AI_CALL_TIMEOUT_MS pour E6.
+```
+**Vous validez :** vous lisez le compte rendu ; CA3 est mesuré pour les 7 textes adverses, ou la cause est dite ; le coût lu dans la Console a l'ordre de grandeur du coût calculé. Ces textes sont écrits par des adultes : ils ne représentent pas de vraies copies d'élèves.
+
+Puis **E5.9** (ci-dessous, points étendus à l'adaptateur).
 
 #### E5.9 — Agent relecteur et revue en contexte neuf
+À lancer après E5.16.
 Créez `.claude/agents/feature-reviewer.md` :
 ```
 ---
@@ -627,17 +751,18 @@ If something cannot be verified, say so clearly.
 Puis :
 ```
 Utilise le sous-agent feature-reviewer pour relire de façon indépendante l'évaluation par l'IA.
-Points : étanchéité de la requête (identité, niveau, identifiants, retard), texte traité comme une donnée, contrat de sortie, immuabilité et proposition courante unique, transitions, matrice aiProposal, journal de sécurité sans contenu, aucun appel réseau dans les tests, valeurs provisoires marquées comme telles.
+Points : étanchéité de la requête (identité, niveau, identifiants, retard), texte traité comme une donnée, contrat de sortie, immuabilité et proposition courante unique, transitions, matrice aiProposal, journal de sécurité sans contenu, aucun appel réseau dans les tests, valeurs provisoires marquées comme telles ; adaptateur Anthropic (seul import du SDK, version exacte, options et variables refusées ; hôte, en-têtes et clés du corps exacts ; aucune relance cachée ; durée bornée lecture comprise ; refus et troncature classés ; thinking jamais stocké ; erreurs sans contenu ; budget jamais relancé) ; 0012 en ajouts seulement ; notice v4 fidèle à la fiche DON-02.
 Ne modifie rien. Renvoie d'abord la revue.
 ```
-Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les nouvelles valeurs provisoires.
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs provisoires et les mesures d'E5.16.
 
 ---
 
 ## E6 — Traitement automatique par lots, échecs et relance (PRC-01, PRC-02)
 
 Préalables :
-- Limites des modèles gratuits d'OpenRouter (`stack-technologique.md` §3) : 20 requêtes par minute, et 50 par jour UTC à 0 crédit acheté (1 000 dès 10 crédits) ; le fournisseur peut limiter davantage. Elles bornent le parallélisme et le volume : le lot de référence de 100 remises dépasse le plafond d'une journée (NFR-TRT-01).
+- Limites d'Anthropic (`stack-technologique.md` §3, `annexe-ia-anthropic.md`) : palier Start attendu (1 000 requêtes par minute pour `claude-haiku-5-5` ; palier réel : à relever (E5.11)), crédit mensuel de 100 $ sans report, limite de l'espace de travail (10 $ par mois [P]). Le lot de référence de 100 remises (NFR-TRT-01) n'est plus borné par le prestataire, mais par Workflows Hobby et Neon.
+- *Historique, OpenRouter (jusqu'au 2026-10-19)* : 20 requêtes par minute et 50 par jour UTC à 0 crédit acheté ; le lot de 100 dépassait le plafond d'une journée.
 - Tentatives, durée maximale par étape, parallélisme et plafond d'usage sont « à définir » : valeurs provisoires.
 
 #### E6.0 — Planifier · Plan
@@ -648,11 +773,14 @@ Il faut :
 - un déclenchement après la validation de la transaction de remise ou de remplacement, jamais avant : la confirmation de l'élève ne dépend pas du traitement ;
 - un traitement par version de remise, idempotent : un double déclenchement donne un seul traitement actif et une seule proposition courante ; le traitement d'une version devenue non active ne produit rien de courant ;
 - des étapes qui ne portent que des identifiants ; la requête à l'IA reste construite par le constructeur d'E5 ;
-- un parallélisme borné selon les quotas relevés, des tentatives et une durée maximale par étape, une reprise après panne sans perte ni doublon ; aucune remise « en cours » au-delà d'une durée maximale (dis comment on le garantit) ;
+- un parallélisme borné selon les limites relevées, des tentatives et une durée maximale par étape, une reprise après panne sans perte ni doublon ; aucune remise « en cours » au-delà d'une durée maximale (dis comment on le garantit) ;
+- les tentatives : 529 et 429 avec retry-after relancés, refused jamais ; tentatives × délai par appel sous 300 s (durée maximale d'une fonction Vercel Hobby, stack-technologique.md §3), sinon une tentative par étape ;
 - un échec après les tentatives qui mène à « evaluation failed » ; la relance et le passage à l'évaluation manuelle exposés comme fonctions serveur (boutons en E7 et E8) ;
-- un plafond d'usage de l'IA par réglage (EXP-02) : au plafond, plus aucun appel, la remise passe à « not assessable », cause « AI unavailable », sans perte ;
+- un plafond d'usage de l'IA en coût mensuel [P] (EXP-02 ; tokens de evaluation_runs × prix publiés, ×1,1 pour inference_geo us) : au plafond, plus aucun appel, la remise passe à « not assessable », cause « AI unavailable », sans perte ;
+- cette cause « AI unavailable » [P], nouvelle, par migration, attribuée aussi selon le code budget d'Anthropic (limite de dépense, crédit épuisé, plafond du palier) ; une clé ou un modèle faux restent « evaluation failed » ;
+- un disjoncteur [P] : N échecs configuration ou rejected sur des remises différentes coupent les appels et alertent l'administrateur ;
 - la mesure par traitement (durées, tentatives, usage), sans identité ni contenu (EXP-01) ;
-- un point d'attache pour la transcription d'image (E9), non implémenté.
+- un point d'attache typé pour la lecture des images (interface Reader, E9), non implémenté.
 Montre : flux, fichiers, étapes et leurs garanties, réglages provisoires, comportement en développement, en test et sur la preview, et la vérification sous pannes.
 ```
 
@@ -660,6 +788,7 @@ Montre : flux, fichiers, étapes et leurs garanties, réglages provisoires, comp
 ```
 Installe et configure Vercel Workflows selon le plan, puis implémente le déclenchement : à la remise et au remplacement, une fois la transaction validée, pour la version active seulement. Une remise texte enchaîne received → evaluating → to_review sans action de quiconque.
 Couvre PRC-01 CA1 (texte) et CA2 (double déclenchement). Rejoue SUB-05 CA2 : un remplacement relance le traitement, et le résultat de l'ancienne version, arrivé tard, reste non courant.
+C'est le premier chemin applicatif qui importe le SDK d'Anthropic : vérifie son empaquetage par Next 16 (build dans e2e), puis sur la preview.
 ```
 **Vous validez :** vous remettez un texte comme élève, la base montre « To review » avec une proposition (simulateur) sans autre action ; l'élève voit toujours « Submitted, being marked ».
 
@@ -667,6 +796,7 @@ Couvre PRC-01 CA1 (texte) et CA2 (double déclenchement). Rejoue SUB-05 CA2 : un
 ```
 Implémente le parallélisme borné, les tentatives, la durée maximale par étape, la reprise après panne et le plafond d'usage selon le plan, valeurs non décidées dans provisional.ts.
 Couvre avec le simulateur PRC-01 CA3 (lot déposé en parallèle par plusieurs comptes, un marqueur unique par texte : chaque proposition ne porte que sur sa copie) et CA4 (une remise en panne n'empêche pas les autres ; arrêt en cours de lot puis reprise : zéro perte, zéro doublon). Plafond atteint : les remises suivantes passent à « AI unavailable » sans appel.
+Les pannes simulées sont déjà prêtes (E5.12) : budget, 402, 529, refus. Un 529 est relancé, un refus jamais, une erreur de budget mène à « AI unavailable » [P].
 ```
 **Vous validez :** sur un lot simulé de quelques dizaines de remises avec pannes injectées, chaque remise atteint un état final et aucune proposition ne cite un autre texte que le sien.
 
@@ -675,7 +805,7 @@ Couvre avec le simulateur PRC-01 CA3 (lot déposé en parallèle par plusieurs c
 Implémente la gestion des échecs (PRC-02) : après les tentatives, « evaluation failed », visible du professeur en E7.
 Fonctions serveur, inscrites dans la matrice et inventory.ts :
 - relance d'un échec (transition 6) ;
-- liste des copies « AI unavailable » à relancer quand leur cause disparaît (rubrique française activée, plafond levé ; transition 7) : jamais automatiquement, jamais pour une copie évaluée à la main.
+- liste des copies « AI unavailable » à relancer quand leur cause disparaît (rubrique française activée, plafond levé, crédit renouvelé au cycle suivant ou limite de l'espace relevée ; transition 7) : jamais automatiquement, jamais pour une copie évaluée à la main.
 Couvre CA1 à CA4 ; l'élève voit seulement « Submitted, being marked », quel que soit l'échec (SUB-01 CA2).
 ```
 **Vous validez :** une panne simulée persistante donne « Evaluation failed » ; la relance ramène la remise à « To review ».
@@ -683,16 +813,16 @@ Couvre CA1 à CA4 ; l'élève voit seulement « Submitted, being marked », quel
 #### E6.4 — Mesures d'usage et de délai (NFR-EXP-01)
 ```
 Ajoute le script qui restitue, par devoir, le délai entre remise et « To review », l'usage d'IA par copie, les tentatives et le taux d'échec, sans identité ni contenu (EXP-01).
-Sur un lot de test, mesure aussi le nombre d'événements Workflows par copie et le délai du lot. Rapporte les chiffres tels quels, même au-dessus d'une cible, et déduis-en combien de copies par mois le plan Hobby et le quota quotidien d'OpenRouter permettent.
+Sur un lot de test, mesure aussi le nombre d'événements Workflows par copie, le délai du lot et le coût par copie (tokens × prix publiés, avec leur source et leur date). Rapporte les chiffres tels quels, même au-dessus d'une cible, et déduis-en combien de copies par mois le plan Hobby et le crédit mensuel permettent. Le cache des consignes se décide ici, sur ces mesures.
 ```
 **Vous validez :** le rapport donne des chiffres mesurés, sans cible inventée.
 
 #### E6.5 — Vérifier et démontrer
 ```
 Écris le parcours E2E d'E6 : l'élève remet, la remise atteint « To review » (vérifié par la base de test ; l'écran du professeur arrive en E7), l'élève voit « Submitted, being marked » ; remplacement, puis nouveau traitement.
-Liste ensuite les variables à ajouter dans Vercel (Preview) pour OpenRouter et Workflows, sans lire .env.local. Une fois la preview poussée à ma demande, vérifie une remise traitée en ligne avec le modèle OpenRouter retenu, sur un texte fictif.
+Liste ensuite les variables à ajouter dans Vercel (Preview) pour Anthropic (AI_PROVIDER=anthropic, GRADING_ANTHROPIC_API_KEY d'une clé de compte de service distincte de celle du dev, limitée à l'espace dédié, où le compte de service est ajouté : une clé de l'espace Default échapperait à la limite de dépense, et une clé non limitée exigerait l'en-tête anthropic-workspace-id, que le fetch ne transmet pas) et pour Workflows, sans lire .env.local. La preview est publique : les deux variables d'IA ne sont posées que pendant les démonstrations, puis la clé est révoquée. Une fois la preview poussée à ma demande, vérifie une remise traitée en ligne avec claude-haiku-5-5, sur un texte fictif.
 ```
-**Vous validez :** sur la preview, une remise fictive atteint « To review » avec une proposition du modèle OpenRouter retenu.
+**Vous validez :** sur la preview, une remise fictive atteint « To review » avec une proposition du modèle `claude-haiku-5-5`.
 
 #### E6.6 — Revue en contexte neuf
 ```
@@ -710,11 +840,11 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs 
 
 | Étape | Prompts prévus | Outils du guide introduits |
 |---|---|---|
-| **E7** Revue par le professeur | E7.0 plan · E7.1 liste réelle à partir de la maquette 1.4 (REV-01) · E7.2 écran de copie à partir de la maquette 1.5 (REV-02) · E7.3 évaluation du professeur, recalcul, note fixée (REV-03) · E7.4 journal atomique et conflits (REV-04) · E7.5 relance depuis la liste, rejeux · revue | — |
-| **E8** Validation, publication | E8.0 plan · E8.1 valider, publier, retirer, raccourci (REV-05, PUB-01) · E8.2 évaluation manuelle (REV-06) · E8.3 vue de l'élève à liste blanche (PUB-02) · E8.4 balayage « rien avant publication » · E8.5 rejeux de la table 8.3 · E8.6 cycle complet en texte (E2E) · revue de la fuite | Revue en contexte neuf : fuite de résultats |
-| **E9** Canal image | E9.0 enquête par sous-agents (OCR ou modèle multimodal, limites de 4,5 Mo et de 1 Go) · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur, type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 moteur de lecture et contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · revue | Sous-agents, revue |
-| **E10** Durcissement et mesure | A : matrice complète automatisée, balayage, étanchéité, pannes, sessions et liens, accessibilité (USA-03), export de sauvegarde ; revue externe facultative (CodeRabbit s'il reste gratuit pour ce dépôt, sinon `/code-review`) ; tri des constats ; T3. B : scripts de mesure depuis le journal, selon le protocole validé par le client | Revue indépendante |
-| **E11** Démonstration | Déploiement final, jeu de données fictif en anglais, scénarios scriptés, préchauffage de Neon, notice « demo, fictitious data », répétition dans le quota de 50 requêtes par jour (répétition et séance) | — |
+| **E7** Revue par le professeur | E7.0 plan · E7.1 liste réelle à partir de la maquette 1.4 (REV-01) · E7.2 écran de copie à partir de la maquette 1.5 (REV-02) · E7.3 évaluation du professeur, recalcul, note fixée (REV-03) · E7.4 journal atomique et conflits (REV-04) · E7.5 relance depuis la liste, rejeux · revue. Pour `refused` : « The AI declined to assess this text », évaluation manuelle proposée (REV-06), relance avec un avertissement (un refus se répète en général) | — |
+| **E8** Validation, publication | E8.0 plan · E8.1 valider, publier, retirer, raccourci (REV-05, PUB-01) · E8.2 évaluation manuelle (REV-06) · E8.3 vue de l'élève à liste blanche (PUB-02) · E8.4 balayage « rien avant publication » · E8.5 rejeux de la table 8.3 · E8.6 cycle complet en texte (E2E) · revue de la fuite. Notice v4 déjà en place ; la mention de l'IA (Q5) répond aussi à l'information exigée par la politique d'usage d'Anthropic (« Education and credentials », champ à confirmer) ; l'élève ne voit jamais un refus ni sa cause | Revue en contexte neuf : fuite de résultats |
+| **E9** Canal image | E9.0 reprend E5.8 avec `claude-haiku-5-5` [D, 2026-10-19] (photos fictives, sans nom, avec `.txt` de référence, hors de git), puis enquête par sous-agents (limites de 4,5 Mo par requête Vercel et de 1 Go ; 1 Mo par défaut pour une Server Action, à vérifier) ; confirme ou non Haiku derrière `Reader` [P] · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur (grand côté ≤ 2 576 px **et** ⌈l/28⌉×⌈h/28⌉ ≤ 4 784 tokens), type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 `Reader` et `transcription-1` en sortie structurée, image en base64 avant le texte, jamais d'URL, contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · notice v5 et fiche DON-02 étendue à la lecture · revue | Sous-agents, revue |
+| **E10** Durcissement et mesure | A : matrice complète automatisée, balayage (journaux sans contenu ni clé), étanchéité (flux image compris), pannes, sessions et liens, accessibilité (USA-03), export de sauvegarde, procédure de montée de version du SDK (relire le diff, rejouer les tests de garanties, vérifier l'en-tête d'authentification) ; revue externe facultative (CodeRabbit s'il reste gratuit pour ce dépôt, sinon `/code-review`) ; tri des constats ; T3. B : scripts de mesure depuis le journal, selon le protocole validé par le client ; mesures pour quelques centimes (stabilité sur N exécutions, CA3, alertes, fidélité de lecture) ; vote k = 3 et variante de réflexion décidés là, chacun avec sa version | Revue indépendante |
+| **E11** Démonstration | Déploiement final, jeu de données fictif en anglais, scénarios scriptés, préchauffage de Neon, notice « demo, fictitious data », répétition sous la limite de l'espace de travail (répétition et séance). Avant : abonnement actif, crédit restant, fin du cycle, expiration de la clé ; repli : REV-06 ou le simulateur ; après : clé révoquée | — |
 | **Fin** | Revue de toute l'application ; vérification des parcours admin, teacher, student ; synchronisation finale de CLAUDE.md | — |
 
 ## 4. Points ouverts qui touchent ces prompts
@@ -725,4 +855,5 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs 
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
 - Q1, Q5, Q6 tranchées [D, 2026-10-15] : note sur 20, somme des niveaux ; remarques dans la langue du devoir, mentions de l'IA et de la note ajustée affichées ; français sans proposition IA jusqu'à la validation de sa rubrique.
 - Bibliothèque de primitives d'interface : tranchée par vous en 1.1.
-- Prestataire d'IA tranché [D, 2026-10-16] : OpenRouter, modèle gratuit, à la place de Mistral. Modèle `xingchen-agi/xing4.0-29b-a4b:free` [D, 2026-10-17], adaptateur en place (E5.4b) ; 50 requêtes par jour à 0 crédit acheté (E5.7, E6, E9, E11).
+- Prestataire d'IA tranché [D, 2026-10-19] : API d'Anthropic en direct, modèle `claude-haiku-5-5`, payée par le crédit API mensuel du développeur (0 MAD décaissé, `stack-technologique.md` §1) ; reprise d'E5 (E5.10 à E5.16), effets sur E6 à E11. Le volume n'est plus borné par un quota du prestataire, mais par le crédit, la limite de l'espace de travail [P], Workflows Hobby et Neon.
+- *Historique* : OpenRouter, modèle gratuit, tranché le 2026-10-16 à la place de Mistral ; modèle `xingchen-agi/xing4.0-29b-a4b:free` [D, 2026-10-17], adaptateur E5.4b ; 50 requêtes par jour à 0 crédit acheté. Remplacé le 2026-10-19.
