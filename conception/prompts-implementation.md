@@ -713,7 +713,7 @@ Puis deux envois réels, pas plus : l'essai de connexion (npm run ai:trial -- --
 ```
 **Vous validez :** les deux réponses sont conformes, modèle `claude-haiku-5-5`, avec l'usage, le coût estimé et `inference_geo` `us` ; le journal a deux lignes `ai_request_sent`, sans le texte ; la Console montre les requêtes dans l'espace dédié ; vous approuvez la notice v4.
 
-Fait le 2026-10-19 : notice v4 ; procédure réécrite, rejeu daté ; deux envois conformes (connexion : 419 tokens, 0,000068 $ ; d01 par `evaluation-2` : 4 692 tokens, 0,0012 $, 10,4 s), deux lignes au journal. Ajout : `EvaluatorError.status` (statut HTTP, identifiant), affiché avec la classe, le `request-id` et le code du prestataire, jamais stocké. Restent à vous : Console (requêtes dans `grading_system`, coût, crédit), expiration de la clé, approbation de la notice v4.
+Fait le 2026-10-19 : notice v4 ; procédure réécrite, rejeu daté ; deux envois conformes (connexion : 419 tokens, 0,000068 $ ; d01 par `evaluation-2` : 4 692 tokens, 0,0012 $, 10,4 s), deux lignes au journal. Ajout : `EvaluatorError.status` (statut HTTP, identifiant), affiché avec la classe, le `request-id` et le code du prestataire, jamais stocké. Notice v4 approuvée par l'utilisateur le 2026-10-19 ; Console relevée (clé, journaux, latence : `procedures.md`, rejeu) ; reste le coût affiché par la Console.
 
 #### E5.16 — Second essai des jeux avec claude-haiku-5-5 (EVL-03 CA3, EVL-04 R2)
 ```
