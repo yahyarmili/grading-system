@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:int": "vitest run --project integration",
+    "test:ui": "vitest --ui --open=false --api.host=0.0.0.0 --api.port=51204",
     "test:e2e": "playwright test",
     "admin:create": "tsx --conditions=react-server scripts/create-admin.ts",
     "ai:trial": "tsx --conditions=react-server scripts/ai-trial.ts",
@@ -50,12 +51,13 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/ui": "5.0.4",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
-    "vitest": "^5.0.4"
+    "vitest": "5.0.4"
   }
 }
