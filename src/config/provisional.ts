@@ -141,11 +141,22 @@ export const AI_RETRY_DELAY_MS = 2_000;
 export const AI_RETRY_MAX_WAIT_MS = 30_000;
 
 /**
- * [PROVISIONAL, [P] derived] The longest evaluation step: every attempt at its
- * timeout, the longest wait between two. 240 s with the values above, under
- * the 300 s of a Vercel Hobby function (src/server/evaluation/orchestrate.test.ts).
+ * [PROVISIONAL, [P] arbitrary, E6.6] Longest wait for the administrators'
+ * alert email (cost cap, breaker, configuration) inside an evaluation step;
+ * also the SMTP transport's timeouts. Late, it is given up and tried again by
+ * the next guard.
  */
-export const EVALUATION_STEP_MAX_MS = AI_MAX_ATTEMPTS * AI_CALL_TIMEOUT_MS + (AI_MAX_ATTEMPTS - 1) * AI_RETRY_MAX_WAIT_MS;
+export const AI_ALERT_SEND_MAX_MS = 10_000;
+
+/**
+ * [PROVISIONAL, [P] derived] The longest evaluation step: every attempt at its
+ * timeout, the longest wait between two, and one alert (E6.6: an alert stops
+ * the attempts; twice its bound, for the wait on another step's sending). 260 s
+ * with the values above, under the 300 s of a Vercel Hobby function
+ * (src/server/evaluation/orchestrate.test.ts).
+ */
+export const EVALUATION_STEP_MAX_MS =
+  AI_MAX_ATTEMPTS * AI_CALL_TIMEOUT_MS + (AI_MAX_ATTEMPTS - 1) * AI_RETRY_MAX_WAIT_MS + 2 * AI_ALERT_SEND_MAX_MS;
 
 /** A Vercel Hobby function's longest duration (a fact, read 2026-10-19: https://vercel.com/docs/functions/limitations). */
 export const VERCEL_FUNCTION_MAX_MS = 300_000;
@@ -196,6 +207,15 @@ export const SWEEP_RESTART_LIMIT = 20;
  * "AI unavailable". Under the workspace's own spending limit (10 USD).
  */
 export const AI_MONTHLY_COST_CAP_USD = 5;
+
+/**
+ * [PROVISIONAL, [P] derived, E6.6] Prompt tokens at which the cost cap counts
+ * a call whose usage no run holds (a timeout, a trial's call, a result never
+ * recorded), its answer at AI_MAX_OUTPUT_TOKENS: about 0.003 USD a call.
+ * E5.16 measured 2 993 to 3 272 (annexe-essais-ia.md), for texts shorter
+ * than the 4 000 characters allowed: about 1.5 times the most measured.
+ */
+export const AI_CALL_PROMPT_TOKENS_CEILING = 5_000;
 
 /**
  * [PROVISIONAL, [P] arbitrary] The circuit breaker opens when this many

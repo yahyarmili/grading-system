@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import {
   canTransition,
@@ -23,7 +23,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** Fields a transition may change besides the status; identity, first date and lateness never change. */
 type TransitionSet = Omit<
   PgUpdateSetSource<typeof submissions>,
-  "id" | "status" | "assignmentId" | "teacherId" | "studentId" | "submittedAt" | "late" | "createdAt"
+  "id" | "status" | "assignmentId" | "teacherId" | "studentId" | "submittedAt" | "late" | "createdAt" | "evaluationRequest"
 >;
 
 export type NewSubmission = {
@@ -55,7 +55,9 @@ export async function insertReceived(tx: Tx, values: NewSubmission) {
  * (wrong state, guard not met): the row lock makes the first writer win.
  * Leaving not_assessable empties its cause; reaching it needs one in `set`
  * (check constraint). Likewise the claim token (E6): leaving evaluating
- * empties it; reaching evaluating needs one in `set`.
+ * empties it; reaching evaluating needs one in `set`. Every transition
+ * empties the teacher's request of a retry or relaunch (E6.6): the claim
+ * takes it, a replacement or a manual evaluation drops it.
  */
 export async function applyTransition(
   tx: Tx,
@@ -74,9 +76,39 @@ export async function applyTransition(
       ...guard.set,
       ...(to === "not_assessable" ? {} : { notAssessableCause: null }),
       ...(to === "evaluating" ? {} : { claimToken: null }),
+      evaluationRequest: null,
       status: to,
     })
     .where(and(eq(submissions.id, submissionId), inArray(submissions.status, from), guard.where))
     .returning({ id: submissions.id, status: submissions.status, currentVersion: submissions.currentVersion });
   return updated ?? null;
+}
+
+/**
+ * The teacher's request of a retry or relaunch (E6.6), without a transition:
+ * the claim of transition 6 or 7 needs it (system.ts). Guarded by the
+ * caller's `where` (state, version, owner), in its transaction. Replaces an
+ * earlier request: its run then claims nothing. False when the guard is not met.
+ */
+export async function recordEvaluationRequest(tx: Tx, submissionId: string, request: string, where: SQL): Promise<boolean> {
+  const [updated] = await tx
+    .update(submissions)
+    .set({ evaluationRequest: request })
+    .where(and(eq(submissions.id, submissionId), where))
+    .returning({ id: submissions.id });
+  return !!updated;
+}
+
+/**
+ * E6.6, the sweep: dates the restart of received submissions (updated_at, on
+ * the database clock), so that the next sweeps leave them to their run for
+ * another grace, and start the others first. No transition: they stay received.
+ */
+export async function markRestarted(tx: Tx, submissionIds: string[]) {
+  if (submissionIds.length === 0) return [];
+  return tx
+    .update(submissions)
+    .set({ updatedAt: sql`now()` })
+    .where(and(inArray(submissions.id, submissionIds), eq(submissions.status, "received")))
+    .returning({ submissionId: submissions.id, versionNumber: submissions.currentVersion });
 }

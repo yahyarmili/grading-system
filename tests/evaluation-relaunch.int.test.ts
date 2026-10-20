@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, inArray, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { AI_MAX_ATTEMPTS } from "@/config/provisional";
 import type { AssignmentLanguage } from "@/lib/assignment";
@@ -18,7 +18,9 @@ import {
   startManualEvaluation,
   type EvaluationStartContext,
   type RelaunchConditions,
+  type SeenVersion,
 } from "@/server/data/evaluation/teacher";
+import { stillEvaluating } from "@/server/data/evaluation/system";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { replaceText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
@@ -26,7 +28,7 @@ import { aiProposals, classMemberships, evaluationRuns, submissions, users } fro
 import type { AiGuard } from "@/server/evaluation/budget";
 import { evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/evaluate";
 import { relaunchConditions } from "@/server/evaluation/relaunch";
-import { evaluateStep } from "@/server/evaluation/steps";
+import { evaluateStep, releaseStep } from "@/server/evaluation/steps";
 import { sweepEvaluations } from "@/server/evaluation/sweep";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { FR_TEST_RUBRIC } from "./fixtures/rubric-fr-test";
@@ -85,7 +87,7 @@ const deps = (over: Partial<EvaluationDeps> = {}): EvaluationDeps => ({
 /** The workflow's step for a ref, its origin included, with the test's dependencies. */
 const step = (ref: EvaluationRef, over: Partial<EvaluationDeps> = {}) =>
   evaluateSubmission(ref.submissionId, deps(over), {
-    expectedVersion: ref.versionNumber, origin: ref.origin, claimToken: randomUUID(),
+    expectedVersion: ref.versionNumber, origin: ref.origin, request: ref.request, claimToken: randomUUID(),
   });
 
 /** Records the versions the teacher's requests hand over, as the Server Action's after() would start them. */
@@ -135,8 +137,8 @@ describe("PRC-02 CA2: the teacher's retry (transition 6)", () => {
 
     const starts = recordStarts();
     expect(await retryEvaluation(teacher, refs[0], starts)).toEqual({ ok: true });
-    expect(starts.refs).toEqual([{ ...refs[0], origin: "retry" }]);
-    // Through the step itself: the origin travels with the ref, the run's token claims it.
+    expect(starts.refs).toEqual([{ ...refs[0], origin: "retry", request: expect.any(String) }]);
+    // Through the step itself: the origin and the request travel with the ref, the run's token claims it.
     expect(await evaluateStep(starts.refs[0], randomUUID())).toMatchObject({ status: "to_review", attempts: 1 });
     const after = await row(refs[0].submissionId);
     expect(after).toMatchObject({ status: "to_review", current: expect.any(String) });
@@ -162,6 +164,90 @@ describe("PRC-02 CA2: the teacher's retry (transition 6)", () => {
     const outcomes = await Promise.all(starts.refs.map((ref) => step(ref)));
     expect(outcomes.map((o) => o.status).sort()).toEqual(["skipped", "to_review"]);
     expect(await db.select().from(aiProposals).where(eq(aiProposals.submissionId, refs[0].submissionId))).toHaveLength(1);
+  });
+
+  it("E6.6: two retries, the run that claims fails back to evaluation_failed: still one evaluation, whatever the order", { timeout: 60_000 }, async () => {
+    const { teacher, refs } = await assignment("en", [TEXT.en, TEXT.en]);
+    // One copy per order: the first request's run gets a place first, then the second's; and the other way round.
+    const orders = [[0, 1], [1, 0]] as const;
+    for (const [i, ref] of refs.entries()) {
+      const [first, second] = orders[i];
+      getSimulator().failNext({ kind: "error", status: 529 }, AI_MAX_ATTEMPTS);
+      await step(ref);
+      getSimulator().clear();
+      // Clicked twice while every place was taken: two runs wait for the same copy.
+      const starts = recordStarts();
+      await retryEvaluation(teacher, ref, starts);
+      await retryEvaluation(teacher, ref, starts);
+      expect(new Set(starts.refs.map((r) => r.request)).size).toBe(2);
+      // The run that claims fails again (a lasting 529), back to evaluation_failed; then the other one gets its place.
+      getSimulator().failNext({ kind: "error", status: 529 }, AI_MAX_ATTEMPTS);
+      const outcomes = [await step(starts.refs[first]), await step(starts.refs[second])];
+      expect(outcomes.map((o) => o.status).sort()).toEqual(["evaluation_failed", "skipped"]);
+      expect(getSimulator().captured()).toHaveLength(AI_MAX_ATTEMPTS);
+      expect(await runsOf(ref.submissionId)).toHaveLength(2);
+      // Delivered again, either one claims nothing: its request was taken or replaced.
+      for (const r of starts.refs) expect(await step(r)).toEqual({ status: "skipped" });
+      expect((await row(ref.submissionId)).status).toBe("evaluation_failed");
+    }
+  });
+
+  it("E6.6: a step without the stored request (forged, or from an earlier request) claims nothing", async () => {
+    const { teacher, refs } = await assignment("en", [TEXT.en]);
+    getSimulator().failNext({ kind: "error", status: 529 }, AI_MAX_ATTEMPTS);
+    await step(refs[0]);
+    getSimulator().clear();
+    expect(await step({ ...refs[0], origin: "retry" })).toEqual({ status: "skipped" });
+    expect(await step({ ...refs[0], origin: "retry", request: randomUUID() })).toEqual({ status: "skipped" });
+    const starts = recordStarts();
+    await retryEvaluation(teacher, refs[0], starts);
+    expect(await step({ ...starts.refs[0], request: randomUUID() })).toEqual({ status: "skipped" });
+    expect(getSimulator().captured()).toEqual([]);
+    expect(await step(starts.refs[0])).toMatchObject({ status: "to_review" });
+  });
+
+  it("E6.6: the ref handed over carries the identifiers, the origin and the request, nothing else of the request", async () => {
+    const { teacher, refs } = await assignment("en", [TEXT.en]);
+    getSimulator().failNext({ kind: "error", status: 529 }, AI_MAX_ATTEMPTS);
+    await step(refs[0]);
+    const starts = recordStarts();
+    // What a form of E7 could pass along with the version seen.
+    const seen = { ...refs[0], text: TEXT.en, studentName: "student 1" } as SeenVersion;
+    expect(await retryEvaluation(teacher, seen, starts)).toEqual({ ok: true });
+    expect(Object.keys(starts.refs[0]).sort()).toEqual(["origin", "request", "submissionId", "versionNumber"]);
+    expect(JSON.stringify(starts.refs[0])).not.toContain("beatiful");
+  });
+
+  it("E6.6: a released run's late answer while another run of the same version evaluates: kept, not current (the claim's token)", { timeout: 60_000 }, async () => {
+    const { teacher, refs } = await assignment("en", [TEXT.en]);
+    const [ref] = refs;
+    const tokenA = randomUUID();
+    const holdA = getSimulator().holdNext();
+    const runA = evaluateStep(ref, tokenA);
+    await expect.poll(async () => (await row(ref.submissionId)).status, { timeout: 30_000 }).toBe("evaluating");
+    // A is given up (its step failed, or the sweep released it): evaluation_failed; the teacher retries.
+    expect(await releaseStep(ref, tokenA)).toBe(true);
+    const starts = recordStarts();
+    expect(await retryEvaluation(teacher, ref, starts)).toEqual({ ok: true });
+    const tokenB = randomUUID();
+    const holdB = getSimulator().holdNext();
+    const runB = evaluateStep(starts.refs[0], tokenB);
+    await expect.poll(async () => (await db.select({ token: submissions.claimToken }).from(submissions).where(eq(submissions.id, ref.submissionId)))[0].token, { timeout: 30_000 }).toBe(tokenB);
+
+    // Same submission, same version, evaluating: only the token tells A from B.
+    expect(await stillEvaluating({ submissionId: ref.submissionId, versionNumber: ref.versionNumber, claimToken: tokenA })).toBe(false);
+    expect(await stillEvaluating({ submissionId: ref.submissionId, versionNumber: ref.versionNumber, claimToken: tokenB })).toBe(true);
+    holdA();
+    expect(await runA).toMatchObject({ status: "stale" });
+    expect(await row(ref.submissionId)).toMatchObject({ status: "evaluating", current: null });
+    holdB();
+    expect(await runB).toMatchObject({ status: "to_review" });
+
+    const proposals = await db.select({ id: aiProposals.id, runId: aiProposals.runId }).from(aiProposals).where(eq(aiProposals.submissionId, ref.submissionId));
+    expect(proposals).toHaveLength(2);
+    const [last] = await db.select({ id: evaluationRuns.id }).from(evaluationRuns).where(eq(evaluationRuns.submissionId, ref.submissionId)).orderBy(desc(evaluationRuns.createdAt)).limit(1);
+    const current = (await row(ref.submissionId)).current;
+    expect(proposals.find((p) => p.id === current)?.runId).toBe(last.id);
   });
 
   it("refused for a copy to review (R3), a version replaced since, another teacher's copy, a student", async () => {
@@ -233,11 +319,24 @@ describe("PRC-02 CA3, R4: a relaunch offered when the cause disappears, for thos
     expect(await relaunchEvaluation(teacher, empty, french, starts)).toEqual({ ok: false, reason: "not_relaunchable" });
     expect(await relaunchEvaluation(teacher, waiting, ENGLISH_ONLY, starts)).toEqual({ ok: false, reason: "not_relaunchable" });
     expect(await relaunchEvaluation(teacher, waiting, french, starts)).toEqual({ ok: true });
-    expect(starts.refs).toEqual([{ ...waiting, origin: "relaunch" }]);
+    expect(starts.refs).toEqual([{ ...waiting, origin: "relaunch", request: expect.any(String) }]);
 
     expect(await step(starts.refs[0], { registry: WITH_FRENCH })).toMatchObject({ status: "to_review", attempts: 1 });
     expect(await row(waiting.submissionId)).toMatchObject({ status: "to_review", cause: null, current: expect.any(String) });
     expect(await listRelaunchable(teacher, assignmentId, french)).toEqual([]);
+  });
+
+  it("E6.6: two relaunches, the first run not assessable again: the other claims nothing", async () => {
+    const { teacher, refs } = await assignment("fr", [TEXT.fr]);
+    await step(refs[0]);
+    const french = await relaunchConditions(WITH_FRENCH);
+    const starts = recordStarts();
+    expect(await relaunchEvaluation(teacher, refs[0], french, starts)).toEqual({ ok: true });
+    expect(await relaunchEvaluation(teacher, refs[0], french, starts)).toEqual({ ok: true });
+    // French withdrawn before the runs: each would become not assessable again, with a run of its own.
+    expect((await Promise.all(starts.refs.map((ref) => step(ref)))).map((o) => o.status).sort()).toEqual(["not_assessable", "skipped"]);
+    for (const ref of starts.refs) expect(await step(ref, { registry: WITH_FRENCH })).toEqual({ status: "skipped" });
+    expect(await runsOf(refs[0].submissionId)).toHaveLength(2);
   });
 
   it("the claim itself refuses a relaunch of a copy without content or evaluated by hand", async () => {

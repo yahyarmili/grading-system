@@ -77,8 +77,11 @@ export type EvaluationError = (typeof evaluationErrors)[number];
  * `origin` (E6.3) names the transition of the claim: "auto" (2, from
  * received, the default) after a submission or replacement; "retry" (6, from
  * evaluation_failed) and "relaunch" (7, from not_assessable) by the teacher.
+ * `request` (E6.6): for a retry or a relaunch, the random identifier of the
+ * teacher's request, stored with the copy; the claim takes it once, so a
+ * request evaluates once, and a ref without it never leaves those states.
  */
-export type EvaluationRef = { submissionId: string; versionNumber: number; origin?: EvaluationOrigin };
+export type EvaluationRef = { submissionId: string; versionNumber: number; origin?: EvaluationOrigin; request?: string };
 
 export const evaluationOrigins = ["auto", "retry", "relaunch"] as const;
 export type EvaluationOrigin = (typeof evaluationOrigins)[number];

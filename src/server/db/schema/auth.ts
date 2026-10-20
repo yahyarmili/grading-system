@@ -192,6 +192,8 @@ export const securityEventType = pgEnum("security_event_type", [
   // E6, EXP-02: the monthly cost cap was reached; the AI circuit breaker opened (one email to the administrators each).
   "ai_cost_cap_reached",
   "ai_breaker_tripped",
+  // E6.6: the AI could not be set up (AI_PROVIDER, its key, a forbidden variable); one email per window.
+  "ai_configuration_failed",
 ]);
 
 /** NFR-DON-05: security log, separate from the review log. No email, secret or content. */

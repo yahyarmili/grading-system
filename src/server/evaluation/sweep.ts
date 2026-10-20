@@ -1,7 +1,7 @@
 import "server-only";
 import { SWEEP_RESTART_LIMIT, TRIGGER_GRACE_MS } from "@/config/provisional";
 import type { EvaluationRef } from "@/lib/evaluation";
-import { listStaleReceived } from "@/server/data/evaluation/system";
+import { takeStaleReceived } from "@/server/data/evaluation/system";
 import { releaseStuckSubmissions } from "@/server/evaluation/evaluate";
 
 // The recovery of the automatic evaluation (PRC-01 CA4, PRC-02 R1): nothing
@@ -16,13 +16,15 @@ export type SweepResult = { released: string[]; restarted: EvaluationRef[] };
  * step can last (EVALUATION_STUCK_AFTER_MS): its process stopped; the
  * teacher may retry it (E6.3). Its result, if it ever comes, is not current.
  * 2. Starts again, through `start`, the text submissions still received
- * TRIGGER_GRACE_MS after they were submitted or replaced, SWEEP_RESTART_LIMIT
- * at most. A start of one already started is harmless: the claim lets one
- * run evaluate.
+ * TRIGGER_GRACE_MS after they were submitted, replaced or last started again,
+ * SWEEP_RESTART_LIMIT at most, the longest waiting first. Each is dated as it
+ * is taken (E6.6): the sweeps of the next submissions leave it to its new run
+ * instead of starting one more each time. A start of one already started is
+ * harmless: the claim lets one run evaluate.
  */
 export async function sweepEvaluations(start: (ref: EvaluationRef) => Promise<void>): Promise<SweepResult> {
   const released = await releaseStuckSubmissions();
-  const restarted = await listStaleReceived(TRIGGER_GRACE_MS, SWEEP_RESTART_LIMIT);
+  const restarted = await takeStaleReceived(TRIGGER_GRACE_MS, SWEEP_RESTART_LIMIT);
   for (const ref of restarted) await start(ref);
   return { released, restarted };
 }

@@ -14,7 +14,7 @@ import type { TransitionId } from "@/lib/submission-status";
 import type { EvaluationInput } from "@/server/ai/request";
 import { db } from "@/server/db/client";
 import { aiProposals, assignments, evaluationRuns, securityEvents, submissions, submissionVersions, users } from "@/server/db/schema";
-import { applyTransition } from "../submissions/transitions";
+import { applyTransition, markRestarted } from "../submissions/transitions";
 
 // System processing of the evaluation (§5.5, transitions 2, 5, 6 and 7): no Actor,
 // called only by the evaluation service (src/server/evaluation/). Listed in
@@ -85,28 +85,32 @@ export type ClaimOptions = {
   slots?: { concurrency: number; stuckAfterMs: number };
   /** E6.3: the transition of the claim, "auto" by default (EvaluationRef). */
   origin?: EvaluationOrigin;
+  /** E6.6: the teacher's request a retry or relaunch claims (EvaluationRef). */
+  request?: string;
 };
 
 /**
  * Where each origin claims from (§5.5). The teacher's retry and relaunch
- * were authorized when asked (teacher.ts); here the state is checked again,
- * under the row lock: a copy evaluated by hand (teacher_started_at) or
- * replaced meanwhile is never claimed. A relaunch claims a relaunchable cause
- * only; whether it disappeared is checked again by the attempts (the rubric,
- * the cost cap): if not, the copy becomes not assessable again, without a loop.
+ * were authorized when asked (teacher.ts), which stored the request; here the
+ * state is checked again, under the row lock, with that request: a copy
+ * evaluated by hand (teacher_started_at), replaced, or already claimed for
+ * this request is never claimed (E6.6: a request evaluates once, even when
+ * its first run failed back to evaluation_failed; a ref without the stored
+ * request, forged or replayed, claims nothing). A relaunch claims a
+ * relaunchable cause only; whether it disappeared is checked again by the
+ * attempts (the rubric, the cost cap): if not, the copy becomes not assessable
+ * again, without a loop.
  */
-const CLAIM_FROM = {
-  auto: { transition: 2, from: eq(submissions.status, "received") },
-  retry: { transition: 6, from: and(eq(submissions.status, "evaluation_failed"), isNull(submissions.teacherStartedAt)) },
-  relaunch: {
+function claimFrom(origin: EvaluationOrigin, request: string | undefined): { transition: TransitionId; from: SQL } {
+  if (origin === "auto") return { transition: 2, from: eq(submissions.status, "received") };
+  const requested = request === undefined ? sql`false` : eq(submissions.evaluationRequest, request);
+  const open = and(isNull(submissions.teacherStartedAt), requested)!;
+  if (origin === "retry") return { transition: 6, from: and(eq(submissions.status, "evaluation_failed"), open)! };
+  return {
     transition: 7,
-    from: and(
-      eq(submissions.status, "not_assessable"),
-      inArray(submissions.notAssessableCause, [...relaunchableCauses]),
-      isNull(submissions.teacherStartedAt),
-    ),
-  },
-} as const satisfies Record<EvaluationOrigin, { transition: TransitionId; from: SQL | undefined }>;
+    from: and(eq(submissions.status, "not_assessable"), inArray(submissions.notAssessableCause, [...relaunchableCauses]), open)!,
+  };
+}
 
 /**
  * Transition 2, received → evaluating, for a text (or 6 and 7 for the
@@ -130,7 +134,7 @@ export async function claimForEvaluation(
   opts: ClaimOptions = {},
 ): Promise<EvaluationClaim | "busy" | null> {
   const { expectedVersion, slots } = opts;
-  const { transition, from } = CLAIM_FROM[opts.origin ?? "auto"];
+  const { transition, from } = claimFrom(opts.origin ?? "auto", opts.request);
   return db.transaction(async (tx) => {
     const [locked] = await tx
       .select({ id: submissions.id })
@@ -343,31 +347,42 @@ export async function releaseStuckEvaluations(afterMs: number): Promise<string[]
 }
 
 /**
- * The text submissions still received `graceMs` after they were submitted or
- * replaced (E6, the sweep): their trigger failed, their run gave up waiting
- * for a place, or the process stopped. The oldest first, `limit` at most;
- * identifiers and the active version only. updated_at of a received row is
- * set by the application's clock: off by seconds at most, under a grace of
- * minutes.
+ * The text submissions still received `graceMs` after they were submitted,
+ * replaced or last started again (E6, the sweep): their trigger failed, their
+ * run gave up waiting for a place, or the process stopped. The oldest first,
+ * `limit` at most; identifiers and the active version only. Taken, they are
+ * dated (markRestarted, E6.6): the next sweeps leave each to the run just
+ * started for another grace, longer than its waits, and take the others
+ * first; two sweeps at once take different ones (skip locked). updated_at of
+ * a submitted or replaced row is set by the application's clock: off by
+ * seconds at most, under a grace of minutes.
  */
-export async function listStaleReceived(graceMs: number, limit: number): Promise<EvaluationRef[]> {
-  const rows = await db
-    .select({ submissionId: submissions.id, versionNumber: submissions.currentVersion })
-    .from(submissions)
-    .innerJoin(
-      submissionVersions,
-      and(eq(submissionVersions.submissionId, submissions.id), eq(submissionVersions.number, submissions.currentVersion)),
-    )
-    .where(
-      and(
-        eq(submissions.status, "received"),
-        eq(submissionVersions.mode, "text"),
-        sql`${submissions.updatedAt} < now() - make_interval(secs => ${graceMs / 1000})`,
-      ),
-    )
-    .orderBy(submissions.updatedAt, submissions.id)
-    .limit(limit);
-  return rows;
+export async function takeStaleReceived(graceMs: number, limit: number): Promise<EvaluationRef[]> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: submissions.id })
+      .from(submissions)
+      .innerJoin(
+        submissionVersions,
+        and(eq(submissionVersions.submissionId, submissions.id), eq(submissionVersions.number, submissions.currentVersion)),
+      )
+      .where(
+        and(
+          eq(submissions.status, "received"),
+          eq(submissionVersions.mode, "text"),
+          sql`${submissions.updatedAt} < now() - make_interval(secs => ${graceMs / 1000})`,
+        ),
+      )
+      .orderBy(submissions.updatedAt, submissions.id)
+      .limit(limit)
+      .for("update", { of: submissions, skipLocked: true });
+    const taken = await markRestarted(
+      tx,
+      rows.map((row) => row.id),
+    );
+    const order = new Map(rows.map((row, i) => [row.id, i]));
+    return taken.sort((a, b) => order.get(a.submissionId)! - order.get(b.submissionId)!);
+  });
 }
 
 /** What the guard of the AI reads (E6, EXP-02), counts only. */
@@ -375,23 +390,40 @@ export type AiGuardCounts = {
   /** Tokens of Anthropic's runs since the first day of the UTC month: what the application spent. */
   promptTokens: number;
   completionTokens: number;
+  /**
+   * E6.6: calls to Anthropic this month whose usage no run holds, to be
+   * counted at a ceiling: the attempts that ended on a timeout (sent, maybe
+   * billed, never counted), and the requests sent beyond the calls of the
+   * runs (ai_request_sent, journaled before every sending: the trial's calls,
+   * a result the database refused, a step killed). By excess.
+   */
+  uncountedCalls: number;
   /** Distinct submissions whose run with this provider failed last on configuration or rejected, within the window. */
   breakerFailures: number;
 };
 
 /**
  * One query for the cost cap and the circuit breaker. The cost counts
- * Anthropic's runs whatever the provider in use: it is real money; the
- * breaker counts the provider in use only (a simulated 401 never stops a
- * real provider, and the other way round).
+ * Anthropic's runs and requests whatever the provider in use: it is real
+ * money; the breaker counts the provider in use only (a simulated 401 never
+ * stops a real provider, and the other way round). The calls of a run are its
+ * attempts that reached the provider: an answer, or an error other than
+ * superseded and internal (an internal one may follow a call: not counted, so
+ * by excess again).
  */
 export async function readAiGuardCounts(provider: AiProvider, breakerWindowMs: number): Promise<AiGuardCounts> {
   const monthStart = sql`date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'`;
-  const lastError = sql`${evaluationRuns.attemptErrors}[cardinality(${evaluationRuns.attemptErrors})]`;
+  const errors = evaluationRuns.attemptErrors;
+  const lastError = sql`${errors}[cardinality(${errors})]`;
+  const times = (error: EvaluationError) => sql`cardinality(array_positions(${errors}, ${error}::evaluation_error))`;
+  const anthropicThisMonth = sql`${evaluationRuns.provider} = 'anthropic' and ${evaluationRuns.createdAt} >= ${monthStart}`;
   const [row] = await db
     .select({
-      promptTokens: sql<string>`coalesce(sum(${evaluationRuns.promptTokens}) filter (where ${evaluationRuns.provider} = 'anthropic' and ${evaluationRuns.createdAt} >= ${monthStart}), 0)`,
-      completionTokens: sql<string>`coalesce(sum(${evaluationRuns.completionTokens}) filter (where ${evaluationRuns.provider} = 'anthropic' and ${evaluationRuns.createdAt} >= ${monthStart}), 0)`,
+      promptTokens: sql<string>`coalesce(sum(${evaluationRuns.promptTokens}) filter (where ${anthropicThisMonth}), 0)`,
+      completionTokens: sql<string>`coalesce(sum(${evaluationRuns.completionTokens}) filter (where ${anthropicThisMonth}), 0)`,
+      timeouts: sql<string>`coalesce(sum(${times("timeout")}) filter (where ${anthropicThisMonth}), 0)`,
+      calls: sql<string>`coalesce(sum(cardinality(${errors}) - ${times("superseded")} - ${times("internal")} + (${evaluationRuns.outcome} = 'proposed')::int) filter (where ${anthropicThisMonth}), 0)`,
+      sent: sql<string>`(select count(*) from ${securityEvents} where ${securityEvents.type} = 'ai_request_sent' and ${securityEvents.createdAt} >= ${monthStart})`,
       breakerFailures: sql<number>`(count(distinct ${evaluationRuns.submissionId}) filter (where ${evaluationRuns.provider} = ${provider} and ${evaluationRuns.outcome} = 'failed' and ${lastError} in ('configuration', 'rejected') and ${evaluationRuns.createdAt} > now() - make_interval(secs => ${breakerWindowMs / 1000})))::int`,
     })
     .from(evaluationRuns)
@@ -401,21 +433,25 @@ export async function readAiGuardCounts(provider: AiProvider, breakerWindowMs: n
   return {
     promptTokens: Number(row.promptTokens),
     completionTokens: Number(row.completionTokens),
+    uncountedCalls: Number(row.timeouts) + Math.max(0, Number(row.sent) - Number(row.calls)),
     breakerFailures: row.breakerFailures,
   };
 }
 
-/** The two alerts of the AI to the administrators (E6). */
-export type AiAlert = "ai_cost_cap_reached" | "ai_breaker_tripped";
+/** The alerts of the AI to the administrators (E6; the configuration, E6.6). */
+export type AiAlert = "ai_cost_cap_reached" | "ai_breaker_tripped" | "ai_configuration_failed";
 
 /**
  * Records an alert once per period (the UTC month for the cost cap, the
- * window for the breaker) and gives the administrators' addresses to email,
- * or none when the period already has it. An advisory lock per alert lets
- * one of two evaluations at once record it. The security log keeps the event,
- * without subject or content.
+ * window for the breaker and the configuration) once `send` emailed the
+ * administrators' addresses it is given. An advisory lock per alert lets one
+ * of two evaluations at once record it; the other waits, then finds it. When
+ * `send` fails, nothing is recorded (E6.6): the next guard tries again, so an
+ * alert is never lost, at the cost of a second email if a failed send had
+ * delivered after all. False when the period already has it. The security
+ * log keeps the event, without subject or content.
  */
-export async function claimAiAlert(alert: AiAlert, windowMs: number): Promise<string[]> {
+export async function claimAiAlert(alert: AiAlert, windowMs: number, send: (emails: string[]) => Promise<void>): Promise<boolean> {
   const since =
     alert === "ai_cost_cap_reached"
       ? sql`date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'`
@@ -427,9 +463,10 @@ export async function claimAiAlert(alert: AiAlert, windowMs: number): Promise<st
       .from(securityEvents)
       .where(and(eq(securityEvents.type, alert), sql`${securityEvents.createdAt} >= ${since}`))
       .limit(1);
-    if (already) return [];
-    await tx.insert(securityEvents).values({ type: alert });
+    if (already) return false;
     const admins = await tx.select({ email: users.email }).from(users).where(eq(users.role, "admin"));
-    return admins.map((admin) => admin.email);
+    await send(admins.map((admin) => admin.email));
+    await tx.insert(securityEvents).values({ type: alert });
+    return true;
   });
 }

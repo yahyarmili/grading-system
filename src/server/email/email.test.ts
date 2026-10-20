@@ -2,7 +2,9 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { AI_ALERT_SEND_MAX_MS } from "@/config/provisional";
 import { CaptureEmailSender, getCaptureSender, getEmailSender, selectTransport } from ".";
+import { SmtpEmailSender } from "./smtp";
 import { emailVerificationMessage } from "./templates";
 
 const message = emailVerificationMessage(
@@ -23,6 +25,19 @@ describe("selectTransport", () => {
     expect(selectTransport({ NODE_ENV: "development", SMTP_USER: "u", SMTP_PASSWORD: "p", EMAIL_TRANSPORT: "capture" })).toBe(
       "capture",
     );
+  });
+});
+
+describe("SmtpEmailSender", () => {
+  it("bounds each phase of the connection (E6.6): never minutes inside an evaluation step", () => {
+    // Nothing is sent: the transport connects on the first sendMail only.
+    const sender = new SmtpEmailSender("sender@example.test", "app-password");
+    const options = (sender as unknown as { transporter: { options: Record<string, unknown> } }).transporter.options;
+    expect(options).toMatchObject({
+      connectionTimeout: AI_ALERT_SEND_MAX_MS,
+      greetingTimeout: AI_ALERT_SEND_MAX_MS,
+      socketTimeout: AI_ALERT_SEND_MAX_MS,
+    });
   });
 });
 

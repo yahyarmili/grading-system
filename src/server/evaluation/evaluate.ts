@@ -10,7 +10,7 @@ import {
 import type { EvaluationError, ProposalAlert } from "@/lib/evaluation";
 import { calculateGrade } from "@/lib/grade";
 import { criterionIds, RUBRIC_VERSIONS, type RubricVersion } from "@/lib/rubric";
-import { EvaluatorError, getEvaluator, type Evaluator, type Usage } from "@/server/ai";
+import { AiConfigurationError, EvaluatorError, getEvaluator, type Evaluator, type Usage } from "@/server/ai";
 import { parseProposalOutput, type ProposalOutput } from "@/server/ai/output";
 import { buildEvaluationRequest, PROMPT_VERSION } from "@/server/ai/request";
 import {
@@ -26,7 +26,7 @@ import {
   type RunRecord,
 } from "@/server/data/evaluation/system";
 import { checkBlockingAlerts, isVeryShort } from "@/server/evaluation/alerts";
-import { aiGuard, type AiGuard } from "@/server/evaluation/budget";
+import { aiGuard, alertAiConfiguration, type AiGuard } from "@/server/evaluation/budget";
 
 // The evaluation of a submission by the AI (EVL-03), transitions 2 and 5 of
 // §5.5: claim, request built from the whitelist, bounded attempts, answer
@@ -230,11 +230,15 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
  * evaluating; nothing changed. The circuit breaker open before any call: no
  * run, evaluation_failed, for the teacher to retry. `claimToken` (E6): the
  * workflow run's identifier, so that its releaseStep frees this claim only;
- * a random one for the command.
+ * a random one for the command. `deps` may be made after the claim (the
+ * workflow's step, E6.6): an AI that cannot be set up (AiConfigurationError)
+ * ends the claimed copy evaluation_failed, without a run, and tells the
+ * administrators once per window, instead of leaving it received, started
+ * again by every sweep, unseen.
  */
 export async function evaluateSubmission(
   submissionId: string,
-  deps: EvaluationDeps = defaultDeps(),
+  deps: EvaluationDeps | (() => EvaluationDeps) = defaultDeps,
   opts: ClaimOptions & { claimToken?: string } = {},
 ): Promise<EvaluationOutcome> {
   const started = performance.now();
@@ -242,11 +246,25 @@ export async function evaluateSubmission(
   if (claim === "busy") return { status: "busy" };
   if (!claim) return { status: "skipped" };
 
-  const tried = await attempt(claim, deps, started);
-  if (tried.outcome === "halted") {
+  const ended = async (errors: EvaluationError[]): Promise<EvaluationOutcome> => {
     const released = await releaseEvaluation(claim);
-    return { status: released ? "evaluation_failed" : "stale", attempts: 0, durationMs: Math.round(performance.now() - started), errors: [] };
+    return { status: released ? "evaluation_failed" : "stale", attempts: 0, durationMs: Math.round(performance.now() - started), errors };
+  };
+  let resolved: EvaluationDeps;
+  try {
+    resolved = typeof deps === "function" ? deps() : deps;
+  } catch (error) {
+    if (!(error instanceof AiConfigurationError)) {
+      await releaseEvaluation(claim).catch(() => false);
+      throw error;
+    }
+    console.error("[evaluation] AI not configured: AiConfigurationError");
+    await alertAiConfiguration();
+    return ended(["configuration"]);
   }
+
+  const tried = await attempt(claim, resolved, started);
+  if (tried.outcome === "halted") return ended([]);
   let result: EvaluationResult = tried;
   let recorded;
   try {

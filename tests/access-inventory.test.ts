@@ -9,12 +9,13 @@ import { ACCESS_MATRIX, COLUMNS, RESOURCES } from "@/server/access/matrix";
 import { authorize } from "@/server/access/policy";
 import * as schema from "@/server/db/schema";
 import {
-  appSources,
   checkDataExports,
   checkEntryPoints,
   checkScripts,
   checkTables,
   dataSources,
+  entrySources,
+  GENERATED_ROUTES,
   scriptSources,
 } from "./helpers/access-inventory";
 
@@ -68,10 +69,25 @@ describe("every table has its place in the matrix", () => {
 });
 
 describe("every server action and route handler has its place in the matrix", () => {
-  const sources = appSources();
+  const sources = entrySources();
 
   it("covers the real application", () => {
     expect(checkEntryPoints(sources)).toEqual([]);
+  });
+
+  it("covers the routes Workflows generates (E6.6): left out, they are reported", () => {
+    const generated = sources.filter((file) => file.path.startsWith(`${GENERATED_ROUTES}/`));
+    expect(generated.map((file) => file.path).sort()).toEqual([
+      `${GENERATED_ROUTES}/v1/flow/route.js`,
+      `${GENERATED_ROUTES}/v1/webhook/[token]/route.js`,
+    ]);
+    const entries = Object.fromEntries(Object.entries(ENTRY_POINTS).filter(([key]) => !key.startsWith(GENERATED_ROUTES)));
+    expect(checkEntryPoints(sources, entries)).toEqual(
+      expect.arrayContaining([
+        `${GENERATED_ROUTES}/v1/flow/route.js#POST: server entry point without an entry in ENTRY_POINTS (inventory.ts)`,
+        `${GENERATED_ROUTES}/v1/webhook/[token]/route.js#GET: server entry point without an entry in ENTRY_POINTS (inventory.ts)`,
+      ]),
+    );
   });
 
   const fictitious = [

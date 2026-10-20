@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import type { EvaluationRef, RelaunchableCause } from "@/lib/evaluation";
@@ -7,15 +8,15 @@ import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
 import { assignments, submissions } from "@/server/db/schema";
 import { ownedBy } from "../access";
-import { applyTransition } from "../submissions/transitions";
+import { applyTransition, recordEvaluationRequest } from "../submissions/transitions";
 
 // PRC-02 (E6.3): what the owner teacher does with a copy the AI did not
 // evaluate; the buttons come in E7 and E8. The retry (transition 6) and the
-// relaunch (7) check the copy and hand its version over: the workflow's step
-// claims it, under the places and the guard of the AI (system.ts). The
-// manual evaluation (6 or 7, to to_review) is written here. Never automatic:
-// only these functions leave evaluation_failed and not_assessable; the sweep
-// takes the received copies only.
+// relaunch (7) check the copy, store the request and hand both over: the
+// workflow's step claims it, under the places and the guard of the AI
+// (system.ts), for that request only. The manual evaluation (6 or 7, to
+// to_review) is written here. Never automatic: only these functions leave
+// evaluation_failed and not_assessable; the sweep takes the received copies only.
 
 /** Starts the evaluation of a version once the request answered: after() in the Server Action (E7), a recorder in the tests. */
 export type EvaluationStartContext = { onStart: (ref: EvaluationRef) => void };
@@ -102,35 +103,54 @@ export async function listRelaunchable(
 }
 
 /**
+ * The ref of a teacher's request, field by field (E6.6): Workflows keeps it,
+ * so nothing else that came with the request travels (rule 4).
+ */
+const requestRef = (seen: SeenVersion, origin: "retry" | "relaunch", request: string): EvaluationRef => ({
+  submissionId: seen.submissionId,
+  versionNumber: seen.versionNumber,
+  origin,
+  request,
+});
+
+/**
  * Transition 6, by the teacher (PRC-02 R3, CA2): an evaluation_failed copy
- * is evaluated again; a refusal too (the teacher may ask again). Hands the
- * version to `ctx`, which starts the workflow once the request answered; the
- * claim happens in the step and checks the state again: two retries at once
- * evaluate once. Null when the copy is absent or another teacher's. Never a
- * copy to review (R3): "not_failed".
+ * is evaluated again; a refusal too (the teacher may ask again). Stores a new
+ * request with the copy, under its row lock, then hands the version and the
+ * request to `ctx`, which starts the workflow once the request answered; the
+ * claim happens in the step, checks the state again and takes the request:
+ * one request evaluates once, and of two requests in a row only the last one
+ * (E6.6). Null when the copy is absent or another teacher's. Never a copy to
+ * review (R3): "not_failed".
  */
 export async function retryEvaluation(actor: Actor, seen: SeenVersion, ctx: EvaluationStartContext): Promise<RetryResult | null> {
   const grant = authorize(actor, "unpublishedEvaluation", "write");
-  const [row] = await db
-    .select({
-      status: submissions.status,
-      versionNumber: submissions.currentVersion,
-      started: sql<boolean>`${submissions.teacherStartedAt} is not null`,
-    })
-    .from(submissions)
-    .where(and(eq(submissions.id, seen.submissionId), owned(grant)));
-  if (!row) return null;
-  if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" };
-  if (row.status !== "evaluation_failed" || row.started) return { ok: false, reason: "not_failed" };
-  ctx.onStart({ ...seen, origin: "retry" });
-  return { ok: true };
+  const request = randomUUID();
+  const result = await db.transaction(async (tx): Promise<RetryResult | null> => {
+    const [row] = await tx
+      .select({
+        status: submissions.status,
+        versionNumber: submissions.currentVersion,
+        started: sql<boolean>`${submissions.teacherStartedAt} is not null`,
+      })
+      .from(submissions)
+      .where(and(eq(submissions.id, seen.submissionId), owned(grant)))
+      .for("update");
+    if (!row) return null;
+    if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" };
+    if (row.status !== "evaluation_failed" || row.started) return { ok: false, reason: "not_failed" };
+    await recordEvaluationRequest(tx, seen.submissionId, request, eq(submissions.status, "evaluation_failed"));
+    return { ok: true };
+  });
+  if (result?.ok) ctx.onStart(requestRef(seen, "retry", request));
+  return result;
 }
 
 /**
  * Transition 7, by the teacher (PRC-02 R4): a copy offered by
  * listRelaunchable, and it only, is evaluated by the AI again. Never
- * automatic, never a copy evaluated by hand. Hands the version to `ctx`, like
- * the retry. Null when the copy is absent or another teacher's.
+ * automatic, never a copy evaluated by hand. Stores a request and hands it to
+ * `ctx`, like the retry. Null when the copy is absent or another teacher's.
  */
 export async function relaunchEvaluation(
   actor: Actor,
@@ -139,16 +159,22 @@ export async function relaunchEvaluation(
   ctx: EvaluationStartContext,
 ): Promise<RelaunchResult | null> {
   const grant = authorize(actor, "unpublishedEvaluation", "write");
-  const [row] = await db
-    .select({ versionNumber: submissions.currentVersion, offered: sql<boolean>`${relaunchable(conditions)}` })
-    .from(submissions)
-    .innerJoin(assignments, eq(assignments.id, submissions.assignmentId))
-    .where(and(eq(submissions.id, seen.submissionId), owned(grant)));
-  if (!row) return null;
-  if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" };
-  if (!row.offered) return { ok: false, reason: "not_relaunchable" };
-  ctx.onStart({ ...seen, origin: "relaunch" });
-  return { ok: true };
+  const request = randomUUID();
+  const result = await db.transaction(async (tx): Promise<RelaunchResult | null> => {
+    const [row] = await tx
+      .select({ versionNumber: submissions.currentVersion, offered: sql<boolean>`${relaunchable(conditions)}` })
+      .from(submissions)
+      .innerJoin(assignments, eq(assignments.id, submissions.assignmentId))
+      .where(and(eq(submissions.id, seen.submissionId), owned(grant)))
+      .for("update", { of: submissions });
+    if (!row) return null;
+    if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" };
+    if (!row.offered) return { ok: false, reason: "not_relaunchable" };
+    await recordEvaluationRequest(tx, seen.submissionId, request, eq(submissions.status, "not_assessable"));
+    return { ok: true };
+  });
+  if (result?.ok) ctx.onStart(requestRef(seen, "relaunch", request));
+  return result;
 }
 
 /**

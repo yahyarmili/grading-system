@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -87,7 +87,7 @@ export function findEntryPoints(files: SourceFile[]): { keys: string[]; problems
       problems.push(`${file.path}: inline "use server"; declare server actions in a "use server" module`);
     }
     const isActionModule = source.statements.some((s) => isDirective(s, "use server"));
-    const isRoute = /(^|\/)route\.tsx?$/.test(file.path);
+    const isRoute = /(^|\/)route\.(tsx?|js)$/.test(file.path);
     if (!isActionModule && !isRoute) continue;
     for (const { name } of exportsOf(source)) {
       if (isRoute && !isActionModule && !HTTP_METHODS.has(name)) continue;
@@ -204,6 +204,26 @@ export function checkDataExports(
 
 export const appSources = () => readSources("src", () => true);
 export const dataSources = () => readSources("src/server/data", () => true);
+
+/** Where withWorkflow writes its route handlers (git-ignored, JavaScript): by the dev server or a build. */
+export const GENERATED_ROUTES = "src/app/.well-known/workflow";
+
+/**
+ * E6.6: the route handlers Workflows generates, outside appSources (.js):
+ * they reach the steps, so they are entry points too. Throws when they were
+ * not generated yet: the check would pass without them.
+ */
+export function generatedRouteSources(): SourceFile[] {
+  const directory = path.join(ROOT, GENERATED_ROUTES);
+  if (!existsSync(directory)) throw new Error(`${GENERATED_ROUTES} is missing: start the dev server (docker compose up) first`);
+  return readdirSync(directory, { recursive: true, encoding: "utf8" })
+    .map((file) => path.posix.join(GENERATED_ROUTES, file.split(path.sep).join("/")))
+    .filter((file) => /(^|\/)route\.js$/.test(file))
+    .map((file) => ({ path: file, text: readFileSync(path.join(ROOT, file), "utf8") }));
+}
+
+/** Every server entry point: the application's, and the routes Workflows generates. */
+export const entrySources = () => [...appSources(), ...generatedRouteSources()];
 
 /** Files of scripts/ missing from SCRIPTS, and entries that no longer exist. */
 export function checkScripts(files: SourceFile[], scripts: typeof SCRIPTS = SCRIPTS): string[] {

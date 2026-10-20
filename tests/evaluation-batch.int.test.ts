@@ -1,19 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
-import { EVALUATION_STUCK_AFTER_MS } from "@/config/provisional";
-import type { EvaluationRef } from "@/lib/evaluation";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AI_ALERT_SEND_MAX_MS, EVALUATION_STUCK_AFTER_MS } from "@/config/provisional";
+import type { EvaluationError, EvaluationRef } from "@/lib/evaluation";
 import { RUBRIC_VERSIONS } from "@/lib/rubric";
 import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
-import { getSimulator, SimulatorEvaluator, type Evaluator, type SimulatedFault } from "@/server/ai";
+import { AiConfigurationError, getSimulator, SimulatorEvaluator, type Evaluator, type SimulatedFault } from "@/server/ai";
 import { createAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
+import { readAiGuardCounts } from "@/server/data/evaluation/system";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { db } from "@/server/db/client";
 import { aiProposals, classMemberships, evaluationRuns, securityEvents, submissions, users } from "@/server/db/schema";
 import { getCaptureSender } from "@/server/email";
-import type { AiGuardState } from "@/server/evaluation/budget";
+import { createAiGuard, type AiGuardState } from "@/server/evaluation/budget";
 import { evaluateSubmission, type EvaluationDeps, type EvaluationOutcome } from "@/server/evaluation/evaluate";
 import { orchestrate } from "@/server/evaluation/orchestrate";
 import { evaluateStep, releaseStep } from "@/server/evaluation/steps";
@@ -344,6 +345,127 @@ describe("the circuit breaker [P]", () => {
     getSimulator().failNext({ kind: "max_tokens" }, 1);
     for (const ref of refs.slice(0, 3)) await run(ref);
     expect(await run(refs[3])).toMatchObject({ status: "to_review", attempts: 1 });
+  });
+});
+
+describe("E6.6, EXP-02: the calls whose usage no run holds count at a ceiling", () => {
+  const sent = (n: number) => db.insert(securityEvents).values(Array.from({ length: n }, () => ({ type: "ai_request_sent" as const })));
+  const anthropicRun = (submissionId: string, outcome: "proposed" | "failed", attemptErrors: EvaluationError[]) =>
+    db.insert(evaluationRuns).values({
+      submissionId, versionNumber: 1, outcome, provider: "anthropic", modelRequested: "claude-haiku-5-5",
+      promptVersion: "evaluation-2", rubricVersion: "en-1", attempts: attemptErrors.length + (outcome === "proposed" ? 1 : 0),
+      attemptErrors, durationMs: 1, promptTokens: null, completionTokens: null, totalTokens: null,
+    });
+  const uncounted = async () => (await readAiGuardCounts("simulator", 3_600_000)).uncountedCalls;
+  // One call at the ceiling: (5 000 × 0.10 + 4 000 × 0.50) / 1e6 × 1.1 ≈ 0.00275 USD.
+  const guard = createAiGuard({ capUsd: 0.005, breakerFailures: 3, breakerWindowMs: 3_600_000 });
+
+  it("requests sent without a run (the trial, a result never recorded): the cap reached on them alone", async () => {
+    await sent(1);
+    expect(await uncounted()).toBe(1);
+    expect(await guard("simulator")).toBe("open");
+    await sent(1);
+    expect(await guard("simulator")).toBe("cost_cap");
+  });
+
+  it("the calls of the runs are not counted twice; a timeout is, a superseded attempt never", async () => {
+    const { refs } = await batch(1);
+    const id = refs[0].submissionId;
+    // A 529 then an answer: two calls, both journaled, both in the run.
+    await anthropicRun(id, "proposed", ["unavailable"]);
+    // Replaced before its second attempt: one call only.
+    await anthropicRun(id, "failed", ["unavailable", "superseded"]);
+    await sent(3);
+    expect(await uncounted()).toBe(0);
+    // Two timeouts: sent, maybe billed, never counted by the provider.
+    await anthropicRun(id, "failed", ["timeout", "timeout"]);
+    await sent(2);
+    expect(await uncounted()).toBe(2);
+    expect(await guard("simulator")).toBe("cost_cap");
+  });
+});
+
+describe("E6.6: the administrators' alert is recorded once sent", () => {
+  const capped = createAiGuard({ capUsd: 0, breakerFailures: 3, breakerWindowMs: 3_600_000 });
+  const alerts = () => getCaptureSender().captured().filter((m) => m.kind === "ai_alert");
+  const recorded = async () => (await db.select().from(securityEvents).where(eq(securityEvents.type, "ai_cost_cap_reached"))).length;
+
+  it("a failed send records nothing: the next guard sends it, then no more in the period", async () => {
+    await createUser("admin");
+    getCaptureSender().failNext();
+    expect(await capped("simulator")).toBe("cost_cap");
+    expect(alerts()).toHaveLength(0);
+    expect(await recorded()).toBe(0);
+    expect(await capped("simulator")).toBe("cost_cap");
+    expect(await capped("simulator")).toBe("cost_cap");
+    expect(alerts()).toHaveLength(1);
+    expect(await recorded()).toBe(1);
+  });
+
+  it("a mail server that never answers: the guard goes on after AI_ALERT_SEND_MAX_MS, nothing recorded", { timeout: 60_000 }, async () => {
+    await createUser("admin");
+    const hung = vi.spyOn(getCaptureSender(), "send").mockImplementation(() => new Promise(() => {}));
+    try {
+      const started = performance.now();
+      expect(await capped("simulator")).toBe("cost_cap");
+      expect(performance.now() - started).toBeGreaterThanOrEqual(AI_ALERT_SEND_MAX_MS - 100);
+      expect(performance.now() - started).toBeLessThan(AI_ALERT_SEND_MAX_MS + 10_000);
+    } finally {
+      hung.mockRestore();
+    }
+    expect(await recorded()).toBe(0);
+  });
+});
+
+describe("E6.6: an AI that cannot be set up", () => {
+  const unconfigured = () => {
+    throw new AiConfigurationError("AI_PROVIDER=anthropic needs GRADING_ANTHROPIC_API_KEY.");
+  };
+
+  it("fails the claimed copy without a run, never leaves it received; the administrators are told once", { timeout: 60_000 }, async () => {
+    await createUser("admin");
+    const { refs } = await batch(2);
+    for (const ref of refs) {
+      const outcome = await evaluateSubmission(ref.submissionId, unconfigured, { expectedVersion: ref.versionNumber, slots: SLOTS, claimToken: randomUUID() });
+      expect(outcome).toEqual({ status: "evaluation_failed", attempts: 0, durationMs: expect.any(Number), errors: ["configuration"] });
+      expect(await runsOf(ref.submissionId)).toEqual([]);
+    }
+    expect(new Set(Object.values(await states(refs.map((r) => r.submissionId))))).toEqual(new Set(["evaluation_failed"]));
+    const sentAlerts = getCaptureSender().captured().filter((m) => m.subject === "AI stopped: not configured");
+    expect(sentAlerts).toHaveLength(1);
+    expect(sentAlerts[0].text).not.toMatch(/MARKER|needs GRADING/);
+    expect(await db.select().from(securityEvents).where(eq(securityEvents.type, "ai_configuration_failed"))).toHaveLength(1);
+    // Nothing left for the sweep to start again and again.
+    await age(refs.map((r) => r.submissionId));
+    expect((await sweepEvaluations(async () => {})).restarted).toEqual([]);
+  });
+});
+
+describe("E6.6: the sweep starts a late submission again once per grace", () => {
+  it("taken, it is dated: the next sweeps leave it to its run, then take it again once the grace has passed", { timeout: 60_000 }, async () => {
+    const { refs } = await batch(2);
+    const ids = refs.map((r) => r.submissionId);
+    await age(ids);
+    const started: EvaluationRef[] = [];
+    const sweep = () => sweepEvaluations(async (ref) => void started.push(ref));
+    expect((await sweep()).restarted).toHaveLength(2);
+    // The next submissions' sweeps, while those runs wait for a place: nothing more.
+    expect((await sweep()).restarted).toEqual([]);
+    expect((await sweep()).restarted).toEqual([]);
+    expect(started).toHaveLength(2);
+    expect(await states(ids)).toEqual(Object.fromEntries(ids.map((id) => [id, "received"])));
+    // The runs gave up; the grace has passed again.
+    await age(ids);
+    expect((await sweep()).restarted).toHaveLength(2);
+  });
+
+  it("the longest waiting first: a submission just started again goes after the others", { timeout: 60_000 }, async () => {
+    const { refs } = await batch(3);
+    const [a, b, c] = refs.map((r) => r.submissionId);
+    await db.update(submissions).set({ updatedAt: sql`now() - interval '30 minutes'` }).where(eq(submissions.id, a));
+    await db.update(submissions).set({ updatedAt: sql`now() - interval '20 minutes'` }).where(eq(submissions.id, b));
+    await db.update(submissions).set({ updatedAt: sql`now() - interval '11 minutes'` }).where(eq(submissions.id, c));
+    expect((await sweepEvaluations(async () => {})).restarted.map((r) => r.submissionId)).toEqual([a, b, c]);
   });
 });
 

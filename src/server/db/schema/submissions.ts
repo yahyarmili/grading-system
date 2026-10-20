@@ -76,6 +76,13 @@ export const submissions = pgTable(
      * own claim. An identifier, never content.
      */
     claimToken: text(),
+    /**
+     * The teacher's last request of a retry or relaunch (E6.6): a random
+     * identifier, set while the copy is failed or not assessable; the claim of
+     * that request takes it, and any transition empties it. A second request
+     * replaces the first, whose run then claims nothing.
+     */
+    evaluationRequest: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
@@ -114,6 +121,10 @@ export const submissions = pgTable(
       sql`(${t.status} = 'not_assessable') = (${t.notAssessableCause} is not null)`,
     ),
     check("submissions_claim_token_iff_evaluating", sql`(${t.status} = 'evaluating') = (${t.claimToken} is not null)`),
+    check(
+      "submissions_evaluation_request_status",
+      sql`${t.evaluationRequest} is null or ${t.status} in ('evaluation_failed', 'not_assessable')`,
+    ),
   ],
 );
 

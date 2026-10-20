@@ -83,16 +83,20 @@ This link works once and expires in ${validFor}.`,
  * administrators. No student, submission or content: what happened and when
  * it ends only.
  */
-export function aiAlertMessage(to: string, alert: "cost_cap" | "breaker", detail: string): EmailMessage {
-  const what =
-    alert === "cost_cap"
-      ? {
-          subject: "AI stopped: monthly cost cap reached",
-          body: `The estimated cost of the AI this month reached its cap (${detail}). New submissions become "AI unavailable" without any call until the first day of next month (UTC), or until the cap is raised. Teachers may then relaunch them.`,
-        }
-      : {
-          subject: "AI stopped: repeated access errors",
-          body: `Several submissions failed in a row on an access error of the AI (key, model or request refused) (${detail}). No call is made until the window has passed; new submissions end "Evaluation failed". Check the key and the model.`,
-        };
+export function aiAlertMessage(to: string, alert: "cost_cap" | "breaker" | "configuration", detail: string): EmailMessage {
+  const what = {
+    cost_cap: {
+      subject: "AI stopped: monthly cost cap reached",
+      body: `The estimated cost of the AI this month reached its cap (${detail}). New submissions become "AI unavailable" without any call until the first day of next month (UTC), or until the cap is raised. Teachers may then relaunch them.`,
+    },
+    breaker: {
+      subject: "AI stopped: repeated access errors",
+      body: `Several submissions failed in a row on an access error of the AI (key, model or request refused) (${detail}). No call is made until the window has passed; new submissions end "Evaluation failed". Check the key and the model.`,
+    },
+    configuration: {
+      subject: "AI stopped: not configured",
+      body: `The application could not set up the AI (${detail}). No call is made; new submissions end "Evaluation failed", and teachers may retry them once the configuration is fixed.`,
+    },
+  }[alert];
   return { kind: "ai_alert", to, subject: what.subject, text: `Hello,\n\n${what.body}` };
 }

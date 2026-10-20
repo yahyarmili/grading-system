@@ -27,11 +27,14 @@ const STEP_SLOTS = { concurrency: EVALUATION_CONCURRENCY, stuckAfterMs: EVALUATI
 export async function evaluateStep(ref: EvaluationRef, claimToken: string): Promise<EvaluationOutcome> {
   "use step";
   try {
-    return await evaluateSubmission(ref.submissionId, defaultDeps(), {
+    // The dependencies are made after the claim (E6.6): an AI that cannot be
+    // set up fails the claimed copy, never leaves it received.
+    return await evaluateSubmission(ref.submissionId, () => defaultDeps(), {
       expectedVersion: ref.versionNumber,
       slots: STEP_SLOTS,
       claimToken,
       origin: ref.origin,
+      request: ref.request,
     });
   } catch (error) {
     throw new FatalError(`evaluation step failed: ${errorKind(error)}`);
