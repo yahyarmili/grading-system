@@ -49,7 +49,7 @@
 - **Lots** : -50 % ; résultats gardés 29 jours, hors ZDR ; sortie structurée acceptée ([Batch], E).
 - **Cache** : 512 tokens au moins ; 5 min ou 1 h ; lecture ×0,1 ; changer l'effort ou la réflexion l'invalide ([Prompt caching], R).
 - **`count_tokens`** : gratuit, une estimation ([Token counting], L). **API Models** : `capabilities` de chaque modèle ([Models API], L).
-- **Pas maintenant** : un essai complet coûte quelques centimes (§7) ; le cache rapporterait ~0,0001 $ par copie ; les lots gardent les données 29 jours ; l'`usage` des appels réels suffit à compter. Files API et Citations : stockage hors de notre contrôle (DON-01) ; Citations incompatible avec la sortie structurée.
+- **Pas maintenant** : un essai complet coûte quelques centimes (§7) ; le cache des consignes rapporterait au plus 0,00029 $ par copie (mesure d'E6.4) : écarté [D, 2026-10-20], à revoir si le coût de l'IA devient la borne ; les lots gardent les données 29 jours ; l'`usage` des appels réels suffit à compter. Files API et Citations : stockage hors de notre contrôle (DON-01) ; Citations incompatible avec la sortie structurée.
 
 ## 5. Audit du SDK `@anthropic-ai/sdk` 0.135.0
 

@@ -329,7 +329,8 @@ Adversarial set (EVL-03 CA3): largest gap on any criterion with the base text, i
 - **Crédit Max** (100 $ par mois) : ≈ 92 000 copies (67 000 au coût maximal) ; jamais atteint sous le plafond de 5 $.
 - Une copie échouée après 3 tentatives facture jusqu'à 3 appels ; non mesuré ici (0 échec).
 
-### Cache des consignes (à décider)
+### Cache des consignes
 
 - Gain par copie lue en cache : 2 960 × (0,10 − 0,01) $/MTok × 1,1 ≈ 0,00029 $ (27 % du coût moyen) ; surcoût d'une écriture : 2 960 × 0,025 $/MTok × 1,1 ≈ 0,00008 $. Rentable au-delà d'environ 22 % de lectures en cache, durée de 5 min : vrai pour un lot de classe remis en quelques minutes, faux pour des remises espacées.
 - Avec un cache toujours lu, le plafond de 5 $ passerait d'environ 4 600 à environ 6 300 copies ; les événements de Workflows bornent alors vers 6 700.
+- **Décision [D, 2026-10-20]** : pas de cache pour l'instant. La borne mensuelle est le plafond de 5 $ (≈ 4 600 copies), puis les événements de Workflows (≈ 6 700) ; le cache ne gagne au plus que 0,00029 $ par copie. À revoir si le coût de l'IA devient la borne (clé du client, volumes plus grands, plafond relevé).
