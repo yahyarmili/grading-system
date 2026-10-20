@@ -4,8 +4,10 @@ import { startEvaluation } from "@/server/evaluation/trigger";
 
 // E6 (PRC-01 CA4, PRC-02 R1): the sweep of the automatic evaluation, called
 // by Vercel's cron (vercel.json) with "Authorization: Bearer <CRON_SECRET>".
-// Vercel runs crons on production deployments only: the preview relies on
-// the sweep of each trigger (trigger.ts). Answers counts only.
+// Vercel runs crons on production deployments only (https://vercel.com/docs/cron-jobs,
+// read 2026-10-20): the preview relies on the sweep of each trigger
+// (trigger.ts) and, from E7, of the teacher's list of copies. Known limit until
+// then: a stuck submission waits for the next submission. Answers counts only.
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
