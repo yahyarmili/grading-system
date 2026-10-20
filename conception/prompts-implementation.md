@@ -3,7 +3,7 @@
 > Étape 8 de la démarche d'ingénierie. Statut : **brouillon**. Structure validée par l'utilisateur le 2026-10-12 ; contenu des prompts à valider à l'usage.
 > S'appuie sur [fonctionnalites.md](fonctionnalites.md) (plan E1 à E11, identifiants AUTH-01…), [besoins-non-fonctionnels.md](besoins-non-fonctionnels.md), [acteurs.md](acteurs.md) et [stack-technologique.md](stack-technologique.md). Méthode reprise du guide « Complete Claude Code Course Flow » (PDF fourni par l'utilisateur).
 
-**En bref.** Une suite de prompts à copier dans Claude Code, un par sous-fonctionnalité, chacun suivi de ce que vous vérifiez avant de passer au suivant. Les phases 0 à 2 et les étapes E1 à E6 sont rédigées en entier ; E7 à E11 sont en squelette et seront rédigées à l'approche de chaque étape, à partir de la conception à jour.
+**En bref.** Une suite de prompts à copier dans Claude Code, un par sous-fonctionnalité, chacun suivi de ce que vous vérifiez avant de passer au suivant. Les phases 0 à 2 et les étapes E1 à E8 sont rédigées en entier (E7 et E8 le 2026-10-21) ; E9 à E11 sont en squelette et seront rédigées à l'approche de chaque étape, à partir de la conception à jour.
 
 ---
 
@@ -856,14 +856,207 @@ Revue faite le 2026-10-20 (`feature-reviewer`) : aucun bloquant, 2 majeurs, 6 mi
 
 ---
 
-## E7 à E11 — Squelette
+## E7 — Revue par le professeur : liste, copie, modification libre, journal (REV-01 à REV-04)
+
+Préalables :
+- **Q4 et Q8** (échéance : avant E7, `fonctionnalites.md` §9) : à trancher par vous avant E7.0. Recommandations : Q4, aucune correction de la transcription dans le MVP (sans effet sur une copie texte ; écran de copie image en E9) ; Q8, toute modification d'une évaluation validée ou publiée la repasse à « À valider », republication explicite (règle déjà écrite dans REV-03 R5). Sans décision, la recommandation est codée [P] et signalée.
+- **Balayage côté professeur** [D, 2026-10-20] : le cron Vercel ne tourne pas sur la preview ; l'ouverture de la liste des remises d'un devoir lance `sweepEvaluations`, qui libère les remises bloquées en évaluation et relance les remises reçues oubliées.
+- **Deux points ouverts d'E6.6**, à trancher au plan : l'alerte « prestataire injoignable » de NFR-EXP-02 (une série de 529 ou de délais dépassés n'alerte personne) ; la relance du professeur abandonnée sans retour quand les 10 places restent prises plus de 5 min (la copie reste en échec, relançable).
+- **Notice du professeur** (NFR-DON-04, « E4 à E8 ») : avant son premier accès aux copies, le professeur apprend ce que mesure le journal (temps de revue, concordance avec l'IA). Elle arrive avec le journal (`schema/notices.ts` l'annonce).
+- Déjà prêts : les fonctions d'E6.3, sans bouton (`retryEvaluation`, `relaunchEvaluation`, `listRelaunchable`, `startManualEvaluation`, dont le formulaire vient en E8) ; les maquettes 1.4 et 1.5 sous `/dev/mockups/` ; `compareText` (`src/lib/collation.ts`) ; `calculateGrade` et `GRADE_STEP` [P].
+- Réactivité (NFR-TRT-03) : seuil à définir ; mesurée en E7.8 et rapportée telle quelle.
+
+#### E7.0 — Planifier · Plan
+```
+Inspecte l'application (matrix.ts, inventory.ts, src/server/data/evaluation/, transitions.ts, maquettes /dev/mockups/, src/lib/grade.ts et collation.ts, page /teacher/assignments/[assignmentId]) et planifie la revue par le professeur : REV-01 à REV-04 (conception/fonctionnalites.md §6 et §8.2 E7, invariants 5, 6 et 9 de §5.3, états §5.5, table 8.3) ; NFR-TRT-03, NFR-FIA-01, NFR-DON-04, NFR-USA-03.
+Confie d'abord à un sous-agent la lecture de node_modules/next/dist/docs/ sur : préchargement des liens, cache du routeur côté client, after() et Server Actions, revalidation après une écriture, `instant` et cacheComponents. Résumé avec les chemins lus.
+Il faut :
+- une évaluation du professeur distincte de la proposition immuable : 5 niveaux, une remarque par critère, commentaire général, pistes, note finale, « note fixée », origine (proposition, ou manuelle en E8), version de rubrique ; dis quand elle naît (à la première écriture depuis la proposition courante, ou autrement) et pourquoi ; une seule par remise et par version active ; ce qu'elle devient si l'élève remplace sa remise avant tout acte du professeur ;
+- la note : entière et recalculée (somme des niveaux) tant qu'elle n'est pas fixée ; fixée, au pas GRADE_STEP [P] entre 0 et 20, plus de recalcul, écart signalé, retour possible à la note calculée ; niveau entier de 0 à 4, refusé sinon côté serveur ;
+- la remarque « to re-read » quand le niveau de son critère change : où l'état est stocké, ce qui l'efface ; elle ne bloque rien et n'exige aucun texte (D5) ;
+- le journal (REV-04) : table dédiée, immuable par trigger comme 0011, écrite dans la même transaction que la modification par un module unique (test statique du type submission-writes.test.ts : aucune écriture d'évaluation sans entrée de journal) ; ancienne et nouvelle valeur, auteur, date par l'horloge de la base ; événements : ouverture de la liste et de la copie, chaque modification, relances (les fonctions d'E6.3 journalisent désormais, dans leur transaction), puis en E8 validation, publication, retrait, saisie manuelle ; jamais lu par l'élève ; distinct du journal de sécurité (DON-05), qui reste sans contenu ;
+- une ouverture journalisée sans faux positif : un préchargement ou un rendu en cache n'écrit pas « opened » ; dis par quel chemin l'ouverture est enregistrée ;
+- le premier acte du professeur : la première modification pose teacher_started_at dans la même transaction, sur la ligne de remise verrouillée (comme startManualEvaluation), et ferme le remplacement (SUB-05 R3) ;
+- la concurrence (REV-03 R5, NFR-FIA-01) : toute écriture porte la version de remise, la proposition courante et la révision de l'évaluation vues à l'ouverture ; refus « replaced » (remise remplacée : rechargement) distinct de « conflict » (autre onglet : la saisie reste à l'écran, rien n'est écrasé) ; dis le grain d'enregistrement (champ par champ ou formulaire entier) et son effet sur le journal et les conflits ;
+- une copie validée ou publiée modifiée repasse à « To review » (transition 10, Q8) : prévue au schéma, jouée en E8 ;
+- la liste (REV-01) : membres actifs des classes destinataires, « non remis » compris, une ligne par élève avec ses classes ; élèves retirés ayant une remise, marqués « removed from class » ; tri et filtres sur toute la liste ; note du professeur, sinon note proposée « provisional » ; copies sans note en fin dans les deux sens ; ordre alphabétique nom puis prénom par compareText ; dis où se fait le tri (SQL ou liste entière côté serveur) au volume du cas haut (plus de 100 copies) ; compteurs à valider, en échec, non évaluables ; tri et filtres conservés au retour à la liste ;
+- à l'ouverture de la liste, le balayage sweepEvaluations d'abord, borné dans le temps, sans erreur visible s'il échoue ;
+- la copie (REV-02) : identité (D9) avec les seules classes du professeur destinataires du devoir ; texte de l'élève tel quel, avec l'attribut lang de la langue du devoir (USA-03) ; proposition en lecture seule (niveaux, justifications, citations, commentaire, pistes, note proposée, alertes ; modèle et date en petit) ; mode, « late » ; aucun historique de résultats (R2) ; page de statut sans formulaire pour « non remis », « en cours », échec et non évaluable (avec la cause et les actions) ;
+- la relance depuis la liste et la copie : retryEvaluation, relaunchEvaluation, listRelaunchable, after(() => startEvaluation(ref)) dans la Server Action ; pour refused : « The AI declined to assess this text », relance permise avec un avertissement, évaluation manuelle proposée (active en E8) ;
+- les deux points ouverts d'E6.6 : recommande, avec le coût de chaque option ;
+- la notice du professeur avant son premier accès aux copies (DON-04) : texte dans src/lib/texts.ts, versionné, lecture enregistrée (compte, date, version), ligne de matrice ;
+- lignes de matrice et d'inventaire : évaluation non publiée (L É), journal (L), proposition (L), identité (studentAccount L), notice du professeur ; aucune colonne « autre » qui donne quelque chose ; fonctions dans REAL ;
+- un 404 réel (instant = false) pour un devoir, une copie ou un élève d'autrui ; aucun cache ne sert une évaluation périmée ;
+- la réactivité (TRT-03) : requêtes de la liste et de la copie, index, nombre d'allers-retours à Neon (~175 ms chacun), et comment on la mesure.
+Montre : tables, contraintes et migrations, flux d'une modification (verrous, gardes, journal), routes, Server Actions, matrice, valeurs provisoires, et la vérification (dont la concurrence).
+```
+
+#### E7.1 — Schéma de l'évaluation et du journal (REV-03, REV-04)
+```
+Implémente seulement le socle du plan approuvé : tables de l'évaluation du professeur et du journal, contraintes, trigger d'immuabilité du journal, migrations relues, module unique qui écrit l'évaluation et son journal dans la même transaction, lignes de matrice et d'inventaire.
+Tests : unitaires sur le recalcul et la fixation de la note (pas, bornes, retour à la note calculée) et sur un niveau hors 0-4 ; intégration : chaque écriture laisse son entrée de journal, une entrée ne se modifie ni ne se supprime, la proposition reste identique après des modifications ; test statique : seul le module unique écrit ces tables.
+Pas encore d'écran. Migre la base dev.
+```
+**Vous validez :** les migrations sont lisibles ; une modification sans journal est impossible par construction ; la proposition d'origine ne bouge pas.
+
+#### E7.2 — Liste réelle des remises (REV-01)
+```
+/build-ui Remplace la maquette 1.4 par la liste réelle des remises d'un devoir, ouverte depuis la page du devoir (ASG-02 CA2 rejoué) : une ligne par élève (nom, prénom, classes, état, « Late », mode, note), « Not submitted » compris ; élèves retirés ayant une remise, marqués « Removed from class » ; tri par note, date de remise (version active) ou ordre alphabétique sur toute la liste ; note « provisional » quand seule la proposition existe ; copies sans note en fin dans les deux sens, jamais comptées comme 0 ; filtres par classe et par état, combinables ; compteurs ; tri et filtres conservés au retour.
+À l'ouverture : balayage sweepEvaluations selon le plan, puis entrée de journal « list opened ». Le nom ouvre la copie (E7.3).
+Couvre CA1 à CA4 (« Émile », « Eric », « d'Aubigné » ; élève retiré sans remise absent), SUB-04 CA3 (« Late » visible du professeur) et CLS-04 CA3. Liste d'un devoir d'autrui : 404 réel.
+```
+**Vous validez :** sur un devoir envoyé à deux classes avec un élève commun, il apparaît une fois avec ses deux classes ; le tri par note met les copies sans note en fin dans les deux sens ; une remise bloquée en évaluation repart quand vous ouvrez la liste.
+
+#### E7.3 — Écran de copie en lecture (REV-02)
+```
+/build-ui Remplace la maquette 1.5 par l'écran réel de copie, ouvert par un clic sur le nom : identité (nom, prénom, email) et les seules classes du professeur destinataires du devoir ; texte de l'élève tel quel, avec l'attribut lang de la langue du devoir ; proposition de l'IA en lecture seule (niveaux, justifications, citations, commentaire général, pistes, note proposée, alertes avec leur libellé) ; mode et « Late » ; aucun historique de résultats.
+Selon l'état : « Not submitted », « Being evaluated », échec et non évaluable affichent une page de statut avec la cause, sans formulaire (les actions arrivent en E7.6) ; « To review » : le formulaire du professeur, en lecture seule jusqu'à E7.4.
+Entrée de journal « copy opened » par le chemin du plan, sans faux positif au préchargement.
+Couvre CA1 (deux homonymes : chaque clic ouvre la bonne copie), CA2 et CA3. Copie d'un autre professeur, ou d'un élève qui n'a pas reçu le devoir : 404 réel.
+```
+**Vous validez :** sur ordinateur, vous lisez la copie et la proposition sans défiler sans cesse ; un élève de trois classes destinataires, dont une d'un autre professeur, n'affiche que vos deux classes.
+
+#### E7.4 — Modification libre et journal (REV-03, REV-04 CA1)
+```
+/build-ui Rends le formulaire de l'écran de copie modifiable selon le plan : niveau 0-4 par critère, remarque par critère (initialisée depuis la justification de l'IA), commentaire général, pistes, note.
+Note recalculée tant qu'elle n'est pas fixée ; fixée, écart avec la note calculée signalé (jamais par la seule couleur) et retour possible à la note calculée ; critère marqué « Modified » et remarque « To re-read » quand son niveau change. Aucune justification exigée (D5). Remarques dans la langue du devoir, modifiables (Q5 [D]).
+Chaque enregistrement : gardes du plan, journal dans la même transaction, teacher_started_at à la première modification. Validation Zod côté serveur, message par champ.
+Couvre REV-03 CA1 à CA3 (niveau hors 0-4 refusé, aussi par requête directe), REV-04 CA1 (ancienne et nouvelle valeur, auteur, date ; proposition inchangée) et SUB-05 CA3 après modification (remplacement refusé à l'élève). L'élève n'accède ni à l'évaluation, ni au journal, ni à la proposition : test par requête directe.
+```
+**Vous validez :** vous changez un niveau : la note suit, la remarque passe « To re-read » ; vous fixez la note puis changez un niveau : la note reste, l'écart est signalé ; l'élève ne peut plus remplacer sa remise.
+
+#### E7.5 — Conflits et remplacement pendant l'ouverture (REV-03 R5, CA3, CA4 ; NFR-FIA-01)
+```
+Implémente la détection des écritures concurrentes selon le plan.
+Remise remplacée par l'élève pendant que la copie est ouverte : enregistrement refusé avec « This submission was replaced », copie rechargée sur la nouvelle version. Même évaluation modifiée dans deux onglets : le second enregistrement reçoit un conflit explicite, sa saisie reste à l'écran, rien n'est écrasé en silence. Remplacement de l'élève et premier acte du professeur simultanés : un seul aboutit (SUB-05 CA4 rejoué avec un vrai premier acte).
+Tests d'intégration avec de vraies transactions concurrentes, chacun avec sa contre-épreuve (garde retirée : le test échoue).
+```
+**Vous validez :** deux onglets sur la même copie : le second enregistrement affiche un conflit sans perdre votre saisie ; une copie remplacée pendant l'ouverture se recharge.
+
+#### E7.6 — Relance depuis la liste et la copie (PRC-02, rejeu)
+```
+/build-ui Branche les fonctions d'E6.3 : « Retry » sur une copie en échec (retryEvaluation) ; « Relaunch » sur les copies que propose listRelaunchable (rubrique française activée, IA de nouveau disponible), depuis la liste et depuis la copie ; Server Action avec after(() => startEvaluation(ref)) ; version vue transmise, refus « changed » affiché clairement. Chaque relance est journalisée.
+Copie dont l'IA a refusé le texte (refused) : « The AI declined to assess this text », relance permise avec un avertissement (un refus se répète en général), évaluation manuelle proposée (formulaire en E8 ; bouton absent ou désactivé d'ici là, selon le plan).
+Applique la décision du plan sur les deux points ouverts d'E6.6.
+Couvre PRC-02 CA1 à CA3 depuis l'écran (relance d'un échec jusqu'à « To review » ; relance proposée pour les seules copies « AI unavailable » non évaluées à la main) et CA4 (l'élève voit toujours « Submitted, being marked »). Double clic sur « Retry » : une seule évaluation (R4).
+```
+**Vous validez :** avec une panne simulée persistante, la copie s'affiche en échec ; après « Retry », elle atteint « To review » en quelques secondes ; l'élève ne voit aucun changement.
+
+#### E7.7 — Journal du correcteur et notice du professeur (REV-04 R2, R3 ; NFR-DON-04)
+```
+/build-ui Ajoute la consultation du journal par le correcteur, sur l'écran de copie (« History ») : événements de la copie, du plus récent au plus ancien, auteur, date avec fuseau (formatDateTime), ancienne et nouvelle valeur ; la proposition d'origine reste lisible à côté. Aucune action de modification ni de suppression.
+Ajoute la notice du professeur avant son premier accès aux copies (DON-04) : ce que mesure le journal (heures d'ouverture et de validation, donc temps de revue ; concordance entre la proposition et la version finale), qui le lit, et sa limite (la concordance ne distingue pas accord et influence, REV-04 R4). Texte dans src/lib/texts.ts, versionné et gelé par empreinte comme la notice élève ; lecture enregistrée ; accès aux copies refusé côté serveur tant qu'elle ne l'est pas.
+Couvre REV-04 R3 : un autre professeur et l'élève n'obtiennent rien, par requête directe.
+```
+**Vous validez :** un nouveau professeur lit la notice une fois, puis voit ses copies ; l'historique d'une copie montre son ouverture et chaque modification.
+
+#### E7.8 — Vérifier et démontrer
+```
+Rejoue les critères de la table 8.3 attendus en E7 : ASG-02 CA2, SUB-04 CA3, SUB-05 CA3 (après modification), CLS-04 CA3 et REV-01 CA4, PRC-02 depuis la liste.
+Vérifie que la matrice passe pour les ressources nouvelles ou élargies (évaluation non publiée, journal, proposition, identité, notice du professeur) : un autre professeur, l'élève et l'administrateur n'obtiennent rien.
+Mesure la réactivité (TRT-03) sur un devoir de 120 copies fictives : affichage de la liste, ouverture d'une copie, enregistrement d'une modification, en local ; rapporte les chiffres tels quels (seuil à définir).
+Écris le parcours E2E d'E7 : une remise texte arrive « To review » (simulateur) ; le professeur ouvre la liste, clique sur le nom, modifie un niveau puis la note seule, voit le journal ; conflit entre deux onglets ; remise remplacée pendant l'ouverture ; l'élève ne voit que « Submitted, being marked ».
+Une fois la preview poussée à ma demande, rejoue le parcours en ligne avec le simulateur et mesure les trois mêmes délais.
+```
+**Vous validez :** la démonstration de sortie d'E7 : une remise arrive « To review », vous l'ouvrez et la modifiez, le journal le montre, l'élève ne voit rien.
+
+#### E7.9 — Revue en contexte neuf
+```
+Utilise le sous-agent feature-reviewer pour relire de façon indépendante la revue par le professeur.
+Points : copie, évaluation ou journal d'un autre élève (homonymes, mauvais identifiant), écriture sans journal, proposition modifiable par un chemin quelconque, perte silencieuse entre onglets, remplacement et premier acte simultanés, identité ou classes d'un autre professeur, préchargement qui journalise, cache qui sert une évaluation périmée, journal ou proposition lisibles par l'élève, matrice des nouvelles actions, lenteur de la liste.
+Ne modifie rien. Renvoie d'abord la revue.
+```
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q4, Q8, la notice du professeur et les valeurs provisoires.
+
+---
+
+## E8 — Validation, publication, consultation : premier cycle complet en texte (REV-05, REV-06, PUB-01, PUB-02)
+
+Préalables :
+- **Q5** tranchée [D, 2026-10-15] : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA affichée à l'élève (formulation à confirmer avec le cadre légal) ; « note ajustée par le professeur » sans justification quand la note diffère de la note calculée. La mention de l'IA répond aussi à l'information demandée par la politique d'usage d'Anthropic (« Education and credentials », champ à confirmer) ; formulation [P] dans `src/lib/texts.ts`.
+- **Q8** : tranchée, ou recommandation provisoire, depuis E7.
+- Notice élève v4 déjà en place. L'élève ne voit jamais un refus de l'IA, ni sa cause, ni un état technique.
+- `startManualEvaluation` (E6.3) passe aujourd'hui la copie à « To review » sans évaluation : E8 la rend cohérente avec le formulaire.
+
+#### E8.0 — Planifier · Plan
+```
+Inspecte l'application après E7 et planifie la fin du premier cycle en texte : REV-05, REV-06, PUB-01, PUB-02 (conception/fonctionnalites.md §6 et §8.2 E8, invariant 7 de §5.3, transitions 8, 9 et 10 de §5.5, table 8.3) ; NFR-EXP-04 (contrôle bloquant « aucun résultat avant publication »), NFR-USA-03.
+Confie d'abord à un sous-agent la lecture de node_modules/next/dist/docs/ sur ce qui peut resservir une page à l'élève après un retrait (cache du routeur côté client, préchargement, bouton retour et bfcache, en-têtes Cache-Control des pages dynamiques, cacheComponents) et sur ce que reçoit le navigateur d'une page ou d'une Server Action (charge RSC). Résumé avec les chemins lus.
+Il faut :
+- la validation (REV-05) : 5 niveaux et une note exigés côté serveur ; journalisée « without changes » ou « after changes » (dis comment la nature est établie) ; pose teacher_started_at ; refusée, aussi par requête directe, pour une copie en échec ou sans évaluation ;
+- la publication (PUB-01) : depuis « Validated » seulement, copie par copie ; action répétée = une publication ; retrait vers « Validated » ; « Validate and publish » enchaîne deux actes journalisés séparément ; si le second échoue, la copie reste validée et le professeur le voit (dis comment un test provoque cet échec) ;
+- une copie validée ou publiée modifiée repasse à « To review » (transition 10, Q8) ; la version publiée disparaît pour l'élève ;
+- l'évaluation manuelle (REV-06) : même formulaire, depuis une évaluation échouée (refus compris) ou non évaluable (sans contenu, rubrique non validée, IA indisponible) ; origine « manual » et version de rubrique enregistrées ; journalisée « entered manually, without AI proposal » ; réconcilie startManualEvaluation : aucune copie « To review » sans proposition ni évaluation du professeur ; la transition 6 ou 7 se fait avec la première écriture, dans la même transaction ; dis quels critères s'affichent pour un devoir en français tant que sa rubrique n'est pas validée (Q6) ;
+- la vue de l'élève (PUB-02) : projection dédiée à liste blanche, un DTO fermé lu sur la ligne « Évaluation publiée » ; note telle que fixée, niveaux, remarque par critère, commentaire, pistes, rubrique ; mention de l'IA seulement si une proposition a existé (dis ce qu'affiche une évaluation manuelle) ; « Grade adjusted by your teacher » quand la note diffère de la somme des niveaux ; attribut lang sur les remarques ; jamais la proposition ni ses justifications d'origine, les alertes, le journal, la transcription, un état technique, une cause d'échec ou un refus ;
+- « rien avant publication » (PUB-02 R2) dans toutes les réponses reçues par l'élève : pages, charges RSC, Server Actions, messages d'erreur, liste, état ; retrait effectif au prochain accès, bouton retour compris ; dis quelle parade couvre chaque canal ;
+- le balayage automatique de la fuite (E8.4) : marqueurs uniques dans la proposition simulée et dans l'évaluation, cherchés dans toutes les réponses de l'élève ; un contrôle bloquant (EXP-04) ;
+- l'état « Marked, result available » (toStudentStatus) pour « Published » seulement ;
+- l'élève retiré lit son résultat publié (CLS-04 CA3, SUB-01 CA3) ;
+- lignes de matrice et d'inventaire touchées, fonctions dans REAL.
+Montre : transitions et leurs gardes, flux du raccourci, évaluation manuelle, projection de l'élève et sa liste blanche, canaux de fuite et leur parade, textes et valeurs provisoires, et la vérification.
+```
+
+#### E8.1 — Valider, publier, retirer, raccourci (REV-05, PUB-01)
+```
+/build-ui Ajoute à l'écran de copie « Validate », « Publish », « Validate and publish » et « Withdraw publication » (confirmation pour la publication et le retrait), et l'état correspondant dans la liste.
+Transitions 8, 9 et 10 par applyTransition seulement ; chaque acte journalisé avec auteur et date ; validation « without changes » ou « after changes » ; action répétée sans doublon ; échec du second acte du raccourci : copie validée, message au professeur. Modifier une copie validée ou publiée la repasse à « To review » (Q8).
+Couvre REV-05 CA1 et CA2, PUB-01 CA1 (publication d'une copie non validée refusée en interface et par requête directe) et CA2, REV-03 R5, REV-04 CA2 (ouverture puis validation au journal) et SUB-05 CA3 après validation.
+```
+**Vous validez :** « Validate and publish » laisse deux entrées au journal ; une copie publiée puis modifiée redevient « To review » et l'élève ne voit plus son résultat.
+
+#### E8.2 — Évaluation manuelle (REV-06)
+```
+/build-ui Active l'évaluation manuelle depuis une copie en échec (refus de l'IA compris) ou non évaluable, avec le formulaire d'E7.4 sans proposition à côté : 5 niveaux, remarques, commentaire, pistes, note.
+Selon le plan : la première écriture fait la transition 6 ou 7 et crée l'évaluation d'origine « manual » dans la même transaction ; journal « entered manually, without AI proposal » ; la copie n'est plus proposée à la relance (PRC-02 R4). Ensuite, validation et publication comme en E8.1.
+Couvre CA1 et CA2 (devoir en français sans rubrique française validée). Double clic : une seule évaluation.
+```
+**Vous validez :** une copie en échec s'évalue à la main jusqu'à la publication ; le journal dit « without AI proposal » ; elle ne figure plus parmi les relances.
+
+#### E8.3 — Vue du résultat par l'élève (PUB-02)
+```
+/build-ui Implémente la vue du résultat de l'élève, sur téléphone d'abord, depuis My assignments : état « Marked, result available », note telle que fixée, niveau par critère avec son libellé, remarque par critère, commentaire général, pistes, lien vers la rubrique ; mention de l'IA et « Grade adjusted by your teacher » selon le plan (textes dans src/lib/texts.ts).
+La projection renvoie le DTO fermé du plan, rien d'autre ; sa requête ne lit aucun champ de la proposition, du journal ni des alertes.
+Couvre CA1, CA3 (évaluation modifiée avant publication : seule la version du professeur ; l'élève B qui ouvre le résultat de A : 404 réel) et EVL-04 CA3 (aucune alerte). Un élève retiré lit son résultat publié.
+```
+**Vous validez :** sur téléphone, l'élève lit sa note et ses remarques ; une note fixée à 15 pour des niveaux qui font 13 affiche « Grade adjusted by your teacher ».
+
+#### E8.4 — Balayage « rien avant publication » (PUB-02 R2, NFR-EXP-04)
+```
+Écris le contrôle automatique de la fuite : avec des marqueurs uniques dans la proposition simulée (justifications, commentaire, alertes) et dans l'évaluation du professeur, collecte toutes les réponses reçues par l'élève (pages, charges RSC, Server Actions, erreurs, liste, état) et cherches-y les marqueurs, dans quatre situations : copie à valider ; validée non publiée ; publiée puis retirée, bouton retour compris ; publiée (seuls les champs de la liste blanche apparaissent).
+Il tourne avec les tests (intégration ou E2E selon le plan) et fait échouer la suite au premier marqueur trouvé. Contre-épreuve : un champ interdit ajouté exprès à la projection fait échouer le test.
+```
+**Vous validez :** le test échoue quand on ajoute exprès un champ interdit à la vue de l'élève, et passe sinon.
+
+#### E8.5 — Rejeux de la table 8.3
+```
+Rejoue les critères attendus en E8 : SUB-01 CA2 (« Marked, result available » pour une copie publiée seulement ; « Submitted, being marked » pour tous les autres états), SUB-05 CA3 (remplacement refusé après validation), EVL-04 CA3, REV-03 R5, REV-04 CA2 et CA3 (journal et proposition inaccessibles à l'élève après publication), CLS-04 CA3 et SUB-01 CA3 (résultat publié d'un élève retiré, sans nouvelle remise possible).
+Vérifie que la matrice 5.4 passe pour chaque ressource existante, dont « Évaluation publiée » (élève concerné L ; autre élève et autre professeur, rien ; propriétaire L É pour le retrait).
+```
+**Vous validez :** chaque critère rejoué est nommé dans un test qui passe.
+
+#### E8.6 — Cycle complet en texte (E2E)
+```
+Écris le parcours E2E du premier cycle complet : le professeur crée une classe et un devoir ; l'élève rejoint, lit la notice, remet ; la remise atteint « To review » (simulateur) ; le professeur ouvre la copie, modifie un niveau, valide et publie ; l'élève lit son résultat ; le professeur retire la publication : l'élève ne voit plus rien, bouton retour compris ; une seconde copie en échec est évaluée à la main puis publiée.
+Une fois la preview poussée à ma demande, rejoue le cycle en ligne avec le simulateur ; avec Anthropic seulement pendant une démonstration, selon la procédure « Activer l'IA sur la preview ».
+```
+**Vous validez :** un professeur et une classe font le cycle complet en texte sans intervention technique (O4, texte).
+
+#### E8.7 — Revue en contexte neuf : fuite des résultats
+```
+Utilise le sous-agent feature-reviewer pour relire de façon indépendante la validation, la publication et la vue de l'élève.
+Points : résultat visible avant publication ou après retrait par un canal indirect (liste, état, message d'erreur, charge RSC, cache du routeur, bouton retour, préchargement) ; proposition brute ou alerte dans une réponse à l'élève ; résultat d'un autre élève ; publication sans validation par requête directe ; raccourci à moitié fait ; copie « To review » sans évaluation ; journal incomplet du cycle ; matrice.
+Ne modifie rien. Renvoie d'abord la revue.
+```
+Puis **T4** pour un constat douteux, **T3**, **T1** (critères de sortie d'E8, `fonctionnalites.md` §8.2), et **T5** pour Q5 (formulation de la mention de l'IA), Q8 et les valeurs provisoires.
+
+---
+
+## E9 à E11 — Squelette
 
 À rédiger en détail à l'approche de chaque étape, à partir de la conception à jour. Chaque étape commence par un **Plan** et se termine par **T1**, puis T5 si une décision a changé.
 
 | Étape | Prompts prévus | Outils du guide introduits |
 |---|---|---|
-| **E7** Revue par le professeur | E7.0 plan · E7.1 liste réelle à partir de la maquette 1.4 (REV-01) ; son ouverture lance d'abord le balayage (`sweepEvaluations`), qui libère les remises bloquées en évaluation : le cron Vercel ne tourne pas sur la preview [D, 2026-10-20] · E7.2 écran de copie à partir de la maquette 1.5 (REV-02) · E7.3 évaluation du professeur, recalcul, note fixée (REV-03) · E7.4 journal atomique et conflits (REV-04) · E7.5 relance depuis la liste, rejeux · revue. Pour `refused` : « The AI declined to assess this text », évaluation manuelle proposée (REV-06), relance avec un avertissement (un refus se répète en général). À trancher au plan d'E7 (E6.6, 2026-10-20) : l'alerte « prestataire injoignable » de NFR-EXP-02 (une série de 529 ou de délais dépassés n'alerte personne) ; la relance du professeur abandonnée sans retour quand les 10 places restent prises plus de 5 min (la copie reste en échec, relançable) | — |
-| **E8** Validation, publication | E8.0 plan · E8.1 valider, publier, retirer, raccourci (REV-05, PUB-01) · E8.2 évaluation manuelle (REV-06) · E8.3 vue de l'élève à liste blanche (PUB-02) · E8.4 balayage « rien avant publication » · E8.5 rejeux de la table 8.3 · E8.6 cycle complet en texte (E2E) · revue de la fuite. Notice v4 déjà en place ; la mention de l'IA (Q5) répond aussi à l'information exigée par la politique d'usage d'Anthropic (« Education and credentials », champ à confirmer) ; l'élève ne voit jamais un refus ni sa cause | Revue en contexte neuf : fuite de résultats |
 | **E9** Canal image | E9.0 reprend E5.8 avec `claude-haiku-5-5` [D, 2026-10-19] (photos fictives, sans nom, avec `.txt` de référence, hors de git), puis enquête par sous-agents (limites de 4,5 Mo par requête Vercel et de 1 Go ; 1 Mo par défaut pour une Server Action, à vérifier) ; confirme ou non Haiku derrière `Reader` [P] · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur (grand côté ≤ 2 576 px **et** ⌈l/28⌉×⌈h/28⌉ ≤ 4 784 tokens), type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 `Reader` et `transcription-1` en sortie structurée, image en base64 avant le texte, jamais d'URL, contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · notice v5 et fiche DON-02 étendue à la lecture · revue | Sous-agents, revue |
 | **E10** Durcissement et mesure | A : matrice complète automatisée, balayage (journaux sans contenu ni clé), étanchéité (flux image compris), pannes, sessions et liens, accessibilité (USA-03), export de sauvegarde, procédure de montée de version du SDK (relire le diff, rejouer les tests de garanties, vérifier l'en-tête d'authentification) ; revue externe facultative (CodeRabbit s'il reste gratuit pour ce dépôt, sinon `/code-review`) ; tri des constats ; T3. B : scripts de mesure depuis le journal, selon le protocole validé par le client ; mesures pour quelques centimes (stabilité sur N exécutions, CA3, alertes, fidélité de lecture) ; vote k = 3 et variante de réflexion décidés là, chacun avec sa version (rejouer a03, seul texte adverse hors de l'écart en E5.16, accepté [D, 2026-10-19]) | Revue indépendante |
 | **E11** Démonstration | Déploiement final, à trancher en E11 (2026-10-20) : garder la preview, faire de `preview` la branche de production de Vercel (adresse courte, cron ; variables à recopier en Production), ou fusionner dans `main` et la déployer avec une base Neon à elle (E1.8 : aucune production sur la base dev) ; jeu de données fictif en anglais, scénarios scriptés, préchauffage de Neon, notice « demo, fictitious data », répétition sous la limite de l'espace de travail (répétition et séance). Avant : abonnement actif, crédit restant, fin du cycle, expiration de la clé ; repli : REV-06 ou le simulateur ; après : clé révoquée | — |
