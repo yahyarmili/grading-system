@@ -41,12 +41,22 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
   Le lot de 100 copies (NFR-TRT-01) n'est plus borné par le prestataire, mais par Workflows Hobby et Neon.
 - **Valeurs [P] de la reprise**, consignées après E5.16 (2026-10-19), dans `src/config/provisional.ts` :
   - génération (`evaluation-2`) : effort `low`, réflexion adaptative (`display: "omitted"`), `max_tokens` 4 000 ; E5.16 : sortie au plus 2 073 tokens ;
-  - délai par appel 120 s ; E5.16 : au plus 11,3 s, médiane 7,4 s ; **proposé pour E6, non appliqué : 60 s** (3 tentatives de 60 s et 2 attentes de 30 s font 240 s, sous les 300 s de Vercel) ;
-  - 3 tentatives, attente de 2 s, `Retry-After` honoré jusqu'à 30 s ; remise libérée en échec après 12 min en « en cours » (dérivé, E5.9) ;
+  - délai par appel 120 s ; E5.16 : au plus 11,3 s, médiane 7,4 s ; 60 s depuis E6.2 (valeurs d'E6 ci-dessous) ;
+  - 3 tentatives, attente de 2 s, `Retry-After` honoré jusqu'à 30 s ; remise libérée en échec après 12 min en « en cours » (dérivé, E5.9 ; 9 min 20 s depuis E6.6) ;
   - garde des commandes à 200 requêtes par jour UTC, essai de connexion compris ; pause de 1 s entre deux appels d'essai ;
   - écart adverse permis : 1 niveau ; E5.16 : dépassé une fois sur 21 (a03, écart 2), suites proposées dans [l'essai](annexe-essais-ia.md) ;
   - `refused` jamais relancé ; budget (limite de dépense, plafond du palier, crédit) classé `configuration`, jamais relancé ; clé `GRADING_ANTHROPIC_API_KEY`.
 - **Mesures d'E5.16** (2026-10-19, [essai](annexe-essais-ia.md)) : 60 appels, 60 propositions conformes, aucun refus (jeu sensible compris) ; coût estimé 0,065 $, soit environ 0,0011 $ par copie ; Console : 0,07 $ dépensés, crédit 99,94 $.
+- **Valeurs [P] d'E6**, consignées le 2026-10-20 (`src/config/provisional.ts` ; choix et écarts : plan d'E6 et son historique) :
+  - un run Workflows par déclenchement, une seule étape d'IA, jamais relancée par Workflows ; au plus 10 copies en évaluation (choisi avec vous le 2026-10-19), une copie sans place redemande toutes les 15 s, 20 fois au plus ;
+  - délai par appel 60 s ; étape au plus 260 s (3 appels, 2 attentes, une alerte bornée à 10 s comptée deux fois), sous les 300 s de Vercel ; remise libérée en échec après 9 min 20 s en « en cours » ;
+  - balayage à chaque déclenchement et par le cron (production seulement) : remise reçue relancée après 10 min, 20 au plus par passage, chacune datée pour n'être reprise qu'après un nouveau délai (E6.6) ;
+  - plafond de 5 $ par mois UTC (choisi avec vous le 2026-10-19), sur les appels à Anthropic, quel que soit le prestataire en service : tokens des exécutions, plus chaque appel sans usage connu (délai dépassé, essai, résultat non enregistré, compté par `ai_request_sent`) au plafond d'un appel, 5 000 tokens d'entrée et `max_tokens` en sortie, environ 0,003 $ (E6.6) ;
+  - disjoncteur : 3 copies en échec `configuration` ou `rejected` en 1 h ; alertes aux administrateurs (plafond, disjoncteur, IA impossible à créer), un email par période, enregistré une fois envoyé ;
+  - budget du prestataire (402, limite de dépense, plafond du palier, crédit épuisé quel que soit le statut) → « IA indisponible » ; `truncated` jamais relancé ; `Retry-After` au-delà de 30 s arrête les tentatives ;
+  - relance et relancement : une demande à usage unique enregistrée par le professeur ; relancement après une erreur de budget proposé seulement quand une évaluation du même prestataire a abouti depuis.
+- **Mesures d'E6.4** (2026-10-20, [lot mesuré](annexe-essais-ia.md)) : environ 0,0011 $ par copie ; le plafond de 5 $ permet environ 4 600 copies par mois, Workflows Hobby environ 6 700.
+- **Routes de Workflows.** Générées par `withWorkflow`, elles ne vérifient aucune signature de livraison (sources de `@vercel/queue` lues le 2026-10-20). Sur Vercel, le déclencheur de file les rend privées, invocables par la file seule ([Queues](https://vercel.com/docs/queues/quickstart), lu le 2026-10-20 ; documenté, non testé) ; en local, ouvertes. La prise en charge ne fait donc confiance à aucun message : elle n'évalue que ce qui était dû (E6.6).
 - **Fiche DON-02 d'Anthropic**, lue le 2026-10-19 (« résumé » : page lue en résumé seulement) :
   - **conditions** : une organisation de la Console relève des [Commercial Terms](https://www.anthropic.com/legal/commercial-terms) (résumé), ses crédits des [Supplemental Credit Terms](https://www.anthropic.com/legal/credit-terms) ; que l'API payée par le crédit Max relève des premières est une déduction, à vérifier ;
   - **entraînement** : aucun sur les données de l'API par défaut, sauf retour envoyé ou accord explicite ([entraînement](https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training), résumé) ;
@@ -96,6 +106,7 @@ Projet académique d'un collègue, qui joue le rôle du « client ». Vous êtes
 - région de la base Neon ;
 - limites de poids et de pages des images (TRT-02) ;
 - événements par copie sur Vercel (mesurés en Local World en E6.4, même décompte supposé) ;
+- routes de Workflows privées sur Vercel : documenté, non testé (§3) ;
 - lisibilité d'une photo réduite (E9.0, puis E9).
 
 Les pages officielles ont été lues par extraction. Les chiffres de Gmail SMTP viennent de blogs, pas de Google. Pour Anthropic (2026-10-19), la confiance de chaque fait (lu en entier, par extraits ou en résumé seulement) est dans [annexe-ia-anthropic.md](annexe-ia-anthropic.md) ; la Console a été relevée par vous le 2026-10-19, pas par moi. Pour OpenRouter : §3 au commit `85b60c4`.

@@ -852,6 +852,8 @@ Ne modifie rien. Renvoie d'abord la revue.
 ```
 Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour les valeurs provisoires et les mesures.
 
+Revue faite le 2026-10-20 (`feature-reviewer`) : aucun bloquant, 2 majeurs, 6 mineurs, tous corrigés et testés à la demande (commit `2e2d073`, historique du plan d'E6). T4 : le majeur douteux (livraison forgée vers les routes de Workflows) n'est pas reproductible sur Vercel, où le déclencheur de file rend la route privée (documenté, non testé) ; en local la route est ouverte, et la prise en charge n'évalue que ce qui était dû. T3 : commentaire de l'inventaire seul. T1 : conforme au plan et aux critères ; complétés : le plafond ne prend plus les envois d'OpenRouter pour des appels sans usage, crédit épuisé quel que soit le statut, tests de la route cron et d'un `start()` en échec, E2E sur les quatre états d'échec ; écarts notés sans correction : délai mesuré depuis la version évaluée, contre-épreuves du double déclenchement et des 10 places plus faibles qu'écrit ; à trancher : alerte « prestataire injoignable » (NFR-EXP-02), relance du professeur abandonnée après 5 min sans place. T5 : valeurs et mesures d'E6 consignées (`stack-technologique.md` §3, `fonctionnalites.md` §5.4, §5.5, PRC-02 R4, `besoins-non-fonctionnels.md` EXP-02).
+
 ---
 
 ## E7 à E11 — Squelette

@@ -203,6 +203,8 @@ L = lecture, É = écriture, — = refus (test négatif exécutable). « Propri�
 | Journal | — | — | L (ses copies) | — | — | — |
 | Rubrique | L | L | L | L | L | — |
 
+[P, E6.3, consigné le 2026-10-20] Relance, relancement et évaluation manuelle (PRC-02) relèvent de « Évaluation non publiée » en écriture ; la liste des copies à relancer, de « Remise et images » en lecture. Le traitement automatique (transitions 2, 5, 6, 7) agit sans acteur ; il ne reprend une copie en échec que sur la demande que le professeur a enregistrée (E6.6).
+
 ### 5.5 États de la remise (internes)
 
 États : **À remettre** ; **Remise reçue** ; **Transcription en cours** (image) ; **Transcription échouée** ; **Évaluation en cours** ; **Évaluation échouée** ; **Non évaluable / IA indisponible** (avec sa cause) ; **À valider** ; **Validée** ; **Publiée**. Indicateur transversal : **en retard** (D8). Pas d'état « brouillon » : la remise est atomique.
@@ -215,7 +217,7 @@ L = lecture, É = écriture, — = refus (test négatif exécutable). « Propri�
 | 4 | Transcription échouée -> Transcription en cours, ou À valider | Relance du professeur, ou évaluation manuelle (REV-06). |
 | 5 | Évaluation en cours -> À valider, ou Évaluation échouée, ou Non évaluable / IA indisponible | Sortie conforme (EVL-03) ; échec (PRC-02) ; texte sans contenu évaluable ou devoir en français sans rubrique française validée (contrôlé avant l'appel à l'IA, après transcription pour une image). |
 | 6 | Évaluation échouée -> Évaluation en cours, ou À valider | Relance du professeur, ou évaluation manuelle (REV-06). |
-| 7 | Non évaluable / IA indisponible -> À valider, ou Évaluation en cours | Évaluation manuelle ; ou relance proposée au professeur quand la cause disparaît (rubrique française validée, PRC-02). Le texte existe déjà. |
+| 7 | Non évaluable / IA indisponible -> À valider, ou Évaluation en cours | Évaluation manuelle ; ou relance proposée au professeur quand la cause disparaît (rubrique française validée ; ou IA de nouveau disponible : plafond levé, et après une erreur de budget du prestataire, une évaluation réussie depuis [P, E6.3] ; PRC-02). Le texte existe déjà. |
 | 8 | À valider -> Validée | Le professeur valide (REV-05). |
 | 9 | Validée -> Publiée | Le professeur publie (PUB-01). « Valider et publier » enchaîne 8 et 9 en une action (D6). |
 | 10 | Publiée -> Validée ; Validée ou Publiée -> À valider | Retrait de la publication (PUB-01) ; modification de l'évaluation (REV-03, Q8). |
@@ -507,7 +509,7 @@ Le système réessaie un traitement échoué un nombre borné de fois, puis le s
 - **R1** [P] Tentatives et durée maximale par étape : à définir. Aucune remise ne reste indéfiniment « en cours ».
 - **R2** [P] États distincts : « transcription échouée » et « évaluation échouée » (techniques, relançables) ; « non évaluable » ou « IA indisponible » (cause connue, sans relance en boucle). Visibles du professeur (REV-01), jamais de l'élève (SUB-01).
 - **R3** [P] Le professeur peut relancer depuis un échec ou passer à l'évaluation manuelle (REV-06) ; pas de relance d'une copie « À valider » (Q4).
-- **R4** [P] Quand la rubrique française est activée, le professeur se voit proposer de relancer l'évaluation IA des copies « IA indisponible » pour cette cause ; jamais automatiquement, jamais sur une copie déjà évaluée à la main.
+- **R4** [P] Quand la rubrique française est activée, le professeur se voit proposer de relancer l'évaluation IA des copies « IA indisponible » pour cette cause ; jamais automatiquement, jamais sur une copie déjà évaluée à la main. De même quand l'IA redevient disponible (plafond levé ; après une erreur de budget du prestataire, une fois qu'une évaluation a abouti depuis) [P, E6.3]. Jamais pour « sans contenu ». Une demande de relance ne donne qu'une évaluation, même cliquée deux fois [P, E6.6].
 - **CA1** Échec technique répété : après le nombre borné de tentatives, la remise passe en échec visible du professeur.
 - **CA2** Relance manuelle réussie : la remise reprend son cycle jusqu'à « À valider ». Panne du service d'IA pendant un lot : aucune remise perdue, les remises touchées passent en échec visible.
 - **CA3** Rubrique française activée : la relance est proposée pour les copies « IA indisponible » non évaluées à la main, et pour elles seules.
