@@ -91,6 +91,8 @@ const MESSAGES: Record<CallError, string> = {
   rejected: "The AI refused the request.",
   configuration: "The AI refused the access: key, model or account.",
   refused: "The AI declined to evaluate this text.",
+  budget: "The AI refused the call: spending limit or credit reached.",
+  truncated: "The AI's answer was cut at its length limit.",
 };
 
 /** A failed call, by kind only (EVL-03 R3). No cause attached: the provider's error stays behind. */

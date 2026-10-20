@@ -2,8 +2,9 @@ import { AI_INFERENCE_GEO, AI_MODEL } from "@/config/decisions";
 import type { Usage } from "@/server/ai";
 
 // Published prices of the model (a fact, neither [D] nor [P]): used for the
-// estimated cost of the trial only (E5.14), never stored, never billed from.
-// Read on 2026-10-19; to read again before a trial that relies on them.
+// estimated cost of the trial (E5.14) and for the monthly cost cap of the
+// application (E6, EXP-02); never stored, never billed from. Read on
+// 2026-10-19; to read again before a trial, or when the cap relies on them.
 
 export const PRICES = {
   model: AI_MODEL,
@@ -42,4 +43,16 @@ export function estimateCostUsd(usage: Usage | null | undefined): number | null 
   const cost =
     (input * rates.input + output * rates.output + cacheRead * rates.cacheRead + cacheWrite * rates.cacheWrite5m) / 1_000_000;
   return geo === "us" ? cost * PRICES.usMultiplier : cost;
+}
+
+/**
+ * The estimated cost of stored runs in USD (E6, the monthly cost cap), from
+ * their sums only: the prompt at the input price (the cache read, cheaper, is
+ * counted in it: an estimate by excess), the completion at the output price,
+ * inference_geo "us". Each prompt stays far under the long-context threshold
+ * (about 2 000 tokens in E5.16), so its prices are not used.
+ */
+export function estimateRunsCostUsd(promptTokens: number, completionTokens: number): number {
+  const cost = (promptTokens * PRICES.perMillion.input + completionTokens * PRICES.perMillion.output) / 1_000_000;
+  return AI_INFERENCE_GEO === "us" ? cost * PRICES.usMultiplier : cost;
 }

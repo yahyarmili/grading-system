@@ -95,13 +95,12 @@ export const ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 
 /**
  * [PROVISIONAL, [P]] Longest wait for one call to the AI, answer read
- * included; under Vercel's 300 s for one call. Raised from 60 s on
- * 2026-10-17 at the user's request: the answers of the first trial run that
- * arrived took 39 to 57 s, and 27 calls in 34 reached 60 s
- * (conception/annexe-essais-ia.md). Several attempts of one evaluation may
- * now exceed 300 s together: to handle when E6 runs it on Vercel.
+ * included. 120 s from 2026-10-17 (the slow OpenRouter trial); back to 60 s in
+ * E6.2 (plan of E6 §9): with Anthropic, E5.16 measured 11.3 s at most, and an
+ * answer up to max_tokens takes about 30 s. With the attempts below, one
+ * evaluation fits in a Vercel function's 300 s (EVALUATION_STEP_MAX_MS).
  */
-export const AI_CALL_TIMEOUT_MS = 120_000;
+export const AI_CALL_TIMEOUT_MS = 60_000;
 
 /**
  * [PROVISIONAL, [P] arbitrary] How much effort the model spends (low to max;
@@ -133,17 +132,79 @@ export const AI_MAX_ATTEMPTS = 3;
 /** [PROVISIONAL, [P] arbitrary] Wait before a new attempt, unless the provider asked for one (Retry-After). */
 export const AI_RETRY_DELAY_MS = 2_000;
 
-/** [PROVISIONAL, [P] arbitrary] Longest wait asked by the provider (Retry-After) that is honoured; longer is cut to this. */
+/**
+ * [PROVISIONAL, [P] arbitrary] Longest wait asked by the provider (Retry-After)
+ * that is honoured. Longer: the attempts stop on rate_limited, the submission
+ * ends evaluation_failed and the teacher retries it (E6.2, chosen with the
+ * user on 2026-10-19); it was cut to this value and retried before.
+ */
 export const AI_RETRY_MAX_WAIT_MS = 30_000;
 
 /**
- * [PROVISIONAL, [P] derived] How long a submission may stay evaluating before
- * it is released to evaluation_failed (PRC-02 R1): the longest evaluation
- * (every attempt at its timeout, the longest wait between two), plus 5 minutes
- * for the database and the validator. 12 minutes with the values above.
+ * [PROVISIONAL, [P] derived] The longest evaluation step: every attempt at its
+ * timeout, the longest wait between two. 240 s with the values above, under
+ * the 300 s of a Vercel Hobby function (src/server/evaluation/orchestrate.test.ts).
  */
-export const EVALUATION_STUCK_AFTER_MS =
-  AI_MAX_ATTEMPTS * AI_CALL_TIMEOUT_MS + (AI_MAX_ATTEMPTS - 1) * AI_RETRY_MAX_WAIT_MS + 5 * 60_000;
+export const EVALUATION_STEP_MAX_MS = AI_MAX_ATTEMPTS * AI_CALL_TIMEOUT_MS + (AI_MAX_ATTEMPTS - 1) * AI_RETRY_MAX_WAIT_MS;
+
+/** A Vercel Hobby function's longest duration (a fact, read 2026-10-19: https://vercel.com/docs/functions/limitations). */
+export const VERCEL_FUNCTION_MAX_MS = 300_000;
+
+/**
+ * [PROVISIONAL, [P] derived] How long a submission may stay evaluating before
+ * it is released to evaluation_failed (PRC-02 R1): the longest step, plus 5
+ * minutes for the database and the validator. 9 minutes with the values
+ * above, beyond a function's 300 s: a step still running is never released.
+ */
+export const EVALUATION_STUCK_AFTER_MS = EVALUATION_STEP_MAX_MS + 5 * 60_000;
+
+// ---------------------------------------------------------------------------
+// Automatic evaluation by batches (E6). PROVISIONAL, [P]: plan of E6 §9.
+
+/**
+ * [PROVISIONAL, [P], chosen with the user on 2026-10-19] Most submissions
+ * evaluating at once (PRC-01 R3); one stuck beyond EVALUATION_STUCK_AFTER_MS
+ * holds no place. The others wait their turn.
+ */
+export const EVALUATION_CONCURRENCY = 10;
+
+/** [PROVISIONAL, [P] arbitrary] Wait of a run that found no free place, before it asks again. */
+export const EVALUATION_BUSY_WAIT_MS = 15_000;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Times a run asks for a place: 5 minutes at
+ * most, then the submission stays received and the sweep starts it again
+ * (TRIGGER_GRACE_MS).
+ */
+export const EVALUATION_BUSY_MAX_WAITS = 20;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] A text submission still received this long
+ * after it was submitted or replaced is started again by the sweep: its
+ * trigger failed, its run gave up waiting, or the process stopped. Longer
+ * than a run's waits (EVALUATION_BUSY_WAIT_MS × EVALUATION_BUSY_MAX_WAITS).
+ */
+export const TRIGGER_GRACE_MS = 10 * 60_000;
+
+/** [PROVISIONAL, [P] arbitrary] Most received submissions one sweep starts again. */
+export const SWEEP_RESTART_LIMIT = 20;
+
+/**
+ * [PROVISIONAL, [P], chosen with the user on 2026-10-19] Most the application
+ * may spend on the AI per UTC month, in USD, estimated from the tokens of
+ * Anthropic's runs (EXP-02). Reached: no more calls, the submissions become
+ * "AI unavailable". Under the workspace's own spending limit (10 USD).
+ */
+export const AI_MONTHLY_COST_CAP_USD = 5;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] The circuit breaker opens when this many
+ * distinct submissions failed on configuration or rejected (a wrong key,
+ * model or request) within AI_BREAKER_WINDOW_MS: no more calls until the
+ * window has passed.
+ */
+export const AI_BREAKER_FAILURES = 3;
+export const AI_BREAKER_WINDOW_MS = 60 * 60_000;
 
 /**
  * [PROVISIONAL, [P] arbitrary] Edits allowed between a quote and the text, per

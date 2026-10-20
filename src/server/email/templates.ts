@@ -77,3 +77,22 @@ ${url}
 This link works once and expires in ${validFor}.`,
   };
 }
+
+/**
+ * E6 (EXP-02): the AI stopped for the whole application, to the
+ * administrators. No student, submission or content: what happened and when
+ * it ends only.
+ */
+export function aiAlertMessage(to: string, alert: "cost_cap" | "breaker", detail: string): EmailMessage {
+  const what =
+    alert === "cost_cap"
+      ? {
+          subject: "AI stopped: monthly cost cap reached",
+          body: `The estimated cost of the AI this month reached its cap (${detail}). New submissions become "AI unavailable" without any call until the first day of next month (UTC), or until the cap is raised. Teachers may then relaunch them.`,
+        }
+      : {
+          subject: "AI stopped: repeated access errors",
+          body: `Several submissions failed in a row on an access error of the AI (key, model or request refused) (${detail}). No call is made until the window has passed; new submissions end "Evaluation failed". Check the key and the model.`,
+        };
+  return { kind: "ai_alert", to, subject: what.subject, text: `Hello,\n\n${what.body}` };
+}

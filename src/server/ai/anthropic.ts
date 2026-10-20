@@ -281,7 +281,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /**
  * The answer, or the kind of its failure. The stop reason is read before the
  * content: a refusal is a failure (billed, its usage carried); a cut answer
- * goes to the validator; any other reason is a failure of the service.
+ * (max_tokens) is "truncated", billed too, never retried [P] (plan of E6 §4);
+ * any other reason is a failure of the service.
  */
 export function readMessage(message: unknown): EvaluationResponse {
   if (!isRecord(message) || message.type !== "message") throw new EvaluatorError("unavailable");
@@ -291,7 +292,10 @@ export function readMessage(message: unknown): EvaluationResponse {
     const category = identifierOf(isRecord(message.stop_details) ? message.stop_details.category : undefined) ?? "null";
     throw new EvaluatorError("refused", undefined, `refusal/${category}`, { stopReason: "refusal", usage: usage ?? undefined });
   }
-  if (stopReason !== "end_turn" && stopReason !== "max_tokens") {
+  if (stopReason === "max_tokens") {
+    throw new EvaluatorError("truncated", undefined, "stop_reason/max_tokens", { stopReason, usage: usage ?? undefined });
+  }
+  if (stopReason !== "end_turn") {
     const code = identifierOf(stopReason);
     throw new EvaluatorError("unavailable", undefined, code ? `stop_reason/${code}` : undefined);
   }

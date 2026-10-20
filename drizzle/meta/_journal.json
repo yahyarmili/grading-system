@@ -92,6 +92,13 @@
       "when": 1792419596421,
       "tag": "0012_add_anthropic_and_refused",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792453885388,
+      "tag": "0013_add_ai_unavailable",
+      "breakpoints": true
     }
   ]
 }

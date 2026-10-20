@@ -1,10 +1,10 @@
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
-import type { AiProvider, EvaluationError, NotAssessableCause, ProposalAlert } from "@/lib/evaluation";
+import { and, count, eq, sql } from "drizzle-orm";
+import type { AiProvider, EvaluationError, EvaluationRef, NotAssessableCause, ProposalAlert } from "@/lib/evaluation";
 import type { CriterionId, Level } from "@/lib/rubric";
 import type { EvaluationInput } from "@/server/ai/request";
 import { db } from "@/server/db/client";
-import { aiProposals, assignments, evaluationRuns, submissions, submissionVersions } from "@/server/db/schema";
+import { aiProposals, assignments, evaluationRuns, securityEvents, submissions, submissionVersions, users } from "@/server/db/schema";
 import { applyTransition } from "../submissions/transitions";
 
 // System processing of the evaluation (§5.5, transitions 2 and 5): no Actor,
@@ -49,17 +49,41 @@ export async function readEvaluationInput(
 /** A submission taken for evaluation: the version evaluated and its whitelist. */
 export type EvaluationClaim = { submissionId: string; versionNumber: number; input: EvaluationInput };
 
+/** The advisory lock that serializes the claims while they count the places taken (E6): a constant key. */
+const EVALUATION_SLOTS_LOCK = 0x4556_414c;
+
+/** Submissions evaluating, claimed less than `stuckAfterMs` ago: a stuck one holds no place. */
+const evaluatingSince = (stuckAfterMs: number) =>
+  and(
+    eq(submissions.status, "evaluating"),
+    sql`${submissions.updatedAt} > now() - make_interval(secs => ${stuckAfterMs / 1000})`,
+  );
+
+export type ClaimOptions = {
+  /** E6: the version a submission or replacement triggered; any other active version is not claimed. */
+  expectedVersion?: number;
+  /** E6 (PRC-01 R3): most submissions evaluating at once; "busy" when they are all taken. */
+  slots?: { concurrency: number; stuckAfterMs: number };
+};
+
 /**
  * Transition 2, received → evaluating, for a text. One transaction: the row
  * is locked first, then the whitelist is read in a later statement (a fresh
  * snapshot), then the transition is guarded by the version read. Null when
  * the submission is not received or its active version is not a text. Two
  * claims at once give one evaluation; a replacement at the same time is
- * waited for, never missed. With `expectedVersion` (E6: the version a
- * submission or replacement triggered), null as well when another version is
- * active: a trigger of a replaced text evaluates nothing (SUB-05 R2).
+ * waited for, never missed. With `expectedVersion`, null as well when another
+ * version is active: a trigger of a replaced text evaluates nothing (SUB-05
+ * R2). With `slots`, the claims take an advisory lock in turn (held until
+ * their commit, valid behind Neon's pooler), then count the places taken:
+ * "busy" when none is free, and nothing changes. A count without the lock
+ * would let two claims in at 9.
  */
-export async function claimForEvaluation(submissionId: string, expectedVersion?: number): Promise<EvaluationClaim | null> {
+export async function claimForEvaluation(
+  submissionId: string,
+  opts: ClaimOptions = {},
+): Promise<EvaluationClaim | "busy" | null> {
+  const { expectedVersion, slots } = opts;
   return db.transaction(async (tx) => {
     const [locked] = await tx
       .select({ id: submissions.id })
@@ -73,6 +97,11 @@ export async function claimForEvaluation(submissionId: string, expectedVersion?:
       )
       .for("update");
     if (!locked) return null;
+    if (slots) {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${EVALUATION_SLOTS_LOCK})`);
+      const [taken] = await tx.select({ count: count() }).from(submissions).where(evaluatingSince(slots.stuckAfterMs));
+      if (taken.count >= slots.concurrency) return "busy";
+    }
     const read = await readEvaluationInput(tx, submissionId);
     if (!read) return null;
     const claimed = await applyTransition(tx, submissionId, 2, "evaluating", {
@@ -128,9 +157,15 @@ export type ProposalRecord = {
   proposedGrade: number;
 };
 
+/**
+ * `unavailable` (E6): the attempts failed because the AI is unavailable to
+ * the application (a budget error, or the monthly cost cap reached after a
+ * call): the run is a failure, the submission becomes not assessable, "AI
+ * unavailable", and waits for the teacher's relaunch (transition 7).
+ */
 export type EvaluationResult =
   | { outcome: "proposed"; run: RunRecord; proposal: ProposalRecord }
-  | { outcome: "failed"; run: RunRecord }
+  | { outcome: "failed"; run: RunRecord; unavailable?: boolean }
   | { outcome: "not_assessable"; cause: NotAssessableCause; run: RunRecord };
 
 /**
@@ -200,7 +235,8 @@ export async function recordEvaluation(claim: EvaluationClaim, result: Evaluatio
       proposalId = proposal.id;
     }
 
-    const to = STATUS_OF[result.outcome];
+    const unavailable = result.outcome === "failed" && result.unavailable === true;
+    const to = unavailable ? "not_assessable" : STATUS_OF[result.outcome];
     const moved = await applyTransition(tx, submissionId, 5, to, {
       where: eq(submissions.currentVersion, versionNumber),
       set:
@@ -208,7 +244,9 @@ export async function recordEvaluation(claim: EvaluationClaim, result: Evaluatio
           ? { currentProposalId: proposalId }
           : result.outcome === "not_assessable"
             ? { notAssessableCause: result.cause }
-            : {},
+            : unavailable
+              ? { notAssessableCause: "ai_unavailable" as const }
+              : {},
     });
     return { status: moved ? to : "stale", runId: run.id, proposalId };
   });
@@ -257,5 +295,97 @@ export async function releaseStuckEvaluations(afterMs: number): Promise<string[]
       if (await applyTransition(tx, id, 5, "evaluation_failed", { where: stuck })) released.push(id);
     }
     return released;
+  });
+}
+
+/**
+ * The text submissions still received `graceMs` after they were submitted or
+ * replaced (E6, the sweep): their trigger failed, their run gave up waiting
+ * for a place, or the process stopped. The oldest first, `limit` at most;
+ * identifiers and the active version only. updated_at of a received row is
+ * set by the application's clock: off by seconds at most, under a grace of
+ * minutes.
+ */
+export async function listStaleReceived(graceMs: number, limit: number): Promise<EvaluationRef[]> {
+  const rows = await db
+    .select({ submissionId: submissions.id, versionNumber: submissions.currentVersion })
+    .from(submissions)
+    .innerJoin(
+      submissionVersions,
+      and(eq(submissionVersions.submissionId, submissions.id), eq(submissionVersions.number, submissions.currentVersion)),
+    )
+    .where(
+      and(
+        eq(submissions.status, "received"),
+        eq(submissionVersions.mode, "text"),
+        sql`${submissions.updatedAt} < now() - make_interval(secs => ${graceMs / 1000})`,
+      ),
+    )
+    .orderBy(submissions.updatedAt, submissions.id)
+    .limit(limit);
+  return rows;
+}
+
+/** What the guard of the AI reads (E6, EXP-02), counts only. */
+export type AiGuardCounts = {
+  /** Tokens of Anthropic's runs since the first day of the UTC month: what the application spent. */
+  promptTokens: number;
+  completionTokens: number;
+  /** Distinct submissions whose run with this provider failed last on configuration or rejected, within the window. */
+  breakerFailures: number;
+};
+
+/**
+ * One query for the cost cap and the circuit breaker. The cost counts
+ * Anthropic's runs whatever the provider in use: it is real money; the
+ * breaker counts the provider in use only (a simulated 401 never stops a
+ * real provider, and the other way round).
+ */
+export async function readAiGuardCounts(provider: AiProvider, breakerWindowMs: number): Promise<AiGuardCounts> {
+  const monthStart = sql`date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'`;
+  const lastError = sql`${evaluationRuns.attemptErrors}[cardinality(${evaluationRuns.attemptErrors})]`;
+  const [row] = await db
+    .select({
+      promptTokens: sql<string>`coalesce(sum(${evaluationRuns.promptTokens}) filter (where ${evaluationRuns.provider} = 'anthropic' and ${evaluationRuns.createdAt} >= ${monthStart}), 0)`,
+      completionTokens: sql<string>`coalesce(sum(${evaluationRuns.completionTokens}) filter (where ${evaluationRuns.provider} = 'anthropic' and ${evaluationRuns.createdAt} >= ${monthStart}), 0)`,
+      breakerFailures: sql<number>`(count(distinct ${evaluationRuns.submissionId}) filter (where ${evaluationRuns.provider} = ${provider} and ${evaluationRuns.outcome} = 'failed' and ${lastError} in ('configuration', 'rejected') and ${evaluationRuns.createdAt} > now() - make_interval(secs => ${breakerWindowMs / 1000})))::int`,
+    })
+    .from(evaluationRuns)
+    .where(
+      sql`${evaluationRuns.createdAt} >= least(${monthStart}, now() - make_interval(secs => ${breakerWindowMs / 1000}))`,
+    );
+  return {
+    promptTokens: Number(row.promptTokens),
+    completionTokens: Number(row.completionTokens),
+    breakerFailures: row.breakerFailures,
+  };
+}
+
+/** The two alerts of the AI to the administrators (E6). */
+export type AiAlert = "ai_cost_cap_reached" | "ai_breaker_tripped";
+
+/**
+ * Records an alert once per period (the UTC month for the cost cap, the
+ * window for the breaker) and gives the administrators' addresses to email,
+ * or none when the period already has it. An advisory lock per alert lets
+ * one of two evaluations at once record it. The security log keeps the event,
+ * without subject or content.
+ */
+export async function claimAiAlert(alert: AiAlert, windowMs: number): Promise<string[]> {
+  const since =
+    alert === "ai_cost_cap_reached"
+      ? sql`date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'`
+      : sql`now() - make_interval(secs => ${windowMs / 1000})`;
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${EVALUATION_SLOTS_LOCK}, hashtext(${alert}))`);
+    const [already] = await tx
+      .select({ id: securityEvents.id })
+      .from(securityEvents)
+      .where(and(eq(securityEvents.type, alert), sql`${securityEvents.createdAt} >= ${since}`))
+      .limit(1);
+    if (already) return [];
+    await tx.insert(securityEvents).values({ type: alert });
+    const admins = await tx.select({ email: users.email }).from(users).where(eq(users.role, "admin"));
+    return admins.map((admin) => admin.email);
   });
 }

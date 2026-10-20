@@ -210,9 +210,13 @@ describe("the answer", () => {
     expect(JSON.stringify(response)).not.toContain(ECHO);
   });
 
-  it("leaves a cut answer (max_tokens) to the validator, as it came", async () => {
-    const { evaluator } = adapter(() => message('{"ok":', { stop_reason: "max_tokens" }));
-    expect(await call(evaluator)).toMatchObject({ content: '{"ok":', stopReason: "max_tokens" });
+  it("fails a cut answer (max_tokens) as truncated, with its billed usage and without its content (E6)", async () => {
+    const { evaluator } = adapter(() => message(`{"ok": "${ECHO}`, { stop_reason: "max_tokens" }));
+    const error = (await call(evaluator).catch((e: unknown) => e)) as EvaluatorError;
+    expect(error).toBeInstanceOf(EvaluatorError);
+    expect(error).toMatchObject({ kind: "truncated", providerCode: "stop_reason/max_tokens", stopReason: "max_tokens" });
+    expect(error.usage?.totalTokens).toBeGreaterThan(0);
+    expect(JSON.stringify(error)).not.toContain(ECHO);
   });
 
   it("says nothing it was not told, or told in a form that is not an identifier", async () => {
@@ -346,15 +350,15 @@ describe("no hidden retry: one HTTP request per call", () => {
 
 describe("each failure has a kind, and carries nothing (EVL-03 R3)", () => {
   it.each([
-    ["400, spending limit", () => json(400, failure("invalid_request_error", {}, "You have reached your specified workspace API usage limits.")), "configuration", "invalid_request_error/spend_limit"],
-    ["400, no credit", () => json(400, failure("invalid_request_error", {}, "Your credit balance is too low to access the API.")), "configuration", "invalid_request_error/credit_exhausted"],
+    ["400, spending limit", () => json(400, failure("invalid_request_error", {}, "You have reached your specified workspace API usage limits.")), "budget", "invalid_request_error/spend_limit"],
+    ["400, no credit", () => json(400, failure("invalid_request_error", {}, "Your credit balance is too low to access the API.")), "budget", "invalid_request_error/credit_exhausted"],
     ["400", () => json(400, failure("invalid_request_error")), "configuration", "invalid_request_error"],
     ["401", () => json(401, failure("authentication_error")), "configuration", "authentication_error"],
-    ["402", () => json(402, failure("billing_error")), "configuration", "billing_error"],
+    ["402", () => json(402, failure("billing_error")), "budget", "billing_error"],
     ["403", () => json(403, failure("permission_error")), "configuration", "permission_error"],
     ["404", () => json(404, failure("not_found_error")), "configuration", "not_found_error"],
     ["413 from Cloudflare", () => new Response(`<html>${ECHO}</html>`, { status: 413, headers: { "content-type": "text/html" } }), "rejected", undefined],
-    ["429, the tier's spending cap", () => json(429, failure("rate_limit_error", { error_code: "enforced_spend_limit_reached" })), "configuration", "rate_limit_error/enforced_spend_limit_reached"],
+    ["429, the tier's spending cap", () => json(429, failure("rate_limit_error", { error_code: "enforced_spend_limit_reached" })), "budget", "rate_limit_error/enforced_spend_limit_reached"],
     ["429", () => json(429, failure("rate_limit_error"), { "retry-after": "7" }), "rate_limited", "rate_limit_error"],
     ["504", () => json(504, failure("timeout_error")), "timeout", "timeout_error"],
     ["409", () => json(409, failure("conflict_error")), "unavailable", "conflict_error"],

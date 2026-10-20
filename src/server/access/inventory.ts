@@ -37,8 +37,9 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
  * Server entry points: exports of "use server" modules and route handlers,
  * keyed "<file>#<export>". Either the matrix cell they use, or the public
  * flow they serve outside the matrix (§5.1: visitor sign-up, sign-in, recovery).
+ * `system`: called by the platform with a secret, never by a user (E6: the cron).
  */
-export type EntryPoint = { resource: Resource; action: Action } | { public: string };
+export type EntryPoint = { resource: Resource; action: Action } | { public: string } | { system: string };
 
 export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/(auth)/actions.ts#signUpAction": { public: "AUTH-01: student sign-up" },
@@ -66,6 +67,9 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#replaceTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
+  "src/app/api/cron/evaluation-sweep/route.ts#GET": {
+    system: "E6, PRC-01 CA4: Vercel's cron, with CRON_SECRET; releases stuck evaluations and starts again the stale received ones, answers counts only",
+  },
 };
 
 /**
@@ -111,6 +115,9 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/evaluation/system.ts#listReceived": "system processing (§5.5): identifiers of the received submissions of an assignment, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#releaseEvaluation": "system processing (§5.5, transition 5): a claim whose result the database refused twice ends evaluation_failed, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#releaseStuckEvaluations": "system processing (§5.5, transition 5, PRC-02 R1): submissions evaluating for too long end evaluation_failed, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#listStaleReceived": "system processing (E6, the sweep): identifiers and active version of the text submissions still received after the grace, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#readAiGuardCounts": "system processing (E6, EXP-02): token sums of this month's Anthropic runs and the count of access failures, counts only, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#claimAiAlert": "system processing (E6, EXP-02): records the cost cap or breaker alert once per period and gives the administrators' addresses to email, called only by src/server/evaluation/",
 };
 
 /**
@@ -121,7 +128,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
 export const SCRIPTS: Record<string, string> = {
   "scripts/create-admin.ts": "npm run admin:create: the first administrator (Q2), local script only, never a screen",
   "scripts/evaluate.ts":
-    "npm run ai:evaluate: evaluates one or all received submissions of an assignment (transitions 2 and 5) until E6 chains it; the simulator unless --provider anthropic",
+    "npm run ai:evaluate: evaluates one or all received submissions of an assignment (transitions 2 and 5), by hand beside the automatic evaluation of E6 (same claim, cost cap and breaker); the simulator unless --provider anthropic",
   "scripts/ai-trial.ts":
     "npm run ai:trial: connection trial and trial sets (E5.7, E5.14) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
 };

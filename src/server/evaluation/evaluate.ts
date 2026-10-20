@@ -15,6 +15,7 @@ import { buildEvaluationRequest, PROMPT_VERSION } from "@/server/ai/request";
 import {
   claimForEvaluation,
   listReceived,
+  type ClaimOptions,
   recordEvaluation,
   releaseEvaluation,
   releaseStuckEvaluations,
@@ -24,6 +25,7 @@ import {
   type RunRecord,
 } from "@/server/data/evaluation/system";
 import { checkBlockingAlerts, isVeryShort } from "@/server/evaluation/alerts";
+import { aiGuard, type AiGuard } from "@/server/evaluation/budget";
 
 // The evaluation of a submission by the AI (EVL-03), transitions 2 and 5 of
 // §5.5: claim, request built from the whitelist, bounded attempts, answer
@@ -40,6 +42,8 @@ export type EvaluationDeps = {
   sleep: (ms: number) => Promise<void>;
   /** Longest wait for one call, answer read included. */
   callTimeoutMs: number;
+  /** The cost cap and the circuit breaker, asked before each attempt (E6); the application's by default. */
+  guard?: AiGuard;
 };
 
 export const defaultDeps = (evaluator: Evaluator = getEvaluator()): EvaluationDeps => ({
@@ -47,15 +51,28 @@ export const defaultDeps = (evaluator: Evaluator = getEvaluator()): EvaluationDe
   registry: RUBRIC_VERSIONS,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   callTimeoutMs: AI_CALL_TIMEOUT_MS,
+  guard: aiGuard,
 });
 
-/** What happened to one submission, without content: for the command's line and the tests. */
+/**
+ * What happened to one submission, without content: for the command's line,
+ * the workflow and the tests. "busy" (E6): every place was taken, nothing
+ * changed, the submission stays received.
+ */
 export type EvaluationOutcome =
   | { status: "skipped" }
+  | { status: "busy" }
   | { status: "to_review" | "evaluation_failed" | "not_assessable" | "stale"; attempts: number; durationMs: number; errors: EvaluationError[] };
 
-/** Failed calls retried: a later attempt may succeed. configuration, rejected and refused stop at once. */
+/**
+ * Failed calls retried: a later attempt may succeed (a 529 is unavailable).
+ * Never retried: configuration, rejected, refused, budget, truncated, and a
+ * rate limit whose wait is longer than AI_RETRY_MAX_WAIT_MS (E6).
+ */
 const RETRIED = new Set<EvaluationError>(["timeout", "rate_limited", "unavailable"]);
+
+/** The guard closed before any call, by the circuit breaker: no run, the submission ends evaluation_failed. */
+type Halted = { outcome: "halted" };
 
 /** The three flags of the model, as information alerts (EVL-04), best effort; very_short is the system's own (alerts.ts). */
 function flagAlerts(flags: ProposalOutput["flags"]): ProposalAlert[] {
@@ -79,13 +96,18 @@ function addUsage(total: Usage | null, usage: Usage | null): Usage | null {
 
 /**
  * The attempts on one claimed version, AI_MAX_ATTEMPTS at most (R3). Retried:
- * a timeout, an unavailable provider, a rate limit (after its Retry-After,
- * bounded) and any answer the validator refuses. Before each new attempt, the
- * claim is read again: a replaced text stops on "superseded", never sent
- * again. An unexpected error ends the run on "internal".
+ * a timeout, an unavailable provider, a rate limit (after its Retry-After, if
+ * at most AI_RETRY_MAX_WAIT_MS) and any answer the validator refuses. Before
+ * each new attempt, the claim is read again: a replaced text stops on
+ * "superseded", never sent again. Before every attempt, the guard (E6): the
+ * cost cap reached makes the submission "AI unavailable" (a run without a
+ * call before the first, a failed run after), the breaker open stops it
+ * (halted before the first, a failed run after). A budget error makes it "AI
+ * unavailable" too. An unexpected error ends the run on "internal".
  */
-async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: number): Promise<EvaluationResult> {
+async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: number): Promise<EvaluationResult | Halted> {
   const { evaluator } = deps;
+  const guard = deps.guard ?? aiGuard;
   const errors: EvaluationError[] = [];
   let attempts = 0;
   let usage: Usage | null = null;
@@ -130,6 +152,16 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
           return { outcome: "failed", run: run() };
         }
       }
+      const state = await guard(evaluator.provider);
+      if (state === "cost_cap" && attempts === 0) {
+        return {
+          outcome: "not_assessable",
+          cause: "ai_unavailable",
+          run: { ...run(), modelRequested: null, promptVersion: null, rubricVersion: null },
+        };
+      }
+      if (state === "breaker" && attempts === 0) return { outcome: "halted" };
+      if (state !== "open") return { outcome: "failed", run: run(), unavailable: state === "cost_cap" };
       attempts++;
       wait = AI_RETRY_DELAY_MS;
       let content: string;
@@ -147,8 +179,13 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
         // A billed failure (a refusal) still counts in the run's usage.
         usage = addUsage(usage, error.usage ?? null);
         errors.push(error.kind);
+        if (error.kind === "budget") return { outcome: "failed", run: run(), unavailable: true };
         if (!RETRIED.has(error.kind)) break;
-        if (error.kind === "rate_limited") wait = Math.min(error.retryAfterMs ?? AI_RETRY_DELAY_MS, AI_RETRY_MAX_WAIT_MS);
+        if (error.kind === "rate_limited") {
+          // A long wait asked for: stop rather than call again too early (E6, chosen on 2026-10-19 [P]).
+          if ((error.retryAfterMs ?? 0) > AI_RETRY_MAX_WAIT_MS) break;
+          wait = error.retryAfterMs ?? AI_RETRY_DELAY_MS;
+        }
         continue;
       }
       const parsed = parseProposalOutput(content, claim.input.text);
@@ -188,17 +225,26 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
  * evaluation_failed without a run, and the error is thrown; if even that
  * fails, or the process stops, releaseStuckSubmissions frees it later.
  * `expectedVersion`: only that version is claimed, "skipped" otherwise.
+ * `slots` (E6): "busy" when EVALUATION_CONCURRENCY submissions are already
+ * evaluating; nothing changed. The circuit breaker open before any call: no
+ * run, evaluation_failed, for the teacher to retry.
  */
 export async function evaluateSubmission(
   submissionId: string,
   deps: EvaluationDeps = defaultDeps(),
-  opts: { expectedVersion?: number } = {},
+  opts: ClaimOptions = {},
 ): Promise<EvaluationOutcome> {
   const started = performance.now();
-  const claim = await claimForEvaluation(submissionId, opts.expectedVersion);
+  const claim = await claimForEvaluation(submissionId, opts);
+  if (claim === "busy") return { status: "busy" };
   if (!claim) return { status: "skipped" };
 
-  let result = await attempt(claim, deps, started);
+  const tried = await attempt(claim, deps, started);
+  if (tried.outcome === "halted") {
+    const released = await releaseEvaluation(claim);
+    return { status: released ? "evaluation_failed" : "stale", attempts: 0, durationMs: Math.round(performance.now() - started), errors: [] };
+  }
+  let result: EvaluationResult = tried;
   let recorded;
   try {
     recorded = await recordEvaluation(claim, result);
@@ -262,6 +308,7 @@ export function errorKind(error: unknown): string {
 /** One line per submission for the internal command, without text or identity. */
 export function formatOutcomeLine(label: string, outcome: AssignmentOutcome): string {
   if (outcome.status === "skipped") return `${label}: skipped (not received, or not a text)`;
+  if (outcome.status === "busy") return `${label}: busy, still received (every evaluation place taken)`;
   if (outcome.status === "postponed") return `${label}: postponed, still received (daily AI request limit)`;
   if (outcome.status === "error") return `${label}: error (${outcome.kind})`;
   const errors = outcome.errors.length > 0 ? `, errors: ${outcome.errors.join(", ")}` : "";
@@ -271,8 +318,8 @@ export function formatOutcomeLine(label: string, outcome: AssignmentOutcome): st
 /**
  * PRC-02 R1: releases to evaluation_failed the submissions evaluating for
  * longer than the longest evaluation (EVALUATION_STUCK_AFTER_MS [P]): a crash
- * or a stopped process left them. Run by the command before it evaluates;
- * E6 decides when its processing runs it. Identifiers of the released ones.
+ * or a stopped process left them. Run by the command before it evaluates,
+ * and by the sweep (sweep.ts, E6). Identifiers of the released ones.
  */
 export function releaseStuckSubmissions(afterMs: number = EVALUATION_STUCK_AFTER_MS): Promise<string[]> {
   return releaseStuckEvaluations(afterMs);

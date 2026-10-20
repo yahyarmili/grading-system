@@ -16,7 +16,7 @@ export const identifierOf = (value: unknown): string | undefined =>
 
 /** The limit set in the Console (workspace or organization): a 400, never retried. */
 const SPEND_LIMIT = ["You have reached your specified API usage limits", "You have reached your specified workspace API usage limits"];
-/** No credit left; its status is not documented. */
+/** No credit left; its status is not documented: read on any 4xx, a 429 included (plan of E6 §4). */
 const CREDIT_EXHAUSTED = "Your credit balance is too low";
 
 /** The error object of an Anthropic body (its "error" field), or undefined when the body is not one. */
@@ -31,8 +31,11 @@ const startsWithAny = (message: unknown, beginnings: readonly string[]) =>
 
 /**
  * The kind of a failed answer (EVL-03 R3), from its HTTP status and
- * Anthropic's error object (plan §3, point 7). An unknown status never
- * escapes as a provider error.
+ * Anthropic's error object (plan of E5 §3, point 7). Budget [P] (plan of E6
+ * §4): the Console's spending limit, no credit left, the tier's spending cap
+ * and the billing error (402); never retried, the submission becomes "AI
+ * unavailable". A wrong key, model or request stays configuration or
+ * rejected. An unknown status never escapes as a provider error.
  */
 export function errorForStatus(status: number, body?: unknown, retryAfterMs?: number): EvaluatorError {
   const error = errorObjectOf(body);
@@ -41,14 +44,17 @@ export function errorForStatus(status: number, body?: unknown, retryAfterMs?: nu
   const errorCode = identifierOf(details?.error_code);
   const fail = (kind: EvaluatorError["kind"], code = type, wait?: number) => new EvaluatorError(kind, wait, code);
 
+  if (status >= 400 && status < 500 && startsWithAny(error?.message, [CREDIT_EXHAUSTED])) {
+    return fail("budget", `${type ?? "error"}/credit_exhausted`);
+  }
   if (status === 400) {
-    if (startsWithAny(error?.message, SPEND_LIMIT)) return fail("configuration", "invalid_request_error/spend_limit");
-    if (startsWithAny(error?.message, [CREDIT_EXHAUSTED])) return fail("configuration", `${type ?? "invalid_request_error"}/credit_exhausted`);
+    if (startsWithAny(error?.message, SPEND_LIMIT)) return fail("budget", "invalid_request_error/spend_limit");
     return fail("configuration");
   }
-  if (status === 401 || status === 402 || status === 403 || status === 404) return fail("configuration");
+  if (status === 402) return fail("budget");
+  if (status === 401 || status === 403 || status === 404) return fail("configuration");
   if (status === 429) {
-    if (errorCode === "enforced_spend_limit_reached") return fail("configuration", `${type ?? "rate_limit_error"}/${errorCode}`);
+    if (errorCode === "enforced_spend_limit_reached") return fail("budget", `${type ?? "rate_limit_error"}/${errorCode}`);
     return fail("rate_limited", type, retryAfterMs);
   }
   if (status === 504) return fail("timeout");

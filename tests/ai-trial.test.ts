@@ -179,10 +179,18 @@ describe("runTrial", () => {
 
   it("records a rejected answer as it is, without a new attempt, with its stop reason", async () => {
     const simulator = new SimulatorEvaluator();
-    simulator.failNext({ kind: "max_tokens" });
+    simulator.failNext({ kind: "invalid_output", variant: "not_json" });
     const [first, second] = await runTrial(texts.slice(0, 2), 1, deps(simulator));
-    expect(first).toMatchObject({ outcome: "rejected", code: "not_json", requests: 1, stopReason: "max_tokens" });
+    expect(first).toMatchObject({ outcome: "rejected", code: "not_json", requests: 1, stopReason: "end_turn" });
     expect(second).toMatchObject({ outcome: "proposed", requests: 1 });
+  });
+
+  it("records a cut answer as truncated, with its stop reason and what it cost (E6)", async () => {
+    const simulator = new SimulatorEvaluator();
+    simulator.failNext({ kind: "max_tokens" });
+    const [first] = await runTrial(texts.slice(0, 1), 1, deps(simulator));
+    expect(first).toMatchObject({ outcome: "error", code: "truncated", requests: 1, stopReason: "max_tokens" });
+    expect(first.usage?.completionTokens).toBeGreaterThan(0);
   });
 
   it("counts the refusals by category, null included, with what they cost, apart from the failed calls", async () => {

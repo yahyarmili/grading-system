@@ -78,18 +78,18 @@ describe("injected faults", () => {
 
   it.each([
     [529, "unavailable", "overloaded_error"],
-    [402, "configuration", "billing_error"],
-  ] as const)("an HTTP %i fails as %s, with Anthropic's error type (E5.12)", async (status, kind, code) => {
+    [402, "budget", "billing_error"],
+  ] as const)("an HTTP %i fails as %s, with Anthropic's error type (E5.12, E6)", async (status, kind, code) => {
     const simulator = new SimulatorEvaluator();
     simulator.failNext({ kind: "error", status });
     await expect(simulator.evaluate(request(TEXT), context())).rejects.toMatchObject({ kind, providerCode: code });
   });
 
-  it("fails on the Console's spending limit as a configuration", async () => {
+  it("fails on the Console's spending limit as budget (E6)", async () => {
     const simulator = new SimulatorEvaluator();
     simulator.failNext({ kind: "spend_limit" });
     await expect(simulator.evaluate(request(TEXT), context())).rejects.toMatchObject({
-      kind: "configuration",
+      kind: "budget",
       providerCode: "invalid_request_error/spend_limit",
     });
   });
@@ -107,12 +107,12 @@ describe("injected faults", () => {
     expect(error.message).toBe("The AI declined to evaluate this text.");
   });
 
-  it("cuts its answer at max_tokens: a 200 whose JSON is incomplete", async () => {
+  it("cuts its answer at max_tokens: truncated, with a billed usage (E6)", async () => {
     const simulator = new SimulatorEvaluator();
     simulator.failNext({ kind: "max_tokens" });
-    const response = await simulator.evaluate(request(TEXT), context());
-    expect(response.stopReason).toBe("max_tokens");
-    expect(() => JSON.parse(response.content)).toThrow();
+    const error = (await simulator.evaluate(request(TEXT), context()).catch((e: unknown) => e)) as EvaluatorError;
+    expect(error).toMatchObject({ kind: "truncated", stopReason: "max_tokens", providerCode: "stop_reason/max_tokens" });
+    expect(error.usage?.completionTokens).toBeGreaterThan(0);
     expect((await simulator.evaluate(request(TEXT), context())).stopReason).toBe("end_turn");
   });
 

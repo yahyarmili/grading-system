@@ -14,15 +14,17 @@ const body = (type: string, message = MARKER, details?: unknown) => ({
 
 describe("errorForStatus", () => {
   it.each([
-    ["400, the workspace's spending limit", 400, body("invalid_request_error", "You have reached your specified workspace API usage limits. You will regain access on 2026-11-01."), "configuration", "invalid_request_error/spend_limit"],
-    ["400, the organization's spending limit", 400, body("invalid_request_error", "You have reached your specified API usage limits. You will regain access on 2026-11-01."), "configuration", "invalid_request_error/spend_limit"],
-    ["400, no credit left", 400, body("invalid_request_error", "Your credit balance is too low to access the Anthropic API."), "configuration", "invalid_request_error/credit_exhausted"],
+    ["400, the workspace's spending limit", 400, body("invalid_request_error", "You have reached your specified workspace API usage limits. You will regain access on 2026-11-01."), "budget", "invalid_request_error/spend_limit"],
+    ["400, the organization's spending limit", 400, body("invalid_request_error", "You have reached your specified API usage limits. You will regain access on 2026-11-01."), "budget", "invalid_request_error/spend_limit"],
+    ["400, no credit left", 400, body("invalid_request_error", "Your credit balance is too low to access the Anthropic API."), "budget", "invalid_request_error/credit_exhausted"],
+    ["429, no credit left (status not documented)", 429, body("rate_limit_error", "Your credit balance is too low to access the Anthropic API."), "budget", "rate_limit_error/credit_exhausted"],
+    ["403, no credit left", 403, body("permission_error", "Your credit balance is too low to access the Anthropic API."), "budget", "permission_error/credit_exhausted"],
     ["400, any other", 400, body("invalid_request_error"), "configuration", "invalid_request_error"],
     ["401", 401, body("authentication_error"), "configuration", "authentication_error"],
-    ["402", 402, body("billing_error"), "configuration", "billing_error"],
+    ["402", 402, body("billing_error"), "budget", "billing_error"],
     ["403", 403, body("permission_error"), "configuration", "permission_error"],
     ["404", 404, body("not_found_error"), "configuration", "not_found_error"],
-    ["429, the tier's spending cap", 429, body("rate_limit_error", MARKER, { error_code: "enforced_spend_limit_reached" }), "configuration", "rate_limit_error/enforced_spend_limit_reached"],
+    ["429, the tier's spending cap", 429, body("rate_limit_error", MARKER, { error_code: "enforced_spend_limit_reached" }), "budget", "rate_limit_error/enforced_spend_limit_reached"],
     ["429, any other", 429, body("rate_limit_error"), "rate_limited", "rate_limit_error"],
     ["504", 504, body("timeout_error"), "timeout", "timeout_error"],
     ["409", 409, body("conflict_error"), "unavailable", "conflict_error"],

@@ -189,6 +189,9 @@ export const securityEventType = pgEnum("security_event_type", [
   "class_member_readmitted",
   // E5, DON-05: a request left for a real AI provider (subject: the submission, or none for a trial).
   "ai_request_sent",
+  // E6, EXP-02: the monthly cost cap was reached; the AI circuit breaker opened (one email to the administrators each).
+  "ai_cost_cap_reached",
+  "ai_breaker_tripped",
 ]);
 
 /** NFR-DON-05: security log, separate from the review log. No email, secret or content. */

@@ -232,11 +232,23 @@ describe("EVL-03 CA2 and R3: a non-conform answer is never stored; attempts are 
     simulator.failNext({ kind: "error", status: 429, retryAfterMs: 3_000 });
     simulator.failNext({ kind: "error", status: 429, retryAfterMs: 999_000 });
     const sleep = vi.fn(async () => {});
+    // E6: a wait longer than AI_RETRY_MAX_WAIT_MS stops the attempts, never calls again too early.
     expect(await evaluateSubmission(other.submissionId, deps(simulator, { sleep }))).toMatchObject({
-      status: "to_review", attempts: 3, errors: ["rate_limited", "rate_limited"],
+      status: "evaluation_failed", attempts: 2, errors: ["rate_limited", "rate_limited"],
     });
-    // The wait asked for, bounded by AI_RETRY_MAX_WAIT_MS.
-    expect(sleep.mock.calls).toEqual([[3_000], [30_000]]);
+    expect(sleep.mock.calls).toEqual([[3_000]]);
+    expect(simulator.captured()).toHaveLength(2);
+  });
+
+  it("waits a Retry-After of AI_RETRY_MAX_WAIT_MS exactly, then calls again", async () => {
+    const w = await world();
+    const simulator = new SimulatorEvaluator();
+    simulator.failNext({ kind: "error", status: 429, retryAfterMs: 30_000 });
+    const sleep = vi.fn(async () => {});
+    expect(await evaluateSubmission(w.submissionId, deps(simulator, { sleep }))).toMatchObject({
+      status: "to_review", attempts: 2, errors: ["rate_limited"],
+    });
+    expect(sleep.mock.calls).toEqual([[30_000]]);
   });
 
   it("stops at once on a refusal (E5.12): one attempt, refused, its billed usage kept; the teacher may still ask again", async () => {
@@ -259,24 +271,38 @@ describe("EVL-03 CA2 and R3: a non-conform answer is never stored; attempts are 
     expect(canTransition(6, "evaluation_failed", "evaluating")).toBe(true);
   });
 
-  it("leaves an answer cut at max_tokens to the validator: not_json, retried", async () => {
+  it("stops at once on an answer cut at max_tokens (E6): truncated, its billed usage kept, never retried", async () => {
     const w = await world();
     const simulator = new SimulatorEvaluator();
     simulator.failNext({ kind: "max_tokens" });
     expect(await evaluateSubmission(w.submissionId, deps(simulator))).toMatchObject({
-      status: "to_review", attempts: 2, errors: ["not_json"],
+      status: "evaluation_failed", attempts: 1, errors: ["truncated"],
     });
+    expect(simulator.captured()).toHaveLength(1);
+    const [run] = await runsOf(w.submissionId);
+    expect(run).toMatchObject({ outcome: "failed", attemptErrors: ["truncated"], completionTokens: 4000 });
   });
 
   it.each([
-    ["an overload (529)", { kind: "error", status: 529 }, "to_review", 2, "unavailable"],
-    ["a billing error (402)", { kind: "error", status: 402 }, "evaluation_failed", 1, "configuration"],
-    ["the Console's spending limit", { kind: "spend_limit" }, "evaluation_failed", 1, "configuration"],
+    ["an overload (529), retried", { kind: "error", status: 529 }, "to_review", 2, "unavailable"],
+    ["a billing error (402)", { kind: "error", status: 402 }, "not_assessable", 1, "budget"],
+    ["the Console's spending limit", { kind: "spend_limit" }, "not_assessable", 1, "budget"],
   ] as const)("handles %s", async (_label, fault, status, attempts, error) => {
     const w = await world();
     const simulator = new SimulatorEvaluator();
-    simulator.failNext(fault);
+    simulator.failNext(fault, attempts === 2 ? 1 : 3);
     expect(await evaluateSubmission(w.submissionId, deps(simulator))).toMatchObject({ status, attempts, errors: [error] });
+    expect(simulator.captured()).toHaveLength(attempts);
+  });
+
+  it("makes a budget error \"AI unavailable\" [P]: a failed run, the submission not assessable, no proposal (E6)", async () => {
+    const w = await world();
+    const simulator = new SimulatorEvaluator();
+    simulator.failNext({ kind: "error", status: 402 });
+    await evaluateSubmission(w.submissionId, deps(simulator));
+    expect(await submissionRow(w.submissionId)).toMatchObject({ status: "not_assessable", notAssessableCause: "ai_unavailable", currentProposalId: null });
+    expect(await runsOf(w.submissionId)).toMatchObject([{ outcome: "failed", attempts: 1, attemptErrors: ["budget"], notAssessableCause: null }]);
+    expect(await proposalsOf(w.submissionId)).toEqual([]);
   });
 
   it("ends on internal when the security log fails: nothing is sent, the submission is not left evaluating", async () => {

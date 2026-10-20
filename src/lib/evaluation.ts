@@ -15,12 +15,15 @@ export type SelectableAiProvider = (typeof selectableAiProviders)[number];
 
 /**
  * Why a call to the AI failed, without content (EVL-03 R3). Retried:
- * timeout, rate_limited, unavailable. Final: rejected (the request itself was
- * refused), configuration (key, model, access or budget), refused (the model
- * declined to evaluate the text; billed, so never retried automatically, but
- * the teacher may ask again, transition 6).
+ * timeout, unavailable, and rate_limited when the wait asked for is short
+ * (E6). Final: rejected (the request itself was refused), configuration
+ * (key, model or access), refused (the model declined to evaluate the text;
+ * billed, so never retried automatically, but the teacher may ask again,
+ * transition 6), budget (spending limit, credit or billing: the submission
+ * becomes "AI unavailable" [P], E6) and truncated (the answer reached
+ * max_tokens: billed, and a new attempt would likely be cut again [P], E6).
  */
-export const callErrors = ["timeout", "rate_limited", "unavailable", "rejected", "configuration", "refused"] as const;
+export const callErrors = ["timeout", "rate_limited", "unavailable", "rejected", "configuration", "refused", "budget", "truncated"] as const;
 export type CallError = (typeof callErrors)[number];
 
 /** What one evaluation run gave (E5.5): a proposal, a failure, or a blocking alert before any request. */
@@ -29,15 +32,18 @@ export type EvaluationOutcome = (typeof evaluationOutcomes)[number];
 
 /**
  * Why a submission is not assessable: a blocking alert, raised before any
- * request (EVL-04). E6 and E9 will add their own causes.
+ * request (EVL-04), or the AI unavailable (E6, EXP-02): the monthly cost cap
+ * reached, or the provider's budget (spending limit, credit) [P]. E9 will add
+ * its own causes.
  */
-export const notAssessableCauses = ["no_content", "rubric_unavailable"] as const;
+export const notAssessableCauses = ["no_content", "rubric_unavailable", "ai_unavailable"] as const;
 export type NotAssessableCause = (typeof notAssessableCauses)[number];
 
 /** The teacher's label of each cause. */
 export const notAssessableCauseLabels: Record<NotAssessableCause, string> = {
   no_content: "No content to assess",
-  rubric_unavailable: "AI unavailable: French rubric not validated",
+  rubric_unavailable: "Rubric not validated for this language",
+  ai_unavailable: "AI unavailable",
 };
 
 /**

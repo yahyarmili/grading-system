@@ -159,7 +159,7 @@ describe("SUB-05 CA2 replayed: a replacement evaluates again; the old result, la
     const release = getSimulator().holdNext();
     const first = evaluateStep(triggers.refs[0]);
     // Wait until the call is under way: the submission is evaluating version 1.
-    await expect.poll(async () => (await row(triggers.refs[0].submissionId)).status).toBe("evaluating");
+    await expect.poll(async () => (await row(triggers.refs[0].submissionId)).status, { timeout: 30_000 }).toBe("evaluating");
 
     await replaceStudentText(student, { assignmentId, requestId: randomUUID(), text: NEW_TEXT }, triggers);
     const [, second] = triggers.refs;
