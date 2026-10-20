@@ -123,4 +123,5 @@ Aucune variable `ANTHROPIC_*` ni `NODE_DEBUG` dans Vercel : l'adaptateur refuser
 - devoir fictif « My town » (B1, anglais) et texte fictif proposé (114 mots, sans nom), remis par l'utilisateur avec son compte élève de démonstration ; l'élève voit « Submitted, being marked » ;
 - base dev : version reçue à 20:18:45 UTC, `ai_request_sent` (sujet = la remise) à 20:18:47, exécution enregistrée à 20:18:59, soit 14 s de la remise à `to_review` ; une exécution `anthropic`, `outcome = 'proposed'`, `model_requested` et `model_answered` = `claude-haiku-5-5`, 1 tentative, 12,6 s d'appel, 3 189 tokens en entrée et 1 689 en sortie (coût estimé 0,0013 $ avec la majoration de 1,1) ; proposition courante ;
 - une seule requête et une seule exécution dans l'heure : aucun doublon ;
-- Console (requête dans les Logs de l'espace) : à relever par l'utilisateur.
+- Console, page Logs (relevée par l'utilisateur) : une requête « OK », `claude-haiku-5-5`, palier Standard, 3 189 / 1 689 tokens, identiques aux nôtres ; latence 9,81 s contre 12,6 s mesurées par l'adaptateur (même écart d'environ 3 s qu'en E5.15, cause non vérifiée) ;
+- retour arrière : les deux variables d'IA retirées de Preview par l'utilisateur le 2026-10-20 (capture de la page Vercel).
