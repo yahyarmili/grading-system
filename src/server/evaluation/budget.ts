@@ -52,6 +52,16 @@ export function createAiGuard(settings: AiGuardSettings = SETTINGS): AiGuard {
   };
 }
 
+/**
+ * Whether this month's cost reached the cap, read only: no alert, no call
+ * stopped. For the relaunch of the copies "AI unavailable" (relaunch.ts,
+ * E6.3): offered once the cap is lifted (the next UTC month, or a higher cap).
+ */
+export async function costCapReached(settings: AiGuardSettings = SETTINGS): Promise<boolean> {
+  const counts = await readAiGuardCounts("anthropic", settings.breakerWindowMs);
+  return estimateRunsCostUsd(counts.promptTokens, counts.completionTokens) >= settings.capUsd;
+}
+
 /** Once per period, an email to each administrator; a failure is logged by kind and never stops the evaluation. */
 async function alertAdmins(alert: AiAlert, settings: AiGuardSettings, detail: string): Promise<void> {
   try {

@@ -21,6 +21,14 @@ import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { getCurrentProposal } from "@/server/data/evaluation/proposals";
+import {
+  listRelaunchable,
+  relaunchEvaluation,
+  retryEvaluation,
+  startManualEvaluation,
+  type EvaluationStartContext,
+  type RelaunchConditions,
+} from "@/server/data/evaluation/teacher";
 import { getPublishedRubrics } from "@/server/data/rubric/rubric";
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
@@ -229,8 +237,8 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   // Submitting to the owner's assignment (SUB-02), and replacing the submission
   // the concerned student already made to another (SUB-05): the student writes
   // their own; another student finds nothing; a teacher is refused. Never read
-  // back by the student (A3): no read operation on this side. The owner
-  // teacher's reading comes with REV-01 (E7).
+  // back by the student (A3). The owner teacher reads the copies offered for
+  // a relaunch (PRC-02 R4, E6.3); the list of REV-01 comes in E7.
   submission: {
     setup: async () => {
       const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
@@ -239,7 +247,11 @@ const REAL: Partial<Record<Resource, RealResource>> = {
         assignmentId: submittedId, contentVersion: 1, requestId: randomUUID(), text: "My first text.",
       });
       if (!first?.ok) throw new Error("Not submitted");
+      await forceState(first.ref.submissionId, "not_assessable", "ai_unavailable");
       return { ...fixture, submittedId };
+    },
+    read: {
+      run: async (actor, { submittedId }) => (await listRelaunchable(actor, submittedId, AI_BACK)).length > 0 || null,
     },
     write: [
       {
@@ -250,6 +262,34 @@ const REAL: Partial<Record<Resource, RealResource>> = {
         run: (actor, { submittedId }) =>
           replaceText(actor, { assignmentId: submittedId, requestId: randomUUID(), text: "My new text." }),
       },
+    ],
+  },
+  // PRC-02 (E6.3): the owner teacher retries a failed copy, relaunches one
+  // offered, evaluates one by hand; another teacher finds nothing; a student
+  // is refused. Reading the evaluation in progress comes with REV-02 (E7).
+  unpublishedEvaluation: {
+    setup: async () => {
+      const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
+      const { assignmentId: secondId } = await ownedAssignment(fixture.classId);
+      const ids: string[] = [];
+      for (const assignmentId of [fixture.assignmentId, secondId]) {
+        const submitted = await submitText(people.concernedStudent, {
+          assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
+        });
+        if (!submitted?.ok) throw new Error("Not submitted");
+        ids.push(submitted.ref.submissionId);
+      }
+      await forceState(ids[0], "evaluation_failed");
+      await forceState(ids[1], "not_assessable", "ai_unavailable");
+      return { ...fixture, failedId: ids[0], unavailableId: ids[1] };
+    },
+    write: [
+      { run: (actor, { failedId }) => retryEvaluation(actor, { submissionId: failedId, versionNumber: 1 }, NO_START) },
+      {
+        run: (actor, { unavailableId }) =>
+          relaunchEvaluation(actor, { submissionId: unavailableId, versionNumber: 1 }, AI_BACK, NO_START),
+      },
+      { run: (actor, { failedId }) => startManualEvaluation(actor, { submissionId: failedId, versionNumber: 1 }) },
     ],
   },
   // EVL-01: every signed-in role reads the versions in force; a visitor is
@@ -277,6 +317,14 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     read: { run: (actor, { submissionId }) => getCurrentProposal(actor, submissionId) },
   },
 };
+
+/** The cost cap not reached, English published: an "AI unavailable" copy without a budget error is offered. */
+const AI_BACK: RelaunchConditions = { rubricLanguages: ["en"], costCapReached: false };
+const NO_START: EvaluationStartContext = { onStart: () => {} };
+
+/** Puts a submission in a state the evaluation reaches, directly. */
+const forceState = (id: string, status: "evaluation_failed" | "not_assessable", cause?: "ai_unavailable") =>
+  db.update(submissions).set({ status, notAssessableCause: cause ?? null }).where(eq(submissions.id, id));
 
 /** The concerned student read the notice in force. */
 async function noticeRead(): Promise<Fixture> {

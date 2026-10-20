@@ -1,13 +1,22 @@
 import "server-only";
-import { and, count, eq, sql } from "drizzle-orm";
-import type { AiProvider, EvaluationError, EvaluationRef, NotAssessableCause, ProposalAlert } from "@/lib/evaluation";
+import { and, count, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import {
+  relaunchableCauses,
+  type AiProvider,
+  type EvaluationError,
+  type EvaluationOrigin,
+  type EvaluationRef,
+  type NotAssessableCause,
+  type ProposalAlert,
+} from "@/lib/evaluation";
 import type { CriterionId, Level } from "@/lib/rubric";
+import type { TransitionId } from "@/lib/submission-status";
 import type { EvaluationInput } from "@/server/ai/request";
 import { db } from "@/server/db/client";
 import { aiProposals, assignments, evaluationRuns, securityEvents, submissions, submissionVersions, users } from "@/server/db/schema";
 import { applyTransition } from "../submissions/transitions";
 
-// System processing of the evaluation (§5.5, transitions 2 and 5): no Actor,
+// System processing of the evaluation (§5.5, transitions 2, 5, 6 and 7): no Actor,
 // called only by the evaluation service (src/server/evaluation/). Listed in
 // inventory.ts. The only place that adds evaluation runs and AI proposals
 // (tests/evaluation-writes.test.ts); a trigger refuses any later change (0011).
@@ -74,13 +83,38 @@ export type ClaimOptions = {
   expectedVersion?: number;
   /** E6 (PRC-01 R3): most submissions evaluating at once; "busy" when they are all taken. */
   slots?: { concurrency: number; stuckAfterMs: number };
+  /** E6.3: the transition of the claim, "auto" by default (EvaluationRef). */
+  origin?: EvaluationOrigin;
 };
 
 /**
- * Transition 2, received → evaluating, for a text. One transaction: the row
+ * Where each origin claims from (§5.5). The teacher's retry and relaunch
+ * were authorized when asked (teacher.ts); here the state is checked again,
+ * under the row lock: a copy evaluated by hand (teacher_started_at) or
+ * replaced meanwhile is never claimed. A relaunch claims a relaunchable cause
+ * only; whether it disappeared is checked again by the attempts (the rubric,
+ * the cost cap): if not, the copy becomes not assessable again, without a loop.
+ */
+const CLAIM_FROM = {
+  auto: { transition: 2, from: eq(submissions.status, "received") },
+  retry: { transition: 6, from: and(eq(submissions.status, "evaluation_failed"), isNull(submissions.teacherStartedAt)) },
+  relaunch: {
+    transition: 7,
+    from: and(
+      eq(submissions.status, "not_assessable"),
+      inArray(submissions.notAssessableCause, [...relaunchableCauses]),
+      isNull(submissions.teacherStartedAt),
+    ),
+  },
+} as const satisfies Record<EvaluationOrigin, { transition: TransitionId; from: SQL | undefined }>;
+
+/**
+ * Transition 2, received → evaluating, for a text (or 6 and 7 for the
+ * teacher's retry and relaunch, `origin`, E6.3). One transaction: the row
  * is locked first, then the whitelist is read in a later statement (a fresh
  * snapshot), then the transition is guarded by the version read. Null when
- * the submission is not received or its active version is not a text. Two
+ * the submission is not in the state of its origin (received by default) or
+ * its active version is not a text. Two
  * claims at once give one evaluation; a replacement at the same time is
  * waited for, never missed. With `expectedVersion`, null as well when another
  * version is active: a trigger of a replaced text evaluates nothing (SUB-05
@@ -96,6 +130,7 @@ export async function claimForEvaluation(
   opts: ClaimOptions = {},
 ): Promise<EvaluationClaim | "busy" | null> {
   const { expectedVersion, slots } = opts;
+  const { transition, from } = CLAIM_FROM[opts.origin ?? "auto"];
   return db.transaction(async (tx) => {
     const [locked] = await tx
       .select({ id: submissions.id })
@@ -103,7 +138,7 @@ export async function claimForEvaluation(
       .where(
         and(
           eq(submissions.id, submissionId),
-          eq(submissions.status, "received"),
+          from,
           expectedVersion === undefined ? undefined : eq(submissions.currentVersion, expectedVersion),
         ),
       )
@@ -116,8 +151,8 @@ export async function claimForEvaluation(
     }
     const read = await readEvaluationInput(tx, submissionId);
     if (!read) return null;
-    const claimed = await applyTransition(tx, submissionId, 2, "evaluating", {
-      where: eq(submissions.currentVersion, read.versionNumber),
+    const claimed = await applyTransition(tx, submissionId, transition, "evaluating", {
+      where: and(eq(submissions.currentVersion, read.versionNumber), from),
       // The database clock, not the container's: releaseStuckEvaluations compares it in SQL.
       set: { updatedAt: sql`now()`, claimToken },
     });

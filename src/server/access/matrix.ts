@@ -97,7 +97,9 @@ export const ACCESS_MATRIX = {
   },
   submission: {
     label: "Submission and images",
-    // Student: replaces their own (SUB-05), never reads it back.
+    // Student: replaces their own (SUB-05), never reads it back. Teacher [P]:
+    // reads the copies of their assignments, among them those offered for a
+    // relaunch (listRelaunchable, PRC-02 R4, E6.3).
     concernedStudent: W, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
   },
   transcription: {
@@ -112,6 +114,8 @@ export const ACCESS_MATRIX = {
   },
   unpublishedEvaluation: {
     label: "Unpublished evaluation",
+    // [P] E6.3, PRC-02 R3: the retry (transition 6), the relaunch (7) and the
+    // manual evaluation (6 or 7 to to_review) write the evaluation in progress.
     concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   publishedEvaluation: {

@@ -39,6 +39,15 @@ export type EvaluationOutcome = (typeof evaluationOutcomes)[number];
 export const notAssessableCauses = ["no_content", "rubric_unavailable", "ai_unavailable"] as const;
 export type NotAssessableCause = (typeof notAssessableCauses)[number];
 
+/**
+ * The causes that may disappear, for which the teacher is offered a relaunch
+ * (PRC-02 R4, transition 7, E6.3): the rubric of the language published, the
+ * cost cap or the provider's budget lifted. Never no_content: the text itself
+ * would have to change, and a replacement evaluates it again.
+ */
+export const relaunchableCauses = ["rubric_unavailable", "ai_unavailable"] as const satisfies readonly NotAssessableCause[];
+export type RelaunchableCause = (typeof relaunchableCauses)[number];
+
 /** The teacher's label of each cause. */
 export const notAssessableCauseLabels: Record<NotAssessableCause, string> = {
   no_content: "No content to assess",
@@ -65,8 +74,14 @@ export type EvaluationError = (typeof evaluationErrors)[number];
  * The version of a submission an automatic evaluation is for (PRC-01, E6):
  * identifiers only, the one argument of the workflow and its steps (rule 4),
  * never the text. Built by the data layer once the transaction committed.
+ * `origin` (E6.3) names the transition of the claim: "auto" (2, from
+ * received, the default) after a submission or replacement; "retry" (6, from
+ * evaluation_failed) and "relaunch" (7, from not_assessable) by the teacher.
  */
-export type EvaluationRef = { submissionId: string; versionNumber: number };
+export type EvaluationRef = { submissionId: string; versionNumber: number; origin?: EvaluationOrigin };
+
+export const evaluationOrigins = ["auto", "retry", "relaunch"] as const;
+export type EvaluationOrigin = (typeof evaluationOrigins)[number];
 
 /** Information alerts of a proposal (EVL-04): read by the owner teacher only, never by the student. */
 export const proposalAlerts = ["very_short", "other_language", "off_topic", "addressed_to_marker"] as const;

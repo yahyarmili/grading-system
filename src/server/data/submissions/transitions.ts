@@ -15,7 +15,7 @@ import { submissions } from "@/server/db/schema";
 // row, every other one goes through applyTransition. A move outside the table
 // is refused; tests/submission-writes.test.ts checks no other file writes the table.
 // Both run inside a transaction that has already checked the actor, or inside
-// the system processing of the evaluation (transitions 2 and 5,
+// the system processing of the evaluation (transitions 2, 5, 6 and 7,
 // src/server/data/evaluation/system.ts).
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];

@@ -14,9 +14,10 @@ const STEP_SLOTS = { concurrency: EVALUATION_CONCURRENCY, stuckAfterMs: EVALUATI
 
 /**
  * Claim, attempts and record of one version (evaluate.ts): "skipped" when it
- * is no longer received or another version is active, so a second run or a
- * second delivery of this step evaluates nothing; "busy" when every place is
- * taken, nothing changed. Not retried by Workflows (maxRetries 0): a retry
+ * is no longer in the state of its origin (received, or failed or not
+ * assessable for the teacher's retry and relaunch, E6.3) or another version
+ * is active, so a second run or a second delivery of this step evaluates
+ * nothing; "busy" when every place is taken, nothing changed. Not retried by Workflows (maxRetries 0): a retry
  * would call the AI again, billed, out of sight; the attempts are
  * evaluate.ts's own, EVALUATION_STEP_MAX_MS at most, under a function's
  * 300 s. An error is thrown again by its kind only: a database message may
@@ -30,6 +31,7 @@ export async function evaluateStep(ref: EvaluationRef, claimToken: string): Prom
       expectedVersion: ref.versionNumber,
       slots: STEP_SLOTS,
       claimToken,
+      origin: ref.origin,
     });
   } catch (error) {
     throw new FatalError(`evaluation step failed: ${errorKind(error)}`);
