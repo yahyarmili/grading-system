@@ -9,7 +9,11 @@ import { createStudent, signIn, sql } from "./support/helpers";
 // text or internal state in the student's pages (A3, SUB-01 R3). The detailed
 // tests are in submit-text.spec.ts and the integration tests.
 
-const LINA_TEXT = "My town is smal but it have a big market.\nI like it vey much.";
+// About fifty actions of 2 to 6 s each on Neon: past the default 120 s near its
+// end (seen 2026-10-20, no step stuck in the trace).
+test.setTimeout(240_000);
+
+const LINA_TEXT ="My town is smal but it have a big market.\nI like it vey much.";
 const LINA_NEW_TEXT = "My town is small, and it has a big market.\nI like it very much.";
 
 test("E4 journey: on time, late, replaced, then read only; the assignment locked", async ({ browser }) => {

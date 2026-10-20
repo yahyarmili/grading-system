@@ -48,7 +48,7 @@
 2. Données fictives seulement : jeux de `scripts/fixtures/ai/`, comptes et devoirs de démonstration.
 3. Clé créée dans l'espace `grading_system`, pas dans Default : une clé non limitée à un espace exige un en-tête `anthropic-workspace-id`, que l'adaptateur ne transmet pas (400). Noter son expiration, choisie à la création et non modifiable.
 4. La clé est dans `.env.local` sous `GRADING_ANTHROPIC_API_KEY`, jamais `ANTHROPIC_API_KEY` (Claude Code la prendrait à la place de l'abonnement) ; aucune variable `ANTHROPIC_*` ni `NODE_DEBUG` dans l'environnement, sinon l'adaptateur refuse de démarrer. Puis `docker compose up -d`.
-5. `AI_PROVIDER` n'est pas défini dans Vercel : la preview reste sur le simulateur.
+5. `AI_PROVIDER` n'est pas défini dans Vercel : la preview reste sur le simulateur, sauf pendant une démonstration (« Activer l'IA sur la preview », ci-dessous).
 
 **Contrôles dans la Console, avant l'essai.**
 - **Crédit et fin du cycle** : solde restant, date d'expiration (crédit promotionnel relevé le 2026-10-19 : 100 $, expire le 2026-11-12 UTC) ; après cette date, relever le renouvellement.
@@ -80,3 +80,42 @@
 - étape 4, Console (relevée par l'utilisateur le 2026-10-19, vers 20 h 37 UTC) : page Logs, exactement deux requêtes « OK », `claude-haiku-5-5`, palier Standard, tokens identiques aux nôtres (370 / 49 et 3 143 / 1 549) ; latence 0,99 s et 7,17 s, contre 4,3 s et 10,4 s mesurées par la commande (écart d'environ 3,2 s par appel, cause non vérifiée) ; page Usage filtrée sur l'espace et colonne Cost de la clé encore vides (0 et « — ») une quinzaine de minutes après : coût relevé ensuite avec celui d'E5.16 : 0,07 $ pour les deux (`annexe-essais-ia.md`, 2026-10-19).
 
 **Historique, OpenRouter (jusqu'au 2026-10-19).** Envoi des évaluations à OpenRouter (modèle `xingchen-agi/xing4.0-29b-a4b:free`, relayé à Phala, endpoint ZDR), avec `OPENROUTER_API_KEY` et une garde à 50 requêtes par jour UTC ; rejoué en partie le 2026-10-17. Adaptateur retiré en E5.13. Texte complet : ce fichier au commit `85b60c4`.
+
+## Activer l'IA sur la preview (démonstration, E6.5)
+
+**Quand.** Pendant une démonstration seulement : la preview est publique [D], toute personne inscrite comme élève y déclencherait des envois. Entre deux démonstrations, la preview reste sur le simulateur et aucune clé n'existe.
+
+**Exécutant.** L'utilisateur, dans la Console d'Anthropic et dans Vercel (projet, Settings → Environment Variables, environnement **Preview** seulement). Aucun outil ne lit `.env.local` ni les valeurs posées dans Vercel.
+
+**Variables d'IA (posées pour la démonstration, retirées après).**
+
+| Variable | Valeur | Remarque |
+|---|---|---|
+| `AI_PROVIDER` | `anthropic` | Absente → simulateur. |
+| `GRADING_ANTHROPIC_API_KEY` | clé d'un **compte de service**, propre à la preview | Distincte de la clé du dev ; jamais `ANTHROPIC_API_KEY`. |
+
+Conditions de la clé :
+- compte de service créé pour la preview et **ajouté à l'espace `grading_system`** ; clé créée dans cet espace, **limitée à lui** ;
+- une clé de l'espace Default échapperait à la limite de dépense de l'espace (10 $ par mois) ;
+- une clé non limitée à un espace exige l'en-tête `anthropic-workspace-id`, que l'adaptateur ne transmet pas (4 en-têtes seulement) : 400, `configuration` ;
+- expiration la plus courte que la Console propose, notée à la création.
+
+Aucune variable `ANTHROPIC_*` ni `NODE_DEBUG` dans Vercel : l'adaptateur refuserait de démarrer.
+
+**Variables de Workflows : aucune à ajouter.** Sur Vercel, le SDK `workflow` (5.2.2) choisit seul la Vercel World et lit les variables système (`VERCEL`, `VERCEL_DEPLOYMENT_ID`, `VERCEL_OIDC_TOKEN`, `VERCEL_URL`…), relevées dans `node_modules/@workflow/` le 2026-10-20.
+- À vérifier une fois : Settings → Environment Variables, « Automatically expose System Environment Variables » coché (déjà le cas en E6.1, où la preview a traité une remise).
+- Ne **jamais** poser `WORKFLOW_TARGET_WORLD`, `WORKFLOW_LOCAL_BASE_URL` ni `WORKFLOW_LOCAL_DATA_DIR` dans Vercel : ils forceraient la Local World, propre au poste et à l'E2E.
+- `CRON_SECRET` : inutile sur la preview, où le cron de Vercel ne tourne pas (production seulement) ; sans lui, la route du balayage répond 401.
+
+**Étapes.**
+1. Console : vérifier la limite de l'espace et sa dépense du mois, le crédit et sa fin de cycle (contrôles de « Activer l'envoi réel à l'IA »). La garde de l'application compte aussi les exécutions `anthropic` de la base dev (plafond de 5 $ par mois [P]) : la preview et le dev partagent cette base, donc ce plafond.
+2. Créer le compte de service, l'ajouter à l'espace, créer sa clé dans l'espace.
+3. Vercel (Preview) : poser `AI_PROVIDER` et `GRADING_ANTHROPIC_API_KEY`, puis **redéployer** la preview (une variable modifiée ne vaut qu'au déploiement suivant).
+4. Vérification, sur un texte fictif : un compte élève de démonstration remet un texte ; l'élève voit « Submitted, being marked » ; dans la base dev, la remise passe à `to_review` avec une exécution `provider = 'anthropic'`, `model_answered = 'claude-haiku-5-5'`, `outcome = 'proposed'`, et une ligne `ai_request_sent` dont le sujet est la remise. La Console montre la requête dans l'espace.
+
+**Retour arrière (après chaque démonstration).**
+1. Vercel : supprimer `AI_PROVIDER` et `GRADING_ANTHROPIC_API_KEY` de Preview, puis redéployer : le simulateur reprend.
+2. Console : **révoquer** la clé du compte de service. Une requête restante répond 401 (`configuration`, sans relance ; trois remises en échec ouvrent le disjoncteur).
+3. Les remises déjà traitées, leurs exécutions et les lignes `ai_request_sent` restent (immuables).
+
+**Rejeu.** À consigner ici après la première démonstration : date, état et modèle relevés en base, requête vue dans la Console.
