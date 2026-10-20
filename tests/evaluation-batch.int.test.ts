@@ -16,7 +16,7 @@ import { getCaptureSender } from "@/server/email";
 import type { AiGuardState } from "@/server/evaluation/budget";
 import { evaluateSubmission, type EvaluationDeps, type EvaluationOutcome } from "@/server/evaluation/evaluate";
 import { orchestrate } from "@/server/evaluation/orchestrate";
-import { evaluateStep } from "@/server/evaluation/steps";
+import { evaluateStep, releaseStep } from "@/server/evaluation/steps";
 import { sweepEvaluations } from "@/server/evaluation/sweep";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { recordTriggers } from "./helpers/triggers";
@@ -88,13 +88,19 @@ const deps = (evaluator: Evaluator, over: Partial<EvaluationDeps> = {}): Evaluat
   evaluator, registry: RUBRIC_VERSIONS, sleep: async () => {}, callTimeoutMs: 5_000, ...over,
 });
 
-/** The workflow's body around the step, waiting 50 ms instead of 15 s for a place. */
-const run = (ref: EvaluationRef, step: (ref: EvaluationRef) => Promise<EvaluationOutcome> = evaluateStep) =>
-  orchestrate(ref, { evaluate: step, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 50))) });
+type Step = (ref: EvaluationRef, claimToken: string) => Promise<EvaluationOutcome>;
+
+/** The workflow's body around the step, one token per run, waiting 50 ms instead of 15 s for a place. */
+const run = (ref: EvaluationRef, step: Step = evaluateStep) =>
+  orchestrate(ref, randomUUID(), {
+    evaluate: step,
+    release: releaseStep,
+    sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 50))),
+  });
 
 /** The step with an evaluator of the test's own: the same claim, places and guard as evaluateStep. */
-const stepWith = (evaluator: Evaluator, over: Partial<EvaluationDeps> = {}) => (ref: EvaluationRef) =>
-  evaluateSubmission(ref.submissionId, deps(evaluator, over), { expectedVersion: ref.versionNumber, slots: SLOTS });
+const stepWith = (evaluator: Evaluator, over: Partial<EvaluationDeps> = {}): Step => (ref, claimToken) =>
+  evaluateSubmission(ref.submissionId, deps(evaluator, over), { expectedVersion: ref.versionNumber, slots: SLOTS, claimToken });
 
 /** A simulator per submission, with that submission's own faults: one failure never travels to another copy. */
 function perSubmission(faults: Map<string, { fault: SimulatedFault; times: number }>): Evaluator {
@@ -164,7 +170,7 @@ describe("PRC-01 R3: EVALUATION_CONCURRENCY at once, the others wait their turn"
   it("12 at once: 10 evaluate, 2 are busy and change nothing; once freed, they are evaluated", { timeout: 120_000 }, async () => {
     const { refs } = await batch(12);
     const releases = refs.map(() => getSimulator().holdNext());
-    const pending = refs.map((ref) => evaluateStep(ref));
+    const pending = refs.map((ref) => evaluateStep(ref, randomUUID()));
     await expect.poll(evaluatingCount, { timeout: 60_000 }).toBe(10);
 
     // The two refused a place answered at once, and stay received.
@@ -231,7 +237,7 @@ describe("PRC-01 CA4: a failing submission never stops the others", () => {
     const ids = refs.map((r) => r.submissionId);
     // Three were being evaluated when the process stopped; three were never started (the start failed).
     const releases = refs.slice(0, 3).map(() => getSimulator().holdNext());
-    const abandoned = refs.slice(0, 3).map((ref) => evaluateStep(ref));
+    const abandoned = refs.slice(0, 3).map((ref) => evaluateStep(ref, randomUUID()));
     await expect.poll(evaluatingCount, { timeout: 30_000 }).toBe(3);
     await age(ids);
 
@@ -255,7 +261,7 @@ describe("PRC-01 CA4: a failing submission never stops the others", () => {
     expect(current.filter((c) => c.proposal !== null)).toHaveLength(3);
     // A second sweep, a step delivered again: nothing more.
     expect(await sweepEvaluations(async (ref) => void started.push(ref))).toEqual({ released: [], restarted: [] });
-    expect(await evaluateStep(refs[0])).toEqual({ status: "skipped" });
+    expect(await evaluateStep(refs[0], randomUUID())).toEqual({ status: "skipped" });
     expect(await db.select().from(evaluationRuns)).toHaveLength(6);
   });
 });
@@ -291,7 +297,7 @@ describe("EXP-02: the monthly cost cap", () => {
     const simulator = new SimulatorEvaluator();
     simulator.failNext({ kind: "error", status: 529 });
     const answers: AiGuardState[] = ["open", "cost_cap"];
-    const outcome = await stepWith(simulator, { guard: async () => answers.shift() ?? "open" })(refs[0]);
+    const outcome = await stepWith(simulator, { guard: async () => answers.shift() ?? "open" })(refs[0], randomUUID());
     expect(outcome).toMatchObject({ status: "not_assessable", attempts: 1, errors: ["unavailable"] });
     expect(simulator.captured()).toHaveLength(1);
     expect(await states([refs[0].submissionId])).toEqual({ [refs[0].submissionId]: "not_assessable/ai_unavailable" });
@@ -345,7 +351,7 @@ describe("the sweep leaves alone what is not late", () => {
   it("a received text within its grace, an evaluation under way", { timeout: 60_000 }, async () => {
     const { refs } = await batch(2);
     const release = getSimulator().holdNext();
-    const pending = evaluateStep(refs[0]);
+    const pending = evaluateStep(refs[0], randomUUID());
     await expect.poll(evaluatingCount, { timeout: 30_000 }).toBe(1);
     expect(await sweepEvaluations(async () => {})).toEqual({ released: [], restarted: [] });
     release();

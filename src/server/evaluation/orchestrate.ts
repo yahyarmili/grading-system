@@ -7,8 +7,10 @@ import type { EvaluationOutcome } from "@/server/evaluation/evaluate";
 // (Workflows replays it). Type imports only from evaluate.ts.
 
 export type OrchestrateDeps = {
-  /** The step: claim, attempts, record (steps.ts). */
-  evaluate: (ref: EvaluationRef) => Promise<EvaluationOutcome>;
+  /** The step: claim under the token, attempts, record (steps.ts). */
+  evaluate: (ref: EvaluationRef, claimToken: string) => Promise<EvaluationOutcome>;
+  /** The step that frees this run's own claim after a failure (steps.ts). */
+  release: (ref: EvaluationRef, claimToken: string) => Promise<boolean>;
   /** Workflows' durable sleep: no function runs while it waits. */
   sleep: (ms: number) => Promise<void>;
 };
@@ -18,15 +20,23 @@ export type OrchestrateDeps = {
  * is taken; the run waits EVALUATION_BUSY_WAIT_MS and asks again,
  * EVALUATION_BUSY_MAX_WAITS times at most, then ends "busy": the submission
  * stays received and the sweep starts it again (TRIGGER_GRACE_MS). Any other
- * outcome is final. An error of the step ends the run (no retry: the
- * submission is released by the sweep).
+ * outcome is final. When the step fails, its claim is released (this run's
+ * token only: another run's claim of the same version stays), then the
+ * error ends the run.
  */
-export async function orchestrate(ref: EvaluationRef, deps: OrchestrateDeps): Promise<EvaluationOutcome> {
+export async function orchestrate(ref: EvaluationRef, claimToken: string, deps: OrchestrateDeps): Promise<EvaluationOutcome> {
   // Called as plain functions, never as methods of `deps`: Workflows would
   // serialize `this` with the step's arguments, and fail on its functions.
-  const { evaluate, sleep } = deps;
+  const { evaluate, release, sleep } = deps;
   for (let waits = 0; ; waits++) {
-    const outcome = await evaluate(ref);
+    let outcome: EvaluationOutcome;
+    try {
+      outcome = await evaluate(ref, claimToken);
+    } catch (error) {
+      // If even the release fails, the sweep frees the claim later.
+      await release(ref, claimToken).catch(() => false);
+      throw error;
+    }
     if (outcome.status !== "busy" || waits >= EVALUATION_BUSY_MAX_WAITS) return outcome;
     await sleep(EVALUATION_BUSY_WAIT_MS);
   }

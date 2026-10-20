@@ -69,6 +69,13 @@ export const submissions = pgTable(
     currentProposalId: uuid(),
     /** Set exactly when the status is not_assessable (EVL-04). */
     notAssessableCause: notAssessableCause(),
+    /**
+     * Who holds the evaluation (E6): set by the claim, exactly while the status
+     * is evaluating (the workflow run's identifier, or a random one for the
+     * command). Results and releases are guarded by it: a run frees only its
+     * own claim. An identifier, never content.
+     */
+    claimToken: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
@@ -106,6 +113,7 @@ export const submissions = pgTable(
       "submissions_not_assessable_cause",
       sql`(${t.status} = 'not_assessable') = (${t.notAssessableCause} is not null)`,
     ),
+    check("submissions_claim_token_iff_evaluating", sql`(${t.status} = 'evaluating') = (${t.claimToken} is not null)`),
   ],
 );
 

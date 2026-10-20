@@ -99,6 +99,13 @@
       "when": 1792453885388,
       "tag": "0013_add_ai_unavailable",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792490087079,
+      "tag": "0014_add_claim_token",
+      "breakpoints": true
     }
   ]
 }

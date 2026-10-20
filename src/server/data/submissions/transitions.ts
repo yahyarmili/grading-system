@@ -54,7 +54,8 @@ export async function insertReceived(tx: Tx, values: NewSubmission) {
  * updated row, or null when the submission is absent or the move is refused
  * (wrong state, guard not met): the row lock makes the first writer win.
  * Leaving not_assessable empties its cause; reaching it needs one in `set`
- * (check constraint).
+ * (check constraint). Likewise the claim token (E6): leaving evaluating
+ * empties it; reaching evaluating needs one in `set`.
  */
 export async function applyTransition(
   tx: Tx,
@@ -69,7 +70,12 @@ export async function applyTransition(
   }
   const [updated] = await tx
     .update(submissions)
-    .set({ ...guard.set, ...(to === "not_assessable" ? {} : { notAssessableCause: null }), status: to })
+    .set({
+      ...guard.set,
+      ...(to === "not_assessable" ? {} : { notAssessableCause: null }),
+      ...(to === "evaluating" ? {} : { claimToken: null }),
+      status: to,
+    })
     .where(and(eq(submissions.id, submissionId), inArray(submissions.status, from), guard.where))
     .returning({ id: submissions.id, status: submissions.status, currentVersion: submissions.currentVersion });
   return updated ?? null;

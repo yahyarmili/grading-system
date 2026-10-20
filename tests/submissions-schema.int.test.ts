@@ -146,7 +146,12 @@ describe("applyTransition: the one status writer (§5.5)", () => {
       applyTransition(tx, id, 11, "received", { set: { currentVersion: sql`${submissions.currentVersion} + 1` } }),
     );
     expect(replaced).toEqual({ id, status: "received", currentVersion: 2 });
-    expect(await db.transaction((tx) => applyTransition(tx, id, 2, "evaluating"))).toMatchObject({ status: "evaluating" });
+    expect(await db.transaction((tx) => applyTransition(tx, id, 2, "evaluating", { set: { claimToken: "test-claim" } }))).toMatchObject({
+      status: "evaluating",
+    });
+    // Leaving evaluating empties the claim token, as leaving not_assessable empties its cause.
+    expect(await db.transaction((tx) => applyTransition(tx, id, 5, "evaluation_failed"))).toMatchObject({ status: "evaluation_failed" });
+    expect((await db.select({ token: submissions.claimToken }).from(submissions).where(eq(submissions.id, id)))[0].token).toBeNull();
   });
 
   it("refuses a move from a state outside the table, and changes nothing", async () => {

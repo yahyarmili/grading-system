@@ -113,7 +113,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/evaluation/system.ts#stillEvaluating": "system processing (§5.5): whether a claim still holds before a new attempt, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#recordEvaluation": "system processing (§5.5, transition 5): adds the run and the proposal, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#listReceived": "system processing (§5.5): identifiers of the received submissions of an assignment, called only by src/server/evaluation/",
-  "src/server/data/evaluation/system.ts#releaseEvaluation": "system processing (§5.5, transition 5): a claim whose result the database refused twice ends evaluation_failed, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#releaseEvaluation": "system processing (§5.5, transition 5): frees a claim to evaluation_failed, guarded by its token (a run frees its own claim only): a result refused twice, the breaker, or the workflow's releaseStep; called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#releaseStuckEvaluations": "system processing (§5.5, transition 5, PRC-02 R1): submissions evaluating for too long end evaluation_failed, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#listStaleReceived": "system processing (E6, the sweep): identifiers and active version of the text submissions still received after the grace, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#readAiGuardCounts": "system processing (E6, EXP-02): token sums of this month's Anthropic runs and the count of access failures, counts only, called only by src/server/evaluation/",

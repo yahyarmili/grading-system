@@ -116,7 +116,7 @@ describe("releaseStuckSubmissions", () => {
   it("releases a submission left evaluating (a stopped process) once it is older than the bound, and only then", async () => {
     const id = await received();
     const other = await received();
-    expect(await claimForEvaluation(id)).not.toBeNull();
+    expect(await claimForEvaluation(id, "test-claim")).not.toBeNull();
     // Within the bound (EVALUATION_STUCK_AFTER_MS): an evaluation may still be running.
     expect(await releaseStuckSubmissions()).not.toContain(id);
     expect((await statusOf(id)).status).toBe("evaluating");

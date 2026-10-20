@@ -46,8 +46,18 @@ export async function readEvaluationInput(
   return { versionNumber, input: { ...input, text: row.text } };
 }
 
-/** A submission taken for evaluation: the version evaluated and its whitelist. */
-export type EvaluationClaim = { submissionId: string; versionNumber: number; input: EvaluationInput };
+/**
+ * A submission taken for evaluation: the version evaluated, its whitelist,
+ * and the token of the claim (E6), which guards every later write of it.
+ */
+export type EvaluationClaim = { submissionId: string; versionNumber: number; claimToken: string; input: EvaluationInput };
+
+/** What records or frees a claim: never the whitelist. */
+export type ClaimRef = Pick<EvaluationClaim, "submissionId" | "versionNumber" | "claimToken">;
+
+/** The submission is still under this claim: its version and its token. */
+const heldBy = (claim: ClaimRef) =>
+  and(eq(submissions.currentVersion, claim.versionNumber), eq(submissions.claimToken, claim.claimToken));
 
 /** The advisory lock that serializes the claims while they count the places taken (E6): a constant key. */
 const EVALUATION_SLOTS_LOCK = 0x4556_414c;
@@ -77,10 +87,12 @@ export type ClaimOptions = {
  * R2). With `slots`, the claims take an advisory lock in turn (held until
  * their commit, valid behind Neon's pooler), then count the places taken:
  * "busy" when none is free, and nothing changes. A count without the lock
- * would let two claims in at 9.
+ * would let two claims in at 9. `claimToken` (the workflow run's identifier)
+ * is stored with the state: only its holder records a result or frees it.
  */
 export async function claimForEvaluation(
   submissionId: string,
+  claimToken: string,
   opts: ClaimOptions = {},
 ): Promise<EvaluationClaim | "busy" | null> {
   const { expectedVersion, slots } = opts;
@@ -107,27 +119,22 @@ export async function claimForEvaluation(
     const claimed = await applyTransition(tx, submissionId, 2, "evaluating", {
       where: eq(submissions.currentVersion, read.versionNumber),
       // The database clock, not the container's: releaseStuckEvaluations compares it in SQL.
-      set: { updatedAt: sql`now()` },
+      set: { updatedAt: sql`now()`, claimToken },
     });
-    return claimed ? { submissionId, ...read } : null;
+    return claimed ? { submissionId, claimToken, ...read } : null;
   });
 }
 
 /**
  * Whether the claim still holds: the submission is evaluating the same
- * version. Read before a new attempt, so a replaced text is not sent again.
+ * version under the same token. Read before a new attempt, so a replaced or
+ * released text is not sent again.
  */
-export async function stillEvaluating(claim: EvaluationClaim): Promise<boolean> {
+export async function stillEvaluating(claim: ClaimRef): Promise<boolean> {
   const [row] = await db
     .select({ id: submissions.id })
     .from(submissions)
-    .where(
-      and(
-        eq(submissions.id, claim.submissionId),
-        eq(submissions.status, "evaluating"),
-        eq(submissions.currentVersion, claim.versionNumber),
-      ),
-    );
+    .where(and(eq(submissions.id, claim.submissionId), eq(submissions.status, "evaluating"), heldBy(claim)));
   return !!row;
 }
 
@@ -184,11 +191,12 @@ const STATUS_OF = { proposed: "to_review", failed: "evaluation_failed", not_asse
 /**
  * Transition 5, evaluating → to_review, evaluation_failed or not_assessable.
  * One transaction: the run is added (and its proposal, when there is one),
- * then the transition is guarded by the version evaluated and points the
- * submission to the proposal. When the text was replaced meanwhile, the
- * transition is refused and the rows stay, not current.
+ * then the transition is guarded by the version evaluated and the claim's
+ * token, and points the submission to the proposal. When the text was
+ * replaced meanwhile, or the claim released (and maybe taken again by another
+ * run), the transition is refused and the rows stay, not current.
  */
-export async function recordEvaluation(claim: EvaluationClaim, result: EvaluationResult): Promise<RecordedEvaluation> {
+export async function recordEvaluation(claim: ClaimRef, result: EvaluationResult): Promise<RecordedEvaluation> {
   const { submissionId, versionNumber } = claim;
   return db.transaction(async (tx) => {
     const [run] = await tx
@@ -238,7 +246,7 @@ export async function recordEvaluation(claim: EvaluationClaim, result: Evaluatio
     const unavailable = result.outcome === "failed" && result.unavailable === true;
     const to = unavailable ? "not_assessable" : STATUS_OF[result.outcome];
     const moved = await applyTransition(tx, submissionId, 5, to, {
-      where: eq(submissions.currentVersion, versionNumber),
+      where: heldBy(claim),
       set:
         result.outcome === "proposed"
           ? { currentProposalId: proposalId }
@@ -264,14 +272,15 @@ export async function listReceived(assignmentId: string): Promise<string[]> {
 
 /**
  * Transition 5, evaluating → evaluation_failed, without a run: the result of
- * the claim could not be recorded (the database refused it twice). Guarded by
- * the version claimed; false when the submission is no longer evaluating it.
+ * the claim could not be recorded (the database refused it twice), the
+ * breaker stopped it, or the workflow's step failed (releaseStep, E6).
+ * Guarded by the version and the token of the claim: a run frees its own
+ * claim only, never another run's. False when the submission is no longer
+ * under this claim.
  */
-export async function releaseEvaluation(claim: Pick<EvaluationClaim, "submissionId" | "versionNumber">): Promise<boolean> {
+export async function releaseEvaluation(claim: ClaimRef): Promise<boolean> {
   return db.transaction(async (tx) => {
-    const moved = await applyTransition(tx, claim.submissionId, 5, "evaluation_failed", {
-      where: eq(submissions.currentVersion, claim.versionNumber),
-    });
+    const moved = await applyTransition(tx, claim.submissionId, 5, "evaluation_failed", { where: heldBy(claim) });
     return !!moved;
   });
 }

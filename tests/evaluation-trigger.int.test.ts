@@ -9,7 +9,7 @@ import { createClass } from "@/server/data/classes/classes";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { db } from "@/server/db/client";
 import { aiProposals, classMemberships, evaluationRuns, submissions, users } from "@/server/db/schema";
-import { evaluateStep } from "@/server/evaluation/steps";
+import { evaluateStep, releaseStep } from "@/server/evaluation/steps";
 import { replaceStudentText, submitStudentText } from "@/server/submissions/submissions";
 import { recordTriggers } from "./helpers/triggers";
 
@@ -105,7 +105,7 @@ describe("PRC-01 CA1: a text goes received → evaluating → to_review without 
     await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: TEXT }, triggers);
     const [ref] = triggers.refs;
 
-    const outcome = await evaluateStep(ref);
+    const outcome = await evaluateStep(ref, randomUUID());
     expect(outcome).toMatchObject({ status: "to_review", attempts: 1, errors: [] });
     const [proposal] = await proposalsOf(ref.submissionId);
     expect(await row(ref.submissionId)).toEqual({ status: "to_review", currentVersion: 1, currentProposalId: proposal.id });
@@ -116,11 +116,11 @@ describe("PRC-01 CA1: a text goes received → evaluating → to_review without 
     const { student, assignmentId } = await setup();
     const triggers = recordTriggers();
     await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: TEXT }, triggers);
-    expect(JSON.stringify(await evaluateStep(triggers.refs[0]))).not.toContain("beatiful");
+    expect(JSON.stringify(await evaluateStep(triggers.refs[0], randomUUID()))).not.toContain("beatiful");
 
     // A database error quotes the value it refused; the step throws its kind only.
     const marker = `not-a-uuid-${randomUUID()}`;
-    const error = await evaluateStep({ submissionId: marker, versionNumber: 1 }).catch((e: unknown) => e);
+    const error = await evaluateStep({ submissionId: marker, versionNumber: 1 }, randomUUID()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).name).toBe("FatalError");
     expect((error as Error).message).not.toContain(marker);
@@ -138,7 +138,7 @@ describe("PRC-01 CA2: a repeated trigger gives one evaluation and one current pr
     expect(triggers.refs).toHaveLength(2);
     expect(triggers.refs[1]).toEqual(triggers.refs[0]);
 
-    const outcomes = await Promise.all(triggers.refs.map((ref) => evaluateStep(ref)));
+    const outcomes = await Promise.all(triggers.refs.map((ref) => evaluateStep(ref, randomUUID())));
     expect(outcomes.map((o) => o.status).sort()).toEqual(["skipped", "to_review"]);
     const submissionId = triggers.refs[0].submissionId;
     expect(await runsOf(submissionId)).toHaveLength(1);
@@ -146,7 +146,7 @@ describe("PRC-01 CA2: a repeated trigger gives one evaluation and one current pr
     expect(getSimulator().captured()).toHaveLength(1);
 
     // Delivered once more later (a step is delivered at least once): still nothing.
-    expect(await evaluateStep(triggers.refs[0])).toEqual({ status: "skipped" });
+    expect(await evaluateStep(triggers.refs[0], randomUUID())).toEqual({ status: "skipped" });
     expect(await runsOf(submissionId)).toHaveLength(1);
   });
 });
@@ -157,7 +157,7 @@ describe("SUB-05 CA2 replayed: a replacement evaluates again; the old result, la
     const triggers = recordTriggers();
     await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: TEXT }, triggers);
     const release = getSimulator().holdNext();
-    const first = evaluateStep(triggers.refs[0]);
+    const first = evaluateStep(triggers.refs[0], randomUUID());
     // Wait until the call is under way: the submission is evaluating version 1.
     await expect.poll(async () => (await row(triggers.refs[0].submissionId)).status, { timeout: 30_000 }).toBe("evaluating");
 
@@ -168,7 +168,7 @@ describe("SUB-05 CA2 replayed: a replacement evaluates again; the old result, la
     expect(await first).toMatchObject({ status: "stale" });
     expect(await row(second.submissionId)).toMatchObject({ status: "received", currentVersion: 2, currentProposalId: null });
 
-    expect(await evaluateStep(second)).toMatchObject({ status: "to_review" });
+    expect(await evaluateStep(second, randomUUID())).toMatchObject({ status: "to_review" });
     const proposals = await proposalsOf(second.submissionId);
     expect(proposals.map((p) => p.versionNumber).sort()).toEqual([1, 2]);
     const current = proposals.find((p) => p.versionNumber === 2);
@@ -182,10 +182,67 @@ describe("SUB-05 CA2 replayed: a replacement evaluates again; the old result, la
     await replaceStudentText(student, { assignmentId, requestId: randomUUID(), text: NEW_TEXT }, triggers);
     const [old, current] = triggers.refs;
 
-    expect(await evaluateStep(old)).toEqual({ status: "skipped" });
+    expect(await evaluateStep(old, randomUUID())).toEqual({ status: "skipped" });
     expect(getSimulator().captured()).toHaveLength(0);
     expect(await row(current.submissionId)).toMatchObject({ status: "received", currentVersion: 2 });
-    expect(await evaluateStep(current)).toMatchObject({ status: "to_review" });
+    expect(await evaluateStep(current, randomUUID())).toMatchObject({ status: "to_review" });
     expect((await runsOf(current.submissionId)).map((r) => r.versionNumber)).toEqual([2]);
+  });
+});
+
+describe("releaseStep (E6.2): a run frees its own claim, never another run's", () => {
+  const tokenOf = async (id: string) =>
+    (await db.select({ token: submissions.claimToken }).from(submissions).where(eq(submissions.id, id)))[0].token;
+
+  it("a second run whose step failed releases nothing: the first one's evaluation goes on and is current", async () => {
+    const { student, assignmentId } = await setup();
+    const triggers = recordTriggers();
+    await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: TEXT }, triggers);
+    const [ref] = triggers.refs;
+    const release = getSimulator().holdNext();
+    const runA = "wrun_A";
+    const first = evaluateStep(ref, runA);
+    await expect.poll(async () => (await row(ref.submissionId)).status, { timeout: 30_000 }).toBe("evaluating");
+    expect(await tokenOf(ref.submissionId)).toBe(runA);
+
+    // Run B, triggered again for the same version, failed in its step: its release changes nothing.
+    expect(await releaseStep(ref, "wrun_B")).toBe(false);
+    expect(await row(ref.submissionId)).toMatchObject({ status: "evaluating" });
+
+    release();
+    expect(await first).toMatchObject({ status: "to_review" });
+    const [proposal] = await proposalsOf(ref.submissionId);
+    expect(await row(ref.submissionId)).toEqual({ status: "to_review", currentVersion: 1, currentProposalId: proposal.id });
+    expect(await tokenOf(ref.submissionId)).toBeNull();
+  });
+
+  it("the run whose step failed frees its claim; its answer, if it comes, is kept and never current", async () => {
+    const { student, assignmentId } = await setup();
+    const triggers = recordTriggers();
+    await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: TEXT }, triggers);
+    const [ref] = triggers.refs;
+    const release = getSimulator().holdNext();
+    const first = evaluateStep(ref, "wrun_A");
+    await expect.poll(async () => (await row(ref.submissionId)).status, { timeout: 30_000 }).toBe("evaluating");
+
+    expect(await releaseStep(ref, "wrun_A")).toBe(true);
+    expect(await row(ref.submissionId)).toMatchObject({ status: "evaluation_failed", currentProposalId: null });
+    expect(await tokenOf(ref.submissionId)).toBeNull();
+    // Delivered again (at least once): nothing more.
+    expect(await releaseStep(ref, "wrun_A")).toBe(false);
+
+    release();
+    expect(await first).toMatchObject({ status: "stale" });
+    expect(await row(ref.submissionId)).toMatchObject({ status: "evaluation_failed", currentProposalId: null });
+    expect(await runsOf(ref.submissionId)).toHaveLength(1);
+  });
+
+  it("the database keeps a token exactly while evaluating", async () => {
+    const { student, assignmentId } = await setup();
+    const triggers = recordTriggers();
+    await submitStudentText(student, { assignmentId, contentVersion: "1", requestId: randomUUID(), text: TEXT }, triggers);
+    const id = triggers.refs[0].submissionId;
+    await expect(db.update(submissions).set({ status: "evaluating" }).where(eq(submissions.id, id))).rejects.toThrow();
+    await expect(db.update(submissions).set({ claimToken: "wrun_X" }).where(eq(submissions.id, id))).rejects.toThrow();
   });
 });

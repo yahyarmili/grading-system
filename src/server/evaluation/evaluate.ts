@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import {
   AI_CALL_TIMEOUT_MS,
   AI_MAX_ATTEMPTS,
@@ -227,15 +228,17 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
  * `expectedVersion`: only that version is claimed, "skipped" otherwise.
  * `slots` (E6): "busy" when EVALUATION_CONCURRENCY submissions are already
  * evaluating; nothing changed. The circuit breaker open before any call: no
- * run, evaluation_failed, for the teacher to retry.
+ * run, evaluation_failed, for the teacher to retry. `claimToken` (E6): the
+ * workflow run's identifier, so that its releaseStep frees this claim only;
+ * a random one for the command.
  */
 export async function evaluateSubmission(
   submissionId: string,
   deps: EvaluationDeps = defaultDeps(),
-  opts: ClaimOptions = {},
+  opts: ClaimOptions & { claimToken?: string } = {},
 ): Promise<EvaluationOutcome> {
   const started = performance.now();
-  const claim = await claimForEvaluation(submissionId, opts);
+  const claim = await claimForEvaluation(submissionId, opts.claimToken ?? randomUUID(), opts);
   if (claim === "busy") return { status: "busy" };
   if (!claim) return { status: "skipped" };
 
