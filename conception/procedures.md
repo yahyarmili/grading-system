@@ -118,4 +118,9 @@ Aucune variable `ANTHROPIC_*` ni `NODE_DEBUG` dans Vercel : l'adaptateur refuser
 2. Console : **révoquer** la clé du compte de service. Une requête restante répond 401 (`configuration`, sans relance ; trois remises en échec ouvrent le disjoncteur).
 3. Les remises déjà traitées, leurs exécutions et les lignes `ai_request_sent` restent (immuables).
 
-**Rejeu.** À consigner ici après la première démonstration : date, état et modèle relevés en base, requête vue dans la Console.
+**Rejeu.** 2026-10-20 (E6.5), preview au commit `2ccd93d`, base dev migrée avant le push :
+- variables posées par l'utilisateur en Preview seulement (`GRADING_ANTHROPIC_API_KEY` en « Sensitive »), relevées par capture de la page Vercel, valeurs non lues ;
+- devoir fictif « My town » (B1, anglais) et texte fictif proposé (114 mots, sans nom), remis par l'utilisateur avec son compte élève de démonstration ; l'élève voit « Submitted, being marked » ;
+- base dev : version reçue à 20:18:45 UTC, `ai_request_sent` (sujet = la remise) à 20:18:47, exécution enregistrée à 20:18:59, soit 14 s de la remise à `to_review` ; une exécution `anthropic`, `outcome = 'proposed'`, `model_requested` et `model_answered` = `claude-haiku-5-5`, 1 tentative, 12,6 s d'appel, 3 189 tokens en entrée et 1 689 en sortie (coût estimé 0,0013 $ avec la majoration de 1,1) ; proposition courante ;
+- une seule requête et une seule exécution dans l'heure : aucun doublon ;
+- Console (requête dans les Logs de l'espace) : à relever par l'utilisateur.
