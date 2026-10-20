@@ -383,6 +383,17 @@ describe("E6.6, EXP-02: the calls whose usage no run holds count at a ceiling", 
     expect(await uncounted()).toBe(2);
     expect(await guard("simulator")).toBe("cost_cap");
   });
+
+  it("another real provider's calls (OpenRouter, until 2026-10-19) are taken from the requests, never priced", async () => {
+    const { refs } = await batch(1);
+    await db.insert(evaluationRuns).values({
+      submissionId: refs[0].submissionId, versionNumber: 1, outcome: "proposed", provider: "openrouter", modelRequested: "m",
+      promptVersion: "evaluation-1", rubricVersion: "en-1", attempts: 1, attemptErrors: [], durationMs: 1,
+      promptTokens: 90_000_000, completionTokens: 0, totalTokens: 90_000_000,
+    });
+    await sent(1);
+    expect(await readAiGuardCounts("simulator", 3_600_000)).toMatchObject({ promptTokens: 0, uncountedCalls: 0 });
+  });
 });
 
 describe("E6.6: the administrators' alert is recorded once sent", () => {

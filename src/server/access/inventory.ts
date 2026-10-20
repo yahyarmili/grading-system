@@ -43,11 +43,14 @@ export type EntryPoint = { resource: Resource; action: Action } | { public: stri
 
 /**
  * The route Workflows' queue delivers to (E6.6). @vercel/queue's handler
- * checks no signature of the delivery (read in its source on 2026-10-20);
- * whether Vercel keeps the route to its queue was not verified. So the step
- * trusts nothing of the message: an automatic claim needs the received
- * version, a retry or relaunch the request the owner teacher stored
- * (system.ts); a forged message evaluates nothing that was not due.
+ * checks no signature of the delivery (read in its source on 2026-10-20). On
+ * Vercel, the route's queue trigger (generated config.json) makes it private,
+ * invoked by the queue only (https://vercel.com/docs/queues/quickstart, read
+ * on 2026-10-20; documented, not tested); locally (Local World) anyone on the
+ * machine may post to it. So the step trusts nothing of the message: an
+ * automatic claim needs the received version, a retry or relaunch the request
+ * the owner teacher stored (system.ts); a forged message evaluates nothing
+ * that was not due, and never carries the text (read from the database).
  */
 const WORKFLOW_FLOW =
   "Workflows' deliveries of the evaluation workflow and its steps (PRC-01): identifiers only; a retry or relaunch claims only with the teacher's stored request";

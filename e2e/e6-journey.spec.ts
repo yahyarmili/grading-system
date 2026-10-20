@@ -77,6 +77,8 @@ test("E6 journey: a text, then its replacement, reach to_review by themselves; t
   // here (the failures of the simulator stay in the server's memory).
   for (const [status, cause, label] of [
     ["evaluation_failed", null, "Evaluation failed"],
+    ["not_assessable", "no_content", "No content to assess"],
+    ["not_assessable", "rubric_unavailable", "Rubric not validated for this language"],
     ["not_assessable", "ai_unavailable", "AI unavailable"],
   ] as const) {
     await sql(
@@ -87,7 +89,7 @@ test("E6 journey: a text, then its replacement, reach to_review by themselves; t
     await lina.page.reload();
     await expect(beingMarked(lina.page)).toBeVisible();
     const page = await lina.page.content();
-    for (const hidden of [status, label, "ai_unavailable"]) expect(page).not.toContain(hidden);
+    for (const hidden of [status, label, cause ?? "evaluation_failed"]) expect(page).not.toContain(hidden);
   }
 });
 

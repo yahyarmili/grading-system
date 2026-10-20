@@ -19,6 +19,7 @@ describe("errorForStatus", () => {
     ["400, no credit left", 400, body("invalid_request_error", "Your credit balance is too low to access the Anthropic API."), "budget", "invalid_request_error/credit_exhausted"],
     ["429, no credit left (status not documented)", 429, body("rate_limit_error", "Your credit balance is too low to access the Anthropic API."), "budget", "rate_limit_error/credit_exhausted"],
     ["403, no credit left", 403, body("permission_error", "Your credit balance is too low to access the Anthropic API."), "budget", "permission_error/credit_exhausted"],
+    ["500, no credit left (whatever the status, plan of E6 §4)", 500, body("api_error", "Your credit balance is too low to access the Anthropic API."), "budget", "api_error/credit_exhausted"],
     ["400, any other", 400, body("invalid_request_error"), "configuration", "invalid_request_error"],
     ["401", 401, body("authentication_error"), "configuration", "authentication_error"],
     ["402", 402, body("billing_error"), "budget", "billing_error"],

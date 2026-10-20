@@ -409,7 +409,9 @@ export type AiGuardCounts = {
  * stops a real provider, and the other way round). The calls of a run are its
  * attempts that reached the provider: an answer, or an error other than
  * superseded and internal (an internal one may follow a call: not counted, so
- * by excess again).
+ * by excess again). ai_request_sent names no provider: the calls of every
+ * real provider's runs are taken from it (OpenRouter's, until 2026-10-19),
+ * those of Anthropic alone are priced.
  */
 export async function readAiGuardCounts(provider: AiProvider, breakerWindowMs: number): Promise<AiGuardCounts> {
   const monthStart = sql`date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'`;
@@ -417,12 +419,13 @@ export async function readAiGuardCounts(provider: AiProvider, breakerWindowMs: n
   const lastError = sql`${errors}[cardinality(${errors})]`;
   const times = (error: EvaluationError) => sql`cardinality(array_positions(${errors}, ${error}::evaluation_error))`;
   const anthropicThisMonth = sql`${evaluationRuns.provider} = 'anthropic' and ${evaluationRuns.createdAt} >= ${monthStart}`;
+  const sentThisMonth = sql`${evaluationRuns.provider} <> 'simulator' and ${evaluationRuns.createdAt} >= ${monthStart}`;
   const [row] = await db
     .select({
       promptTokens: sql<string>`coalesce(sum(${evaluationRuns.promptTokens}) filter (where ${anthropicThisMonth}), 0)`,
       completionTokens: sql<string>`coalesce(sum(${evaluationRuns.completionTokens}) filter (where ${anthropicThisMonth}), 0)`,
       timeouts: sql<string>`coalesce(sum(${times("timeout")}) filter (where ${anthropicThisMonth}), 0)`,
-      calls: sql<string>`coalesce(sum(cardinality(${errors}) - ${times("superseded")} - ${times("internal")} + (${evaluationRuns.outcome} = 'proposed')::int) filter (where ${anthropicThisMonth}), 0)`,
+      calls: sql<string>`coalesce(sum(cardinality(${errors}) - ${times("superseded")} - ${times("internal")} + (${evaluationRuns.outcome} = 'proposed')::int) filter (where ${sentThisMonth}), 0)`,
       sent: sql<string>`(select count(*) from ${securityEvents} where ${securityEvents.type} = 'ai_request_sent' and ${securityEvents.createdAt} >= ${monthStart})`,
       breakerFailures: sql<number>`(count(distinct ${evaluationRuns.submissionId}) filter (where ${evaluationRuns.provider} = ${provider} and ${evaluationRuns.outcome} = 'failed' and ${lastError} in ('configuration', 'rejected') and ${evaluationRuns.createdAt} > now() - make_interval(secs => ${breakerWindowMs / 1000})))::int`,
     })

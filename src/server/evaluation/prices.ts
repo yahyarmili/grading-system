@@ -50,7 +50,7 @@ export function estimateCostUsd(usage: Usage | null | undefined): number | null 
  * their sums only: the prompt at the input price (the cache read, cheaper, is
  * counted in it: an estimate by excess), the completion at the output price,
  * inference_geo "us". Each prompt stays far under the long-context threshold
- * (about 2 000 tokens in E5.16), so its prices are not used.
+ * (2 993 to 3 272 tokens in E5.16), so its prices are not used.
  */
 export function estimateRunsCostUsd(promptTokens: number, completionTokens: number): number {
   const cost = (promptTokens * PRICES.perMillion.input + completionTokens * PRICES.perMillion.output) / 1_000_000;

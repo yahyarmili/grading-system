@@ -44,7 +44,8 @@ export function errorForStatus(status: number, body?: unknown, retryAfterMs?: nu
   const errorCode = identifierOf(details?.error_code);
   const fail = (kind: EvaluatorError["kind"], code = type, wait?: number) => new EvaluatorError(kind, wait, code);
 
-  if (status >= 400 && status < 500 && startsWithAny(error?.message, [CREDIT_EXHAUSTED])) {
+  // Whatever the status (plan of E6 §4): no credit is no credit.
+  if (startsWithAny(error?.message, [CREDIT_EXHAUSTED])) {
     return fail("budget", `${type ?? "error"}/credit_exhausted`);
   }
   if (status === 400) {
