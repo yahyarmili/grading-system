@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "admin:create": "tsx --conditions=react-server scripts/create-admin.ts",
     "ai:trial": "tsx --conditions=react-server scripts/ai-trial.ts",
-    "ai:evaluate": "tsx --conditions=react-server scripts/evaluate.ts"
+    "ai:evaluate": "tsx --conditions=react-server scripts/evaluate.ts",
+    "ai:report": "tsx --conditions=react-server scripts/evaluation-report.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",

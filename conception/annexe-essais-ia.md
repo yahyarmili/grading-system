@@ -299,3 +299,37 @@ Adversarial set (EVL-03 CA3): largest gap on any criterion with the base text, i
 - Marge : un appel qui irait jusqu'à `max_tokens` prendrait, au débit le plus lent observé (136 tokens de sortie par seconde, réseau compris ; médiane 186), de l'ordre de 30 s. 60 s en laissent environ le double.
 - Plafond : une fonction Vercel Hobby dure 300 s au plus. Avec `AI_MAX_ATTEMPTS` = 3 et une attente de 30 s au plus entre deux tentatives (`AI_RETRY_MAX_WAIT_MS`), le pire cas fait 3 × 60 + 2 × 30 = 240 s, et laisse 60 s au reste de l'étape.
 - Limites : mesuré depuis Docker en local, pas depuis Vercel (`cle1`) ; un seul soir, 60 appels ; la durée réelle d'une étape de Workflows reste à mesurer en E6.
+
+## Lot mesuré, 2026-10-20 (E6.4, EXP-01)
+
+### Conditions
+
+- 20 copies texte fictives (`SWEEP_RESTART_LIMIT`), reçues ensemble puis lancées par la route du balayage (le cron de production), une exécution Workflows par copie ; Local World (serveur `next dev` d'E2E), simulateur, base de test sur Neon `us-east-2`. Script : `e2e/e6-batch-measure.spec.ts` (sur demande, `E2E_MEASURE=1`) ; rapport : `npm run ai:report`.
+- Le simulateur répond aussitôt : la latence du modèle (E5.16 : médiane 7,4 s, maximum 11,3 s) n'est pas dans ces durées. Coût par copie : les 60 appels réels d'E5.16 (2026-10-19), aux prix de `src/server/evaluation/prices.ts`, lus le 2026-10-19 ([prix](https://platform.claude.com/docs/en/about-claude/pricing), [résidence](https://platform.claude.com/docs/en/manage-claude/data-residency)).
+- Événements : un fichier par événement dans le répertoire de la Local World. Vercel facture « chaque transition d'état d'une exécution » ([tarifs](https://vercel.com/docs/workflows/pricing), page du 2026-09-16, lue le 2026-10-20) ; que le décompte de la Vercel World soit identique est supposé, non vérifié sur la preview.
+
+### Mesures (telles quelles)
+
+| Mesure | Valeur |
+|---|---|
+| États atteints | 20 « To review » sur 20 ; 0 échec |
+| Délai du lot (appel du balayage → dernière « To review ») | 33,8 s |
+| Délai par copie depuis l'appel | min 13,5 s, médiane 14,9 s, max 32,4 s (le premier appel compile les routes de `next dev`) |
+| Durée d'une exécution en base (prise en charge → enregistrement) | min 1,8 s, médiane 6,6 s, max 9,2 s |
+| Événements par copie | 6 sans attente (`run_created`, `run_started`, `step_created`, `step_started`, `step_completed`, `run_completed`) ; 11 avec une attente de place (+ `wait_created`, `wait_completed` et une étape) ; 6 copies sur 20 ont attendu une fois ; 150 au total, 7,5 par copie |
+| Données écrites par copie (Local World) | environ 5,0 Ko, 8,1 Ko avec une attente |
+| Tokens par copie (E5.16, réels) | prompt : min 2 993, médiane 3 158, max 3 272 ; sortie (réflexion comprise) : min 679, médiane 1 344, max 2 073 |
+| Coût par copie (E5.16, estimé) | min 0,00070 $, médiane 0,00109 $, moyenne 0,00108 $, max 0,00149 $ |
+| Partie fixe du prompt (régression des tokens sur la longueur du texte, 60 appels) | environ 2 960 tokens, au-dessus du minimum de 512 du cache |
+
+### Capacité mensuelle déduite (estimations, pas des mesures)
+
+- **Workflows Hobby** (50 000 événements, 1 Go écrit) : 50 000 / 7,5 ≈ 6 700 copies (8 300 sans attente, 4 500 si toutes attendaient une fois) ; 1 Go / 5 Ko ≈ 200 000 copies, donc les événements bornent. Une relance du professeur coûte les mêmes 6 événements.
+- **Plafond de l'application** (5 $ par mois, [P]) : 5 / 0,00108 ≈ 4 600 copies (3 400 au coût maximal). C'est la borne la plus basse.
+- **Crédit Max** (100 $ par mois) : ≈ 92 000 copies (67 000 au coût maximal) ; jamais atteint sous le plafond de 5 $.
+- Une copie échouée après 3 tentatives facture jusqu'à 3 appels ; non mesuré ici (0 échec).
+
+### Cache des consignes (à décider)
+
+- Gain par copie lue en cache : 2 960 × (0,10 − 0,01) $/MTok × 1,1 ≈ 0,00029 $ (27 % du coût moyen) ; surcoût d'une écriture : 2 960 × 0,025 $/MTok × 1,1 ≈ 0,00008 $. Rentable au-delà d'environ 22 % de lectures en cache, durée de 5 min : vrai pour un lot de classe remis en quelques minutes, faux pour des remises espacées.
+- Avec un cache toujours lu, le plafond de 5 $ passerait d'environ 4 600 à environ 6 300 copies ; les événements de Workflows bornent alors vers 6 700.

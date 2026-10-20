@@ -117,6 +117,8 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/evaluation/system.ts#releaseStuckEvaluations": "system processing (§5.5, transition 5, PRC-02 R1): submissions evaluating for too long end evaluation_failed, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#listStaleReceived": "system processing (E6, the sweep): identifiers and active version of the text submissions still received after the grace, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#readAiGuardCounts": "system processing (E6, EXP-02): token sums of this month's Anthropic runs and the count of access failures, counts only, called only by src/server/evaluation/",
+  "src/server/data/evaluation/measures.ts#readEvaluationMeasures":
+    "scripts only (ai:report, E6.4, EXP-01): runs and copies by assignment, outcomes, attempts, durations, token sums and states; no name, email, text or proposal",
   "src/server/data/evaluation/system.ts#claimAiAlert": "system processing (E6, EXP-02): records the cost cap or breaker alert once per period and gives the administrators' addresses to email, called only by src/server/evaluation/",
 };
 
@@ -129,6 +131,8 @@ export const SCRIPTS: Record<string, string> = {
   "scripts/create-admin.ts": "npm run admin:create: the first administrator (Q2), local script only, never a screen",
   "scripts/evaluate.ts":
     "npm run ai:evaluate: evaluates one or all received submissions of an assignment (transitions 2 and 5), by hand beside the automatic evaluation of E6 (same claim, cost cap and breaker); the simulator unless --provider anthropic",
+  "scripts/evaluation-report.ts":
+    "npm run ai:report: the evaluation report by assignment (EXP-01, E6.4): delays, attempts, failure rate, AI usage and estimated cost; reads only, no identity or content",
   "scripts/ai-trial.ts":
     "npm run ai:trial: connection trial and trial sets (E5.7, E5.14) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
 };

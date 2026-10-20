@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_BASE_URL, E2E_MAIL_DIR, E2E_PORT, E2E_WORKFLOW_DIR } from "./e2e/support/env";
+import { E2E_BASE_URL, E2E_CRON_SECRET, E2E_MAIL_DIR, E2E_PORT, E2E_WORKFLOW_DIR } from "./e2e/support/env";
 
 // E1 journeys in a real browser. Runs in the "e2e" compose service (Playwright
 // image): docker compose run --rm e2e
@@ -39,8 +39,13 @@ export default defineConfig({
       AI_PROVIDER: "simulator",
       GRADING_ANTHROPIC_API_KEY: "",
       // Workflows' Local World (E6): its queue calls this server back, and keeps its own runs.
+      // The world named: without it, withWorkflow sets WORKFLOW_LOCAL_DATA_DIR to
+      // .next/workflow-data itself, over the value below (seen in E6.4).
+      WORKFLOW_TARGET_WORLD: "local",
       WORKFLOW_LOCAL_BASE_URL: E2E_BASE_URL,
       WORKFLOW_LOCAL_DATA_DIR: E2E_WORKFLOW_DIR,
+      // The sweep's route, called by the measured batch (E6.4, e2e/e6-batch-measure.spec.ts).
+      CRON_SECRET: E2E_CRON_SECRET,
     },
   },
 });

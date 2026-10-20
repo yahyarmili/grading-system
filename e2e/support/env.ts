@@ -14,6 +14,9 @@ export const E2E_MAIL_DIR = path.join(os.tmpdir(), "grading-e2e-mail");
  */
 export const E2E_WORKFLOW_DIR = path.join(os.tmpdir(), "grading-e2e-workflow");
 
+/** The cron route's secret on the E2E server (E6.4: the measured batch calls it); a test value. */
+export const E2E_CRON_SECRET = "e2e-cron-secret";
+
 /** The test database: reset at each run, like the integration tests. */
 export function testDatabaseUrl(): string {
   const url = process.env.DATABASE_URL_TEST;
