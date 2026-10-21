@@ -65,7 +65,7 @@ function QuickFilter({
       aria-pressed={pressed}
       onClick={onToggle}
       className={cn(
-        "inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 transition-colors",
+        "inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 whitespace-nowrap transition-colors",
         pressed ? "border-primary bg-primary-soft font-medium" : "border-border bg-surface hover:border-primary-hover",
       )}
     >
@@ -227,58 +227,57 @@ export function SubmissionsList({
         pending,
       }}
       toolbar={
-        // Two rows, both from the left: showing "Clear filters" never moves the counters.
-        <div className="flex w-full flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="w-full sm:w-48">
-              <span className="sr-only" id="filter-class-label">
-                Class
-              </span>
-              <Select value={query.classId ?? ALL} onValueChange={(v) => go({ classId: v === ALL ? null : v })}>
-                <SelectTrigger aria-labelledby="filter-class-label" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All classes</SelectItem>
-                  {classes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full sm:w-52">
-              <span className="sr-only" id="filter-status-label">
-                Status
-              </span>
-              <Select
-                value={query.status ?? ALL}
-                onValueChange={(v) => go({ status: v === ALL ? null : (v as StatusFilter) })}
-              >
-                <SelectTrigger aria-labelledby="filter-status-label" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>All statuses</SelectItem>
-                  <SelectItem value="failed">Failed (any)</SelectItem>
-                  <SelectSeparator />
-                  {submissionStatuses.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s === "to_submit" ? "Not submitted" : statusLabels[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {filtersOn && (
-              <button type="button" className="btn btn-ghost" onClick={() => go({ classId: null, status: null })}>
-                Clear filters
-              </button>
-            )}
+        // One row on a wide screen, as in mockup 1.4: the selects shrink rather
+        // than push the counters to a second row when "Clear filters" shows.
+        <div className="flex w-full flex-wrap items-center gap-3 xl:flex-nowrap">
+          <div className="w-full sm:w-48 xl:w-auto xl:max-w-48 xl:min-w-32 xl:flex-1">
+            <span className="sr-only" id="filter-class-label">
+              Class
+            </span>
+            <Select value={query.classId ?? ALL} onValueChange={(v) => go({ classId: v === ALL ? null : v })}>
+              <SelectTrigger aria-labelledby="filter-class-label" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All classes</SelectItem>
+                {classes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <div className="w-full sm:w-52 xl:w-auto xl:max-w-52 xl:min-w-36 xl:flex-1">
+            <span className="sr-only" id="filter-status-label">
+              Status
+            </span>
+            <Select
+              value={query.status ?? ALL}
+              onValueChange={(v) => go({ status: v === ALL ? null : (v as StatusFilter) })}
+            >
+              <SelectTrigger aria-labelledby="filter-status-label" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All statuses</SelectItem>
+                <SelectItem value="failed">Failed (any)</SelectItem>
+                <SelectSeparator />
+                {submissionStatuses.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s === "to_submit" ? "Not submitted" : statusLabels[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {filtersOn && (
+            <button type="button" className="btn btn-ghost shrink-0" onClick={() => go({ classId: null, status: null })}>
+              Clear filters
+            </button>
+          )}
           {/* Counted over the whole list, whatever the filters (R5). */}
-          <div role="group" aria-label="Needs attention" className="flex flex-wrap gap-2">
+          <div role="group" aria-label="Needs attention" className="flex flex-wrap gap-2 xl:ml-auto xl:shrink-0 xl:flex-nowrap">
             {quickFilters.map((q) => (
               <QuickFilter
                 key={q.filter}
