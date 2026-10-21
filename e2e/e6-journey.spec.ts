@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
-import { phone, teacherWithClass } from "./support/classes";
-import { createStudent, signIn, sql } from "./support/helpers";
+import { expect, test } from "@playwright/test";
+import { beingMarked, studentInClass, teacherWithClass } from "./support/classes";
+import { sql } from "./support/helpers";
 
 // E6 (fonctionnalites.md §8): the journey of the step, in the real runtime.
 // Workflows (Local World) evaluates a submitted text without anyone acting, on
@@ -92,25 +92,6 @@ test("E6 journey: a text, then its replacement, reach to_review by themselves; t
     for (const hidden of [status, label, cause ?? "evaluation_failed"]) expect(page).not.toContain(hidden);
   }
 });
-
-/** A student on a phone, signed in, who joined the class with its code. */
-async function studentInClass(browser: Parameters<typeof teacherWithClass>[0], code: string) {
-  const page = await (await browser.newContext(phone)).newPage();
-  const email = await createStudent("Lina", "Amrani");
-  await signIn(page, email);
-  await expect(page).toHaveURL(/\/student\//);
-  await page.goto("/student/classes");
-  await page.getByLabel("Class code").fill(code);
-  await page.getByRole("button", { name: "Join the class" }).click();
-  await expect(page.getByText("You joined the class")).toBeVisible();
-  return { page, email };
-}
-
-const beingMarked = (page: Page) =>
-  page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Text submitted" }) })
-    .getByText("Submitted, being marked");
 
 /** The student's submission as stored: its state, active version and the version of its current proposal. */
 async function stateOf(email: string) {

@@ -1,5 +1,5 @@
 import { expect, type Browser, type Page } from "@playwright/test";
-import { createTeacher, signIn } from "./helpers";
+import { createStudent, createTeacher, signIn } from "./helpers";
 
 // Class screens shared by the E2 journeys (CLS-01 to CLS-04).
 
@@ -40,3 +40,23 @@ export async function teacherWithClass(browser: Browser, name: string, teacher: 
   const code = (await inviteCard(page).getByLabel("Code").textContent())!;
   return { page, link, code, url: new URL(page.url()).pathname };
 }
+
+/** A student on a phone, signed in, who joined the class with its code (E6, E7 journeys). */
+export async function studentInClass(browser: Browser, code: string, student: [string, string] = ["Lina", "Amrani"]) {
+  const page = await (await browser.newContext(phone)).newPage();
+  const email = await createStudent(...student);
+  await signIn(page, email);
+  await expect(page).toHaveURL(/\/student\//);
+  await page.goto("/student/classes");
+  await page.getByLabel("Class code").fill(code);
+  await page.getByRole("button", { name: "Join the class" }).click();
+  await expect(page.getByText("You joined the class")).toBeVisible();
+  return { page, email };
+}
+
+/** The status the student sees once they submitted, whatever the state (SUB-01 CA2). */
+export const beingMarked = (page: Page) =>
+  page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Text submitted" }) })
+    .getByText("Submitted, being marked");

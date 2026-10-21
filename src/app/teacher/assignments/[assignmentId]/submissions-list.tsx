@@ -162,15 +162,18 @@ export function SubmissionsList({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {r.status === "to_submit" ? <span className="text-fg-muted">Not submitted</span> : <StatusTag status={r.status} />}
           {r.cause && <span className="text-xs text-fg-muted">{notAssessableCauseLabels[r.cause]}</span>}
+          {r.refused && <span className="text-xs text-fg-muted">The AI declined the text</span>}
           {r.requested ? (
             <Tag icon={Hourglass}>{r.status === "evaluation_failed" ? "Retry requested" : "Relaunch requested"}</Tag>
           ) : (
             r.submission &&
-            offered.has(r.submission.id) && (
+            // PRC-02 from the list (E7.8): a failure is retried here; a
+            // refusal from the copy, where its warning is.
+            ((r.status === "evaluation_failed" && !r.refused) || offered.has(r.submission.id)) && (
               <RequestButton
-                kind="relaunch"
+                kind={r.status === "evaluation_failed" ? "retry" : "relaunch"}
                 seen={{ submissionId: r.submission.id, versionNumber: r.submission.versionNumber }}
-                label="Relaunch"
+                label={r.status === "evaluation_failed" ? "Retry" : "Relaunch"}
                 small
                 context={`${r.firstName} ${r.lastName}`}
               />

@@ -32,6 +32,7 @@ export type AssignmentCopies = {
 type CopyRow = {
   student_id: string;
   submission_id: string | null;
+  refused: boolean | null;
   version_number: number | null;
   requested: boolean | null;
   first_name: string;
@@ -78,6 +79,11 @@ async function copyRows(grant: Grant, assignmentId: string): Promise<ReviewRow[]
         where m.student_id = u.id
       ), '[]') as classes,
       s.id as submission_id, s.current_version as version_number, s.evaluation_request is not null as requested,
+      s.status = 'evaluation_failed' and (
+        select r.attempt_errors[cardinality(r.attempt_errors)] = 'refused' from evaluation_runs r
+        where r.submission_id = s.id and r.version_number = s.current_version
+        order by r.created_at desc, r.id desc limit 1
+      ) as refused,
       s.status, s.late, v.mode,
       (extract(epoch from v.created_at) * 1000)::float8 as version_ms,
       s.not_assessable_cause as cause,
@@ -94,6 +100,7 @@ async function copyRows(grant: Grant, assignmentId: string): Promise<ReviewRow[]
     studentId: row.student_id,
     submission: row.submission_id === null ? null : { id: row.submission_id, versionNumber: row.version_number! },
     requested: row.requested ?? false,
+    refused: row.refused ?? false,
     firstName: row.first_name,
     lastName: row.last_name,
     classes: [...row.classes].sort((a, b) => compareText(a.name, b.name)),

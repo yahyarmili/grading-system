@@ -17,6 +17,8 @@ export type ReviewRow = {
   submission: { id: string; versionNumber: number } | null;
   /** E7.6: a retry or relaunch the teacher asked waits for its run. */
   requested: boolean;
+  /** E7.8: failed because the AI declined the text: retried from the copy, with its warning, not from the list. */
+  refused: boolean;
   firstName: string;
   lastName: string;
   /** By name. */

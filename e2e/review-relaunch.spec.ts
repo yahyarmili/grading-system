@@ -69,9 +69,9 @@ test("CA1, CA2, R4, CA4: a failed copy, Retry double-clicked: one request, one e
   await expect(student.getByText("Submitted, being marked").first()).toBeVisible();
 });
 
-test("CA3 from the list: Relaunch on the 'AI unavailable' copy only; it reaches To review", async ({ page }) => {
+test("CA3 from the list: Relaunch on the 'AI unavailable' copy only, Retry on the failed one; both reach To review", async ({ page }) => {
   const seeder = await seedTeacher(page, ["A"]);
-  let assignmentId: string, unavailable: string;
+  let assignmentId: string, unavailable: string, failed: string;
   try {
     assignmentId = await seeder.assignment(["A"]);
     const [lena, sam, noor] = [
@@ -81,7 +81,8 @@ test("CA3 from the list: Relaunch on the 'AI unavailable' copy only; it reaches 
     ];
     unavailable = await seeder.submit(assignmentId, lena, "not_assessable", { cause: "ai_unavailable", text: TEXT });
     await seeder.submit(assignmentId, sam, "not_assessable", { cause: "no_content", text: "..." });
-    await seeder.fail(await seeder.submit(assignmentId, noor, "evaluation_failed", { text: TEXT }), UNAVAILABLE);
+    failed = await seeder.submit(assignmentId, noor, "evaluation_failed", { text: TEXT });
+    await seeder.fail(failed, UNAVAILABLE);
   } finally {
     await seeder.close();
   }
@@ -96,6 +97,13 @@ test("CA3 from the list: Relaunch on the 'AI unavailable' copy only; it reaches 
   await expect.poll(() => stateOf(unavailable), { timeout: 90_000 }).toBe("to_review");
   await expect(row.getByText("To review", { exact: true })).toBeVisible({ timeout: 30_000 });
   expect(await journalCount(assignmentId, "relaunch_requested")).toBe(1);
+
+  // PRC-02 from the list (E7.8): the failed copy retried from its line.
+  const failedRow = table.getByRole("row").filter({ hasText: "Haddad" });
+  await failedRow.getByRole("button", { name: "Retry Noor Haddad" }).click();
+  await expect.poll(() => stateOf(failed), { timeout: 90_000 }).toBe("to_review");
+  await expect(failedRow.getByText("To review", { exact: true })).toBeVisible({ timeout: 30_000 });
+  expect(await journalCount(assignmentId, "retry_requested")).toBe(1);
 
   // "No content" is never offered, from the copy either.
   await table.getByRole("link", { name: /Lee/ }).click();
