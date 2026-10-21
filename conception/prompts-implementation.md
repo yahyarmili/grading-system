@@ -860,7 +860,7 @@ Revue faite le 2026-10-20 (`feature-reviewer`) : aucun bloquant, 2 majeurs, 6 mi
 
 Préalables :
 - **Q4** tranchée [D, 2026-10-22] : l'élève vérifie et corrige une fois sa transcription avant l'envoi, le professeur ne la corrige pas, pas de PDF ; l'élève relit sa remise après l'envoi (révise A3 : sa relecture du texte collé arrive en E8.3). Sans effet sur l'écran de copie texte d'E7.
-- **Q8** (échéance : avant E7, `fonctionnalites.md` §9) : à trancher par vous avant E7.0. Recommandation : toute modification d'une évaluation validée ou publiée la repasse à « À valider », republication explicite (règle déjà écrite dans REV-03 R5). Sans décision, la recommandation est codée [P] et signalée.
+- **Q8** tranchée [D, 2026-10-22] : toute modification d'une évaluation validée ou publiée la repasse à « À valider » ; l'élève ne voit plus rien jusqu'à la republication explicite (REV-03 R5, transition 10).
 - **Balayage côté professeur** [D, 2026-10-20] : le cron Vercel ne tourne pas sur la preview ; l'ouverture de la liste des remises d'un devoir lance `sweepEvaluations`, qui libère les remises bloquées en évaluation et relance les remises reçues oubliées.
 - **Deux points ouverts d'E6.6**, à trancher au plan : l'alerte « prestataire injoignable » de NFR-EXP-02 (une série de 529 ou de délais dépassés n'alerte personne) ; la relance du professeur abandonnée sans retour quand les 10 places restent prises plus de 5 min (la copie reste en échec, relançable).
 - **Notice du professeur** (NFR-DON-04, « E4 à E8 ») : avant son premier accès aux copies, le professeur apprend ce que mesure le journal (temps de revue, concordance avec l'IA). Elle arrive avec le journal (`schema/notices.ts` l'annonce).
@@ -967,7 +967,7 @@ Utilise le sous-agent feature-reviewer pour relire de façon indépendante la re
 Points : copie, évaluation ou journal d'un autre élève (homonymes, mauvais identifiant), écriture sans journal, proposition modifiable par un chemin quelconque, perte silencieuse entre onglets, remplacement et premier acte simultanés, identité ou classes d'un autre professeur, préchargement qui journalise, cache qui sert une évaluation périmée, journal ou proposition lisibles par l'élève, matrice des nouvelles actions, lenteur de la liste.
 Ne modifie rien. Renvoie d'abord la revue.
 ```
-Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q8, la notice du professeur et les valeurs provisoires.
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour la notice du professeur et les valeurs provisoires.
 
 ---
 
@@ -975,7 +975,7 @@ Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q8, la notic
 
 Préalables :
 - **Q5** tranchée [D, 2026-10-15] : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA affichée à l'élève (formulation à confirmer avec le cadre légal) ; « note ajustée par le professeur » sans justification quand la note diffère de la note calculée. La mention de l'IA répond aussi à l'information demandée par la politique d'usage d'Anthropic (« Education and credentials », champ à confirmer) ; formulation [P] dans `src/lib/texts.ts`.
-- **Q8** : tranchée, ou recommandation provisoire, depuis E7.
+- **Q8** tranchée [D, 2026-10-22] : modifier une copie validée ou publiée la repasse à « To review » ; l'élève ne voit plus rien jusqu'à la republication.
 - Notice élève v4 déjà en place. L'élève ne voit jamais un refus de l'IA, ni sa cause, ni un état technique.
 - **Relecture de la remise** [D, 2026-10-22, Q4] : l'élève relit son texte collé après l'envoi. Le code d'E4 l'interdit encore (textes `NO_READ_BACK_NOTICE` et `SUBMITTED_NO_READ_BACK_NOTICE`, ligne `ownSubmissionStatus`, tests « aucune réponse ne contient son texte ») : E8 le change.
 - `startManualEvaluation` (E6.3) passe aujourd'hui la copie à « To review » sans évaluation : E8 la rend cohérente avec le formulaire.
@@ -1051,7 +1051,7 @@ Utilise le sous-agent feature-reviewer pour relire de façon indépendante la va
 Points : résultat visible avant publication ou après retrait par un canal indirect (liste, état, message d'erreur, charge RSC, cache du routeur, bouton retour, préchargement) ; proposition brute ou alerte dans une réponse à l'élève ; résultat d'un autre élève ; publication sans validation par requête directe ; raccourci à moitié fait ; copie « To review » sans évaluation ; journal incomplet du cycle ; matrice.
 Ne modifie rien. Renvoie d'abord la revue.
 ```
-Puis **T4** pour un constat douteux, **T3**, **T1** (critères de sortie d'E8, `fonctionnalites.md` §8.2), et **T5** pour Q5 (formulation de la mention de l'IA), Q8 et les valeurs provisoires.
+Puis **T4** pour un constat douteux, **T3**, **T1** (critères de sortie d'E8, `fonctionnalites.md` §8.2), et **T5** pour Q5 (formulation de la mention de l'IA) et les valeurs provisoires.
 
 ---
 
@@ -1069,7 +1069,8 @@ Puis **T4** pour un constat douteux, **T3**, **T1** (critères de sortie d'E8, `
 ## 4. Points ouverts qui touchent ces prompts
 
 - Q4 tranchée [D, 2026-10-22] : l'élève vérifie et corrige une fois sa transcription avant l'envoi ; pas de PDF ; l'élève relit sa remise.
-- Q2 (premier administrateur), Q8, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
+- Q8 tranchée [D, 2026-10-22] : toute modification d'une évaluation validée ou publiée la repasse à « À valider », republication explicite.
+- Q2 (premier administrateur), Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
 - Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`.
 - Q3, Q10 et longueur maximale d'un texte tranchées [D, 2026-10-15] : 2 remplacements au plus jusqu'au premier acte du professeur, sans avertissement d'image illisible ; consigne « pas de nom » seule ; 4000 caractères. Codées dans `src/config/decisions.ts` (E4).
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).
