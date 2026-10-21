@@ -56,7 +56,7 @@ async function seed(page: Page) {
 
 const copyUrl = (assignmentId: string, studentId: string) => `/teacher/assignments/${assignmentId}/students/${studentId}`;
 
-test("REV-02: a click on a name opens that student's copy, with the proposal read-only and no earlier result", async ({ page, browser }) => {
+test("REV-02: a click on a name opens that student's copy, with the proposal beside the evaluation and no earlier result", async ({ page, browser }) => {
   const { assignmentId, first, second } = await seed(page);
   await page.goto(`/teacher/assignments/${assignmentId}?sort=grade`);
   const lee = page.getByRole("table", { name: "Submissions" }).getByRole("link", { name: "Lee Sam" });
@@ -82,10 +82,9 @@ test("REV-02: a click on a name opens that student's copy, with the proposal rea
   await expect(page.getByText("Very short text")).toBeVisible();
   await expect(page.getByText("A clear and simple text.").first()).toBeVisible();
   await expect(page.getByText("Proposed grade 10 / 20")).toBeVisible();
-  // Read-only until saving opens: the levels can't change, the remark can't be typed in.
-  await expect(page.getByRole("radio").first()).toBeDisabled();
-  await expect(page.getByRole("textbox", { name: "General comment", exact: true })).not.toBeEditable();
-  await expect(page.getByText("Read-only for now.")).toBeVisible();
+  // The teacher's evaluation starts from the proposal, nothing to save yet (REV-03 R1, E7.4).
+  await expect(page.getByRole("textbox", { name: "General comment", exact: true })).toHaveValue("A clear and simple text.");
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeDisabled();
   await page.screenshot({ path: "test-results/rev02-1-copy-desktop.png", fullPage: true });
 
   // Back to the list with its sort, then the namesake's copy.
@@ -123,7 +122,7 @@ test("REV-02 R4: without a proposal to review, a status page with the cause and 
     await expect(page.getByText(title, { exact: true }).last()).toBeVisible();
     await expect(page.getByText(cause)).toBeVisible();
     await expect(page.getByRole("radio")).toHaveCount(0);
-    await expect(page.getByText("Read-only for now.")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
   }
   await page.screenshot({ path: "test-results/rev02-3-not-assessable-desktop.png", fullPage: true });
   // Not submitted: nothing logged; the three others: one entry each.

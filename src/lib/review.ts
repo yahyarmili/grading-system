@@ -1,7 +1,7 @@
 import { GRADE_SCALE } from "@/config/decisions";
-import { GRADE_STEP } from "@/config/provisional";
+import { GRADE_STEP, REVIEW_TEXT_MAX_LENGTH } from "@/config/provisional";
 import { calculateGrade } from "@/lib/grade";
-import { criterionIds, type CriterionId, type Level } from "@/lib/rubric";
+import { criterionIds, levels as LEVELS, type CriterionId, type Level } from "@/lib/rubric";
 
 // The teacher's evaluation (E7, REV-03): its fields, the grade rule, the
 // "to re-read" flags and the changes a write records in the review log
@@ -130,4 +130,23 @@ export function fieldsFromProposal(proposal: {
     finalGrade: proposal.proposedGrade,
     gradeFixed: false,
   };
+}
+
+/** The message of each refused field, the same on the form and from the server (REV-03). */
+export const REVIEW_FIELD_MESSAGES = {
+  level: `Choose a level from ${LEVELS[0]} to ${LEVELS.at(-1)}.`,
+  tooLong: `Keep it under ${REVIEW_TEXT_MAX_LENGTH} characters.`,
+  gradeMissing: "Enter a grade, or use the calculated grade.",
+  gradeRange: `Enter a grade between 0 and ${GRADE_SCALE}.`,
+  gradeStep: `Use steps of ${GRADE_STEP}.`,
+} as const;
+
+/** A grade as typed ("13,5" or "13.5"): its value, or the message that refuses it. */
+export function readTypedGrade(typed: string | number): { value: number } | { error: string } {
+  const text = typeof typed === "string" ? typed.trim().replace(",", ".") : typed;
+  if (text === "") return { error: REVIEW_FIELD_MESSAGES.gradeMissing };
+  const value = Number(text);
+  const problem = fixedGradeProblem(value);
+  if (problem) return { error: problem === "range" ? REVIEW_FIELD_MESSAGES.gradeRange : REVIEW_FIELD_MESSAGES.gradeStep };
+  return { value };
 }

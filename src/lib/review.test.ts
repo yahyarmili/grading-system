@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GRADE_STEP } from "@/config/provisional";
-import { applyChanges, diffEvaluation, fieldsFromProposal, finalGradeOf, fixedGradeProblem, gradeGap, type EvaluationChanges } from "@/lib/review";
+import { applyChanges, diffEvaluation, fieldsFromProposal, finalGradeOf, fixedGradeProblem, gradeGap, readTypedGrade, REVIEW_FIELD_MESSAGES, type EvaluationChanges } from "@/lib/review";
 import type { CriterionId, Level } from "@/lib/rubric";
 
 // REV-03 R2, R3 (E7.1): the grade is the sum of the levels while not fixed;
@@ -119,5 +119,17 @@ describe("the changes a save records (REV-04 CA1)", () => {
       { field: "final_grade", oldValue: 10, newValue: 12.5 },
       { field: "grade_fixed", oldValue: false, newValue: true },
     ]);
+  });
+});
+
+describe("a grade as typed in the form (REV-03 R2)", () => {
+  it("reads a comma or a point, and refuses empty, out of range or off the step with its message", () => {
+    expect(readTypedGrade("13,5")).toEqual({ value: 13.5 });
+    expect(readTypedGrade(" 20 ")).toEqual({ value: 20 });
+    expect(readTypedGrade(0)).toEqual({ value: 0 });
+    expect(readTypedGrade("")).toEqual({ error: REVIEW_FIELD_MESSAGES.gradeMissing });
+    expect(readTypedGrade("twelve")).toEqual({ error: REVIEW_FIELD_MESSAGES.gradeRange });
+    expect(readTypedGrade("20.5")).toEqual({ error: REVIEW_FIELD_MESSAGES.gradeRange });
+    expect(readTypedGrade("12.3")).toEqual({ error: REVIEW_FIELD_MESSAGES.gradeStep });
   });
 });

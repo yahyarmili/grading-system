@@ -13,7 +13,7 @@ import { getActor } from "@/server/auth/session";
 import { getCopy, getStudentIdentity, type StudentIdentity, type TeacherCopy } from "@/server/data/review/copy";
 import { CopyOpened } from "./copy-opened";
 import { CopyPanel } from "./copy-panel";
-import { EvaluationView } from "./evaluation-view";
+import { EvaluationForm } from "./evaluation-form";
 
 export const metadata: Metadata = { title: "Submission" };
 
@@ -61,8 +61,15 @@ export default async function Page({ params, searchParams }: Props) {
               language={copy.assignment.language}
             />
           </div>
-          {reviewable && copy.proposal ? (
-            <EvaluationView proposal={copy.proposal} evaluation={copy.evaluation} language={copy.assignment.language} />
+          {reviewable && copy.proposal && copy.seen ? (
+            <EvaluationForm
+              // A copy changed under the page (replaced, saved elsewhere) starts a new form.
+              key={`${copy.seen.versionNumber}:${copy.seen.proposalId}:${copy.seen.revision}`}
+              proposal={copy.proposal}
+              evaluation={copy.evaluation}
+              seen={copy.seen}
+              language={copy.assignment.language}
+            />
           ) : (
             <StatusCard copy={copy} />
           )}

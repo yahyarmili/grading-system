@@ -19,7 +19,8 @@ import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
-import { getCopy, getStudentIdentity, recordCopyOpened } from "@/server/data/review/copy";
+import { getCopy, getStudentIdentity, recordCopyOpened, saveEvaluation } from "@/server/data/review/copy";
+import type { EvaluationChanges } from "@/lib/review";
 import { listAssignmentCopies, recordListOpened } from "@/server/data/review/list";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { getCurrentProposal } from "@/server/data/evaluation/proposals";
@@ -305,6 +306,8 @@ const REAL: Partial<Record<Resource, RealResource>> = {
           relaunchEvaluation(actor, { submissionId: unavailableId, versionNumber: 1 }, AI_BACK, NO_START),
       },
       { run: (actor, { failedId }) => startManualEvaluation(actor, { submissionId: failedId, versionNumber: 1 }) },
+      // REV-03 (E7.4): saving the form; the owner's copy is found (not open: no proposal), another's absent.
+      { run: (actor, { failedId }) => saveEvaluation(actor, { submissionId: failedId, versionNumber: 1, proposalId: null, revision: 0 }, SAVED_FORM) },
     ],
   },
   // Invariant 9: the concerned student's name and email, for themself and
@@ -345,6 +348,11 @@ const REAL: Partial<Record<Resource, RealResource>> = {
 /** The cost cap not reached, English published: an "AI unavailable" copy without a budget error is offered. */
 const AI_BACK: RelaunchConditions = { rubricLanguages: ["en"], costCapReached: false };
 const NO_START: EvaluationStartContext = { onStart: () => {} };
+const SAVED_FORM: EvaluationChanges = {
+  levels: { task: 2, organization: 2, vocabulary: 2, grammar: 2, mechanics: 2 },
+  remarks: { task: "", organization: "", vocabulary: "", grammar: "", mechanics: "" },
+  generalComment: "", nextSteps: [], grade: { fixed: false }, rereadDone: [],
+};
 
 /** Puts a submission in a state the evaluation reaches, directly. */
 const forceState = (id: string, status: "evaluation_failed" | "not_assessable", cause?: "ai_unavailable") =>

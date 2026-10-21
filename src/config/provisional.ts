@@ -277,3 +277,10 @@ export const REVIEW_LIST_PAGE_SIZE = 50;
  * response (after()). The list is shown before, never held by it (TRT-03).
  */
 export const SWEEP_ON_OPEN_MAX_MS = 2_000;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Longest remark, general comment or list of
+ * next steps the teacher can save (REV-03): a bound of the storage, set to
+ * the length of a student's text (SUBMISSION_TEXT_MAX_LENGTH).
+ */
+export const REVIEW_TEXT_MAX_LENGTH = 4000;

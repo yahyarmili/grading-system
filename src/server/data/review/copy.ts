@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { compareText } from "@/lib/collation";
 import type { EvaluationError, NotAssessableCause } from "@/lib/evaluation";
-import type { EvaluationFields } from "@/lib/review";
+import { applyChanges, fieldsFromProposal, type EvaluationChanges, type EvaluationFields } from "@/lib/review";
 import type { RowClass } from "@/lib/review-list";
 import type { CriterionId, Level } from "@/lib/rubric";
 import type { SubmissionMode, SubmissionStatus } from "@/lib/submission-status";
@@ -23,7 +23,7 @@ import {
 } from "@/server/db/schema";
 import { ownedBy } from "../access";
 import { proposalFromRow, type CurrentProposal } from "../evaluation/proposals";
-import { appendJournal } from "./record";
+import { appendJournal, writeEvaluation } from "./record";
 
 // REV-02 (E7.3): one student's copy for one of the teacher's assignments,
 // opened by a click on their name. Another teacher's assignment, a student
@@ -231,5 +231,82 @@ export async function recordCopyOpened(actor: Actor, submissionId: string): Prom
       revision: found.revision ?? 0,
       status: found.status,
     };
+  });
+}
+
+/** The copy as the page saw it: the guard of a save (E7 plan §1.5). */
+export type SeenEvaluation = Pick<CopySeen, "submissionId" | "versionNumber" | "proposalId" | "revision">;
+
+export type SavedEvaluation = EvaluationFields & { revision: number };
+
+export type SaveEvaluationResult =
+  /** changed: false when the form held nothing new (nothing written, nothing logged). */
+  | { ok: true; changed: boolean; evaluation: SavedEvaluation }
+  /** The student replaced the copy, or its proposal changed, since it was opened (R5). */
+  | { ok: false; reason: "replaced" }
+  /** Not To review (validated, published: E8), or without an AI proposal (manual evaluation: E8). */
+  | { ok: false; reason: "not_open" }
+  /** Saved meanwhile elsewhere (another tab): what is stored now, never overwritten silently (CA4). */
+  | { ok: false; reason: "conflict"; saved: SavedEvaluation };
+
+/**
+ * REV-03, REV-04: saves the whole form of the teacher's own copy. Under the
+ * submission row's lock, the one a replacement takes too (SUB-05 R3): the
+ * version and the proposal seen, then the status, then the revision. The
+ * first save from the proposal creates the evaluation and sets
+ * teacher_started_at, which closes replacement; each changed field gets its
+ * log entry in the same transaction (record.ts). The proposal is never
+ * written. Null when absent or another teacher's. `changes` comes validated
+ * (src/server/review/evaluation.ts); a level out of 0 to 4 still throws here
+ * and in the database.
+ */
+export async function saveEvaluation(
+  actor: Actor,
+  seen: SeenEvaluation,
+  changes: EvaluationChanges,
+): Promise<SaveEvaluationResult | null> {
+  const grant = authorize(actor, "unpublishedEvaluation", "write");
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        assignmentId: submissions.assignmentId,
+        status: submissions.status,
+        versionNumber: submissions.currentVersion,
+        proposalId: submissions.currentProposalId,
+        proposal: aiProposals,
+        rubricVersion: evaluationRuns.rubricVersion,
+        evaluation: teacherEvaluations,
+      })
+      .from(submissions)
+      .leftJoin(aiProposals, eq(aiProposals.id, submissions.currentProposalId))
+      .leftJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
+      .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, submissions.id))
+      .where(and(eq(submissions.id, seen.submissionId), ownedBy(grant, { teacher: submissions.teacherId })))
+      .for("update", { of: submissions });
+    if (!row) return null;
+    if (row.versionNumber !== seen.versionNumber || row.proposalId !== seen.proposalId) return { ok: false, reason: "replaced" };
+    if (row.status !== "to_review" || !row.proposal || !row.rubricVersion) return { ok: false, reason: "not_open" };
+
+    const proposal = row.proposal;
+    const stored: SavedEvaluation = row.evaluation
+      ? { ...fieldsFromRow(row.evaluation), revision: row.evaluation.revision }
+      : { ...fieldsFromProposal(proposalFromRow(proposal)), revision: 0 };
+    if (stored.revision !== seen.revision) return { ok: false, reason: "conflict", saved: stored };
+
+    const { revision: fromRevision, ...before } = stored;
+    const after = applyChanges(before, changes);
+    const written = await writeEvaluation(tx, {
+      assignmentId: row.assignmentId,
+      submissionId: seen.submissionId,
+      versionNumber: row.versionNumber,
+      actorId: grant.userId,
+      fromRevision,
+      start: { origin: "proposal", proposalId: proposal.id, rubricVersion: row.rubricVersion },
+      before,
+      after,
+    });
+    return written
+      ? { ok: true, changed: true, evaluation: { ...after, revision: written.revision } }
+      : { ok: true, changed: false, evaluation: stored };
   });
 }

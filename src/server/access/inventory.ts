@@ -84,6 +84,7 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/assignments/actions.ts#deleteAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/[assignmentId]/actions.ts#recordListOpenedAction": { resource: "submission", action: "read" },
   "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#recordCopyOpenedAction": { resource: "submission", action: "read" },
+  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#saveEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#replaceTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
