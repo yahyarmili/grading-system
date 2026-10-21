@@ -12,8 +12,8 @@ import { createClass } from "@/server/data/classes/classes";
 import { abandonEvaluationRequest } from "@/server/data/evaluation/system";
 import { listRelaunchable, startManualEvaluation, type EvaluationStartContext, type RelaunchConditions } from "@/server/data/evaluation/teacher";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
-import { getCopy } from "@/server/data/review/copy";
-import { listAssignmentCopies } from "@/server/data/review/list";
+
+
 import { replaceText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { classMemberships, evaluationRuns, reviewJournalEntries, securityEvents, users } from "@/server/db/schema";
@@ -23,6 +23,7 @@ import { evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/eva
 import { REQUEST_MESSAGES, relaunchCopy, retryCopy } from "@/server/review/relaunch";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { recordTriggers } from "./helpers/triggers";
+import { getCopy, listAssignmentCopies, readTeacherNotice } from "./helpers/review";
 
 // PRC-02 from the screen (E7.6): what the copy and the list read, and what
 // "Retry" and "Relaunch" do through their service: the request on the
@@ -43,6 +44,7 @@ async function createUser(role: "student" | "teacher" | "admin"): Promise<Actor 
     .insert(users)
     .values({ email: `relaunch-${role}${n}@example.test`, emailVerified: true, name: `${role} ${n}`, firstName: role, lastName: `${n}`, role })
     .returning({ id: users.id });
+  if (role === "teacher") await readTeacherNotice(user.id);
   return { kind: "user", userId: user.id, role };
 }
 

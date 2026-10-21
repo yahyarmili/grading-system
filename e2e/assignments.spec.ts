@@ -100,7 +100,9 @@ test("ASG-02: the list and the page of an assignment; another teacher gets 404",
   await expect(page.getByRole("heading", { name: "Later", level: 1 })).toBeVisible();
   await expect(page.getByText(/Due Jun 14, 2030, 18:00 \(Casablanca time, GMT\+\d\)/).filter({ visible: true })).toBeVisible();
   await expect(page.getByText("Describe your town.").filter({ visible: true })).toBeVisible();
-  await expect(page.getByText("No submissions yet").filter({ visible: true })).toBeVisible();
+  // E7.7: the teacher notice before the submissions; read, the classes have no student yet.
+  await page.getByRole("button", { name: "I have read this notice" }).click();
+  await expect(page.getByText("No students yet").filter({ visible: true })).toBeVisible();
   await page.screenshot({ path: "test-results/asg02-2-assignment-desktop.png", fullPage: true });
   const url = new URL(page.url()).pathname;
 

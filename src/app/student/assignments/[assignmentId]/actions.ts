@@ -11,7 +11,7 @@ import {
   type SubmissionContext,
   type SubmitTextState,
 } from "@/server/submissions/submissions";
-import { acknowledgeStudentNotice, type AcknowledgeNoticeState } from "@/server/notices/notices";
+import { acknowledgeNoticeReading, type AcknowledgeNoticeState } from "@/server/notices/notices";
 
 // SUB-02: the student submits their own text; the data layer acts only on an
 // assignment they received, whatever the form sends.
@@ -37,7 +37,7 @@ export async function acknowledgeNoticeAction(
   _previous: AcknowledgeNoticeState,
   form: FormData,
 ): Promise<AcknowledgeNoticeState> {
-  const state = await acknowledgeStudentNotice(await getActor(), { version: form.get("version") ?? undefined });
+  const state = await acknowledgeNoticeReading(await getActor(), { version: form.get("version") ?? undefined });
   if (state.status === "done" || (state.status === "error" && state.reason === "outdated")) refresh();
   return state;
 }

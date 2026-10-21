@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { Ban, CalendarClock, CircleDashed, FileText, Hourglass, Image as ImageIcon, Mail, TriangleAlert, UserMinus, Users, type LucideIcon } from "lucide-react";
 import { z } from "zod";
 import { Alert } from "@/components/alert";
 import { EmptyState } from "@/components/empty-state";
+import { LoadingState } from "@/components/loading";
 import { BackLink } from "@/components/shell/shell-parts";
 import { LateTag, StatusTag } from "@/components/status-tag";
 import { Tag } from "@/components/tag";
@@ -15,11 +17,13 @@ import { getActor } from "@/server/auth/session";
 import { listRelaunchable } from "@/server/data/evaluation/teacher";
 import { getCopy, getStudentIdentity, type StudentIdentity, type TeacherCopy } from "@/server/data/review/copy";
 import { relaunchConditions } from "@/server/evaluation/relaunch";
+import { TeacherNotice } from "@/app/teacher/teacher-notice";
 import { NoticeArea } from "../../notice";
 import { RefreshWhileEvaluating } from "../../refresh-while";
 import { RequestButton } from "../../request-button";
 import { CopyOpened } from "./copy-opened";
 import { CopyPanel } from "./copy-panel";
+import { CopyHistory } from "./history";
 import { EvaluationForm } from "./evaluation-form";
 
 export const metadata: Metadata = { title: "Submission" };
@@ -43,6 +47,15 @@ export default async function Page({ params, searchParams }: Props) {
   const actor = await getActor();
   const [copy, identity] = await Promise.all([getCopy(actor, assignmentId, studentId), getStudentIdentity(actor, studentId)]);
   if (!copy || !identity) notFound();
+  // NFR-DON-04 (E7.7): nothing of the copy before the teacher notice is read.
+  if (copy === "notice_required") {
+    return (
+      <>
+        <BackLink href={`/teacher/assignments/${assignmentId}`}>Submissions</BackLink>
+        <TeacherNotice />
+      </>
+    );
+  }
 
   // The list's sort and filters, given back as they were (REV-01), read again so nothing else passes.
   const list = (await searchParams).list;
@@ -91,6 +104,13 @@ export default async function Page({ params, searchParams }: Props) {
           </div>
         )}
       </NoticeArea>
+      {copy.seen && (
+        <div className="mt-6">
+          <Suspense fallback={<LoadingState label="Loading the history…" className="card" />}>
+            <CopyHistory submissionId={copy.seen.submissionId} />
+          </Suspense>
+        </div>
+      )}
     </>
   );
 }

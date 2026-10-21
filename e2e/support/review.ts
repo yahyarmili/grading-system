@@ -13,7 +13,12 @@ import { createStudent, createTeacher, signIn, sql } from "./helpers";
 export type Seeder = Awaited<ReturnType<typeof seedTeacher>>;
 
 /** Signs in a new teacher in `page`, creates their classes on the screen, then opens the test database. */
-export async function seedTeacher(page: Page, classNames: string[], teacher: [string, string] = ["Sarah", "Bennett"]) {
+export async function seedTeacher(
+  page: Page,
+  classNames: string[],
+  teacher: [string, string] = ["Sarah", "Bennett"],
+  { noticeRead = true } = {},
+) {
   const teacherEmail = await createTeacher(...teacher);
   await signIn(page, teacherEmail);
   await expect(page).toHaveURL(/\/teacher\//);
@@ -24,6 +29,10 @@ export async function seedTeacher(page: Page, classNames: string[], teacher: [st
   await client.connect();
   const one = async <Row>(text: string, values: unknown[]) => (await client.query(text, values)).rows[0] as Row;
   const { id: teacherId } = await one<{ id: string }>(`SELECT id FROM users WHERE email = $1`, [teacherEmail]);
+  // E7.7: the teacher notice read, unless the test shows it.
+  if (noticeRead) {
+    await client.query(`INSERT INTO notice_acknowledgements (user_id, notice, version) VALUES ($1, 'teacher_review', 1)`, [teacherId]); // TEACHER_NOTICE.version (src/lib/texts.ts)
+  }
   const classes = (await client.query<{ id: string; name: string }>(`SELECT id, name FROM classes WHERE teacher_id = $1`, [teacherId])).rows;
   const classId = (name: string) => classes.find((c) => c.name === name)!.id;
 

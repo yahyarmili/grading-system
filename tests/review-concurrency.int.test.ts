@@ -8,12 +8,13 @@ import { getSimulator } from "@/server/ai";
 import { createAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
-import { getCopy } from "@/server/data/review/copy";
+
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { classMemberships, reviewJournalEntries, submissions, teacherEvaluations, users } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { saveTeacherEvaluation } from "@/server/review/evaluation";
+import { getCopy, readTeacherNotice } from "./helpers/review";
 
 // REV-03 R5, SUB-05 CA4 (E7.5): writes that race, in real concurrent
 // transactions (Promise.all: two connections of the pool). Two saves from
@@ -34,6 +35,7 @@ async function createUsers(role: "student" | "teacher", n: number): Promise<(Act
       }),
     )
     .returning({ id: users.id });
+  if (role === "teacher") await readTeacherNotice(...rows.map((user) => user.id));
   return rows.map((user) => ({ kind: "user", userId: user.id, role }));
 }
 

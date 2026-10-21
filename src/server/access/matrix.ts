@@ -90,10 +90,11 @@ export const ACCESS_MATRIX = {
     concernedStudent: L, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
   },
   noticeAcknowledgement: {
-    // [P] NFR-DON-04: the student's own reading of the notice before the
-    // first submission (account, date, version); written once read.
+    // [P] NFR-DON-04: one's own reading of a notice (account, date, version),
+    // written once read: the student's before the first submission (E4), the
+    // teacher's before the first access to copies (E7.7).
     label: "Own reading of a notice (NFR-DON-04)",
-    concernedStudent: LW, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
+    concernedStudent: LW, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   submission: {
     label: "Submission and images",

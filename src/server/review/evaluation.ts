@@ -19,6 +19,7 @@ export const EVALUATION_MESSAGES = {
   notOpen: "This copy can no longer be changed here. The page has been reloaded. Nothing was saved.",
   conflict: "This evaluation was changed in another tab or window. Nothing was saved.",
   notFound: "This copy was not found. Nothing was saved.",
+  noticeRequired: "Read the teacher notice first. The page has been reloaded. Nothing was saved.",
 } as const;
 
 /** A field of the form, as the messages name it: "level.task", "remark.task", "generalComment", "nextSteps", "grade". */
@@ -98,6 +99,8 @@ export async function saveTeacherEvaluation(actor: Actor, raw: unknown): Promise
     if (!result) return { status: "not_found", message: EVALUATION_MESSAGES.notFound };
     if (result.ok) return { status: "saved", changed: result.changed, evaluation: result.evaluation };
     if (result.reason === "conflict") return { status: "conflict", message: EVALUATION_MESSAGES.conflict, saved: result.saved };
+    // E7.7: the page reloads on the notice; the copy is not open to this teacher yet.
+    if (result.reason === "notice_required") return { status: "not_open", message: EVALUATION_MESSAGES.noticeRequired };
     return result.reason === "replaced"
       ? { status: "replaced", message: EVALUATION_MESSAGES.replaced }
       : { status: "not_open", message: EVALUATION_MESSAGES.notOpen };

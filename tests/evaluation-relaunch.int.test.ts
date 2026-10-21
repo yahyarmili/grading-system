@@ -33,6 +33,7 @@ import { sweepEvaluations } from "@/server/evaluation/sweep";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { FR_TEST_RUBRIC } from "./fixtures/rubric-fr-test";
 import { recordTriggers } from "./helpers/triggers";
+import { readTeacherNotice } from "./helpers/review";
 
 // E6.3, PRC-02: after the attempts, "evaluation failed"; the owner teacher
 // retries it (transition 6), relaunches a copy "not assessable" once its
@@ -52,6 +53,7 @@ async function createUser(role: "student" | "teacher"): Promise<Actor & { kind: 
     .insert(users)
     .values({ email: `${role}${n}@example.test`, emailVerified: true, name: `${role} ${n}`, firstName: role, lastName: `${n}`, role })
     .returning({ id: users.id });
+  if (role === "teacher") await readTeacherNotice(user.id);
   return { kind: "user", userId: user.id, role };
 }
 

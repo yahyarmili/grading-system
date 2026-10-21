@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { STUDENT_NOTICE } from "@/lib/texts";
+import { STUDENT_NOTICE, TEACHER_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
 import { createAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { db } from "@/server/db/client";
 import { assignments, classMemberships, noticeAcknowledgements, submissions, users } from "@/server/db/schema";
-import { acknowledgeStudentNotice, NOTICE_MESSAGES } from "@/server/notices/notices";
+import { acknowledgeNoticeReading, NOTICE_MESSAGES } from "@/server/notices/notices";
 import { SUBMISSION_MESSAGES, submitStudentText } from "@/server/submissions/submissions";
 import { noTrigger } from "./helpers/triggers";
 
@@ -17,7 +17,7 @@ import { noTrigger } from "./helpers/triggers";
 // submission without it.
 
 let count = 0;
-async function createUser(role: "student" | "teacher"): Promise<Actor & { kind: "user" }> {
+async function createUser(role: "student" | "teacher" | "admin"): Promise<Actor & { kind: "user" }> {
   const n = ++count;
   const [user] = await db
     .insert(users)
@@ -56,7 +56,7 @@ describe("the first submission waits for the notice", () => {
     const [{ lockedAt }] = await db.select({ lockedAt: assignments.lockedAt }).from(assignments);
     expect(lockedAt).toBeNull();
 
-    expect(await acknowledgeStudentNotice(student, { version: String(STUDENT_NOTICE.version) })).toEqual({ status: "done" });
+    expect(await acknowledgeNoticeReading(student, { version: String(STUDENT_NOTICE.version) })).toEqual({ status: "done" });
     expect((await submit(student, assignmentId)).status).toBe("done");
   });
 
@@ -71,7 +71,7 @@ describe("the first submission waits for the notice", () => {
 
   it("is per account: another student's reading does not count", async () => {
     const { student, assignmentId } = await setup();
-    await acknowledgeStudentNotice(await createUser("student"), { version: String(STUDENT_NOTICE.version) });
+    await acknowledgeNoticeReading(await createUser("student"), { version: String(STUDENT_NOTICE.version) });
     expect(await submit(student, assignmentId)).toMatchObject({ reason: "noticeNotRead" });
   });
 });
@@ -79,7 +79,7 @@ describe("the first submission waits for the notice", () => {
 describe("the reading is recorded: account, date, version", () => {
   it("records the account, the version and the database date", async () => {
     const { student } = await setup();
-    await acknowledgeStudentNotice(student, { version: String(STUDENT_NOTICE.version) });
+    await acknowledgeNoticeReading(student, { version: String(STUDENT_NOTICE.version) });
     const [row] = await db
       .select({
         userId: noticeAcknowledgements.userId,
@@ -95,28 +95,35 @@ describe("the reading is recorded: account, date, version", () => {
   it("keeps the first reading when read again, even twice at once", async () => {
     const { student } = await setup();
     const version = String(STUDENT_NOTICE.version);
-    await Promise.all([acknowledgeStudentNotice(student, { version }), acknowledgeStudentNotice(student, { version })]);
+    await Promise.all([acknowledgeNoticeReading(student, { version }), acknowledgeNoticeReading(student, { version })]);
     const [first] = await readings();
-    await acknowledgeStudentNotice(student, { version });
+    await acknowledgeNoticeReading(student, { version });
     expect(await readings()).toEqual([first]);
   });
 
   it("records nothing for a version no longer in force", async () => {
     const { student } = await setup();
-    expect(await acknowledgeStudentNotice(student, { version: String(STUDENT_NOTICE.version + 1) })).toEqual({
+    expect(await acknowledgeNoticeReading(student, { version: String(STUDENT_NOTICE.version + 1) })).toEqual({
       status: "error", reason: "outdated", message: NOTICE_MESSAGES.outdated,
     });
-    expect(await acknowledgeStudentNotice(student, { version: "not a number" })).toMatchObject({ reason: "outdated" });
+    expect(await acknowledgeNoticeReading(student, { version: "not a number" })).toMatchObject({ reason: "outdated" });
     expect(await readings()).toEqual([]);
   });
 
-  it("refuses a teacher", async () => {
+  it("E7.7: a teacher records their own notice, never the student's", async () => {
     const { teacher } = await setup();
-    expect(await acknowledgeStudentNotice(teacher, { version: String(STUDENT_NOTICE.version) })).toMatchObject({
-      reason: "notAllowed",
-    });
+    // TEACHER_NOTICE.version 1 is not STUDENT_NOTICE.version 4: the student's version is outdated for them.
+    expect(await acknowledgeNoticeReading(teacher, { version: String(STUDENT_NOTICE.version) })).toMatchObject({ reason: "outdated" });
     expect(await readings()).toEqual([]);
-    expect(await db.select().from(users).where(eq(users.id, teacher.userId))).toHaveLength(1);
+    expect(await acknowledgeNoticeReading(teacher, { version: String(TEACHER_NOTICE.version) })).toEqual({ status: "done" });
+    expect(await readings()).toMatchObject([{ userId: teacher.userId, notice: "teacher_review", version: TEACHER_NOTICE.version }]);
+    expect(await getNoticeAcknowledgement(teacher)).toEqual({ acknowledgedAt: expect.any(String) });
+  });
+
+  it("refuses an administrator", async () => {
+    const admin = await createUser("admin");
+    expect(await acknowledgeNoticeReading(admin, { version: String(TEACHER_NOTICE.version) })).toMatchObject({ reason: "notAllowed" });
+    expect(await readings()).toEqual([]);
   });
 });
 

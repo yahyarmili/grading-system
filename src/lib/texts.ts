@@ -101,6 +101,46 @@ export const STUDENT_NOTICE = {
   acknowledge: "I have read this notice",
 } as const;
 
+/**
+ * NFR-DON-04, REV-04 (E7.7) [P]: the teacher reads it before their first
+ * access to copies. Frozen under its version (tests/teacher-notice.test.ts):
+ * any change of the text needs a new version, read again.
+ */
+export const TEACHER_NOTICE = {
+  version: 1,
+  title: "Before you review copies: what the review log records",
+  sections: [
+    {
+      heading: "What is recorded",
+      body: [
+        "When you open an assignment's submissions and a student's copy, every change you make to an evaluation (old and new value), your retries and relaunches, and later your validations and publications. Each entry has its author and date.",
+        "The AI proposal is kept unchanged beside your evaluation.",
+      ],
+    },
+    {
+      heading: "What it measures",
+      body: [
+        "Your review time, from the times you open and validate a copy.",
+        "How close your final evaluation is to the AI proposal.",
+      ],
+    },
+    {
+      heading: "Who reads it",
+      body: [
+        "You, on your own copies, under History. Students never see it. The project team reads it, without names, to measure the review time and the closeness to the AI.",
+        "No one can change or delete an entry, you included.",
+      ],
+    },
+    {
+      heading: "Its limit",
+      body: [
+        "Closeness to the AI proposal does not tell whether you agreed because the AI was right, or because its proposal influenced you.",
+      ],
+    },
+  ],
+  acknowledge: "I have read this notice",
+} as const;
+
 /** SUB-05, Q3 [D, 2026-10-15]: replacements left, until the teacher's first change or validation. */
 export const replacementsLeftNotice = (left: number) =>
   `You can replace your text ${left === 1 ? "once more" : `${left} more times`}, until your teacher starts marking it. Your teacher marks the last text you sent.`;

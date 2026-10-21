@@ -20,6 +20,7 @@ import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites"
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
 import { getCopy, getStudentIdentity, recordCopyOpened, saveEvaluation } from "@/server/data/review/copy";
+import { listCopyJournal } from "@/server/data/review/journal";
 import type { EvaluationChanges } from "@/lib/review";
 import { listAssignmentCopies, recordListOpened } from "@/server/data/review/list";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
@@ -39,7 +40,7 @@ import {
   assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, submissions, users,
 } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
-import { STUDENT_NOTICE } from "@/lib/texts";
+import { STUDENT_NOTICE, TEACHER_NOTICE } from "@/lib/texts";
 import { checkDataExports, dataSources } from "./helpers/access-inventory";
 
 // AUTH-04: every cell of the matrix (fonctionnalites.md §5.4) is replayed.
@@ -232,10 +233,14 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     },
   },
   // The student's own reading of the notice (NFR-DON-04): reading it makes it theirs.
+  // Each role's own notice: the student's (E4), the teacher's (E7.7).
   noticeAcknowledgement: {
-    setup: noticeRead,
+    setup: noticesOfOwners,
     read: { run: (actor) => getNoticeAcknowledgement(actor) },
-    write: { run: (actor) => acknowledgeNotice(actor, STUDENT_NOTICE.version), creates: true },
+    write: {
+      run: (actor) => acknowledgeNotice(actor, actor.kind === "user" && actor.role === "teacher" ? TEACHER_NOTICE.version : STUDENT_NOTICE.version),
+      creates: true,
+    },
   },
   // Submitting to the owner's assignment (SUB-02), and replacing the submission
   // the concerned student already made to another (SUB-05): the student writes
@@ -310,7 +315,7 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       { run: (actor, { failedId }) => saveEvaluation(actor, { submissionId: failedId, versionNumber: 1, proposalId: null, revision: 0 }, SAVED_FORM) },
     ],
   },
-  // REV-04 R3 (E7.6): the copy reads from the log whether the teacher's last
+  // REV-04 R3 (E7.6, E7.7): the copy reads from the log whether the teacher's last
   // request was dropped; the corrector only.
   reviewLog: {
     setup: async () => {
@@ -319,9 +324,13 @@ const REAL: Partial<Record<Resource, RealResource>> = {
         assignmentId: fixture.assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
       });
       if (!submitted?.ok) throw new Error("Not submitted");
-      return fixture;
+      return { ...fixture, submissionId: submitted.ref.submissionId };
     },
-    read: { run: (actor, { assignmentId }) => getCopy(actor, assignmentId, people.concernedStudent.userId) },
+    read: [
+      { run: (actor, { assignmentId }) => getCopy(actor, assignmentId, people.concernedStudent.userId) },
+      // REV-04 R3 (E7.7): the copy's history, by direct request.
+      { run: (actor, { submissionId }) => listCopyJournal(actor, submissionId) },
+    ],
   },
   // Invariant 9: the concerned student's name and email, for themself and
   // the teacher of their class (REV-02, E7.3); another person finds nothing.
@@ -372,10 +381,22 @@ const forceState = (id: string, status: "evaluation_failed" | "not_assessable", 
   db.update(submissions).set({ status, notAssessableCause: cause ?? null }).where(eq(submissions.id, id));
 
 /** The concerned student read the notice in force. */
+/** The notices read: the concerned student's, and the owner teacher's (E7.7). */
+async function noticesOfOwners(): Promise<Fixture> {
+  await db.insert(noticeAcknowledgements).values([
+    { userId: people.concernedStudent.userId, notice: "student_submission", version: STUDENT_NOTICE.version },
+    { userId: people.ownerTeacher.userId, notice: "teacher_review", version: TEACHER_NOTICE.version },
+  ]);
+  return {};
+}
+
+/**
+ * For the copies: the other teacher read their notice too, so that what
+ * they miss is the owner's copy, not the notice (NFR-DON-04, E7.7).
+ */
 async function noticeRead(): Promise<Fixture> {
-  await db.insert(noticeAcknowledgements).values({
-    userId: people.concernedStudent.userId, notice: "student_submission", version: STUDENT_NOTICE.version,
-  });
+  await noticesOfOwners();
+  await db.insert(noticeAcknowledgements).values({ userId: people.otherTeacher.userId, notice: "teacher_review", version: TEACHER_NOTICE.version });
   return {};
 }
 

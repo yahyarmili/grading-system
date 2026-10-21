@@ -17,8 +17,8 @@ export type AcknowledgeNoticeState =
   | { status: "error"; reason: keyof typeof NOTICE_MESSAGES; message: string }
   | { status: "done" };
 
-/** Records the reading of the version shown; an outdated page reads the new version first. */
-export async function acknowledgeStudentNotice(actor: Actor, raw: { version?: unknown }): Promise<AcknowledgeNoticeState> {
+/** Records the reading of the version shown, of the actor's role's notice; an outdated page reads the new version first. */
+export async function acknowledgeNoticeReading(actor: Actor, raw: { version?: unknown }): Promise<AcknowledgeNoticeState> {
   const version = z.coerce.number().int().safeParse(raw.version);
   try {
     if (version.success && (await acknowledgeNotice(actor, version.data))) return { status: "done" };

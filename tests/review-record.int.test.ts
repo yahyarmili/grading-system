@@ -25,6 +25,7 @@ import {
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { recordTriggers } from "./helpers/triggers";
+import { readTeacherNotice } from "./helpers/review";
 
 // E7.1 (REV-03, REV-04, invariant 5): the teacher's evaluation is written
 // with the log entries of its changes, in one transaction; a log entry never
@@ -40,6 +41,7 @@ async function createUser(role: "student" | "teacher"): Promise<Actor & { kind: 
     .insert(users)
     .values({ email: `${role}${n}@example.test`, emailVerified: true, name: `${role} ${n}`, firstName: role, lastName: `${n}`, role })
     .returning({ id: users.id });
+  if (role === "teacher") await readTeacherNotice(user.id);
   return { kind: "user", userId: user.id, role };
 }
 

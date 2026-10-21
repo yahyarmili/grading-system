@@ -17,6 +17,7 @@ import { getTeacherAssignment } from "@/server/data/assignments/assignments";
 import { listRelaunchable } from "@/server/data/evaluation/teacher";
 import { listAssignmentCopies } from "@/server/data/review/list";
 import { relaunchConditions } from "@/server/evaluation/relaunch";
+import { TeacherNotice } from "@/app/teacher/teacher-notice";
 import { AssignmentActions } from "./assignment-actions";
 import { NoticeArea } from "./notice";
 import { RefreshWhileEvaluating } from "./refresh-while";
@@ -104,6 +105,8 @@ async function Submissions({ assignmentId, searchParams }: { assignmentId: strin
   const copies = await listAssignmentCopies(actor, assignmentId);
   // Deleted meanwhile: the 404 was decided above, the section says it.
   if (!copies) return <p className="text-fg-muted">This assignment was not found. It may have been deleted.</p>;
+  // NFR-DON-04 (E7.7): the server returns no copy before the teacher notice is read.
+  if (copies === "notice_required") return <TeacherNotice />;
 
   const query = parseReviewListQuery(await searchParams, copies.classes.map((c) => c.id));
   const list = arrangeReviewList(copies.rows, query, REVIEW_LIST_PAGE_SIZE);

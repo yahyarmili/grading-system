@@ -23,6 +23,7 @@ import {
 } from "@/server/db/schema";
 import { ownedBy } from "../access";
 import { proposalFromRow, type CurrentProposal } from "../evaluation/proposals";
+import { acknowledgedNotice } from "../notices/notices";
 import { appendJournal, writeEvaluation } from "./record";
 
 // REV-02 (E7.3): one student's copy for one of the teacher's assignments,
@@ -96,7 +97,7 @@ const memberships = (studentId: string, active: boolean) => sql`
  * one round trip. The student must be listed (REV-01 R2): an active member
  * of a recipient class, or with a submission.
  */
-export async function getCopy(actor: Actor, assignmentId: string, studentId: string): Promise<TeacherCopy | null> {
+export async function getCopy(actor: Actor, assignmentId: string, studentId: string): Promise<TeacherCopy | "notice_required" | null> {
   const grant = authorize(actor, "submission", "read");
   authorize(actor, "aiProposal", "read");
   authorize(actor, "unpublishedEvaluation", "read");
@@ -116,6 +117,7 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
         ${memberships(studentId, false)}
       ), '[]')`,
       member: sql<boolean>`exists (select 1 ${memberships(studentId, true)})`,
+      noticeRead: sql<boolean>`${acknowledgedNotice(grant.userId, "teacher_review")}`,
       submission: {
         id: submissions.id,
         status: submissions.status,
@@ -154,6 +156,8 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
     .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, submissions.id))
     .where(and(eq(assignments.id, assignmentId), owned(grant)));
   if (!row || (!row.member && !row.submission)) return null;
+  // NFR-DON-04 (E7.7): nothing of the copy before the teacher notice is read.
+  if (!row.noticeRead) return "notice_required";
 
   const { submission, version, proposal, run, evaluation } = row;
   return {
@@ -237,7 +241,13 @@ export async function recordCopyOpened(actor: Actor, submissionId: string): Prom
       })
       .from(submissions)
       .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, submissions.id))
-      .where(and(eq(submissions.id, submissionId), ownedBy(grant, { teacher: submissions.teacherId })));
+      .where(
+        and(
+          eq(submissions.id, submissionId),
+          ownedBy(grant, { teacher: submissions.teacherId }),
+          acknowledgedNotice(grant.userId, "teacher_review"),
+        ),
+      );
     if (!found) return null;
     await appendJournal(tx, [
       {
@@ -271,7 +281,9 @@ export type SaveEvaluationResult =
   /** Not To review (validated, published: E8), or without an AI proposal (manual evaluation: E8). */
   | { ok: false; reason: "not_open" }
   /** Saved meanwhile elsewhere (another tab): what is stored now, never overwritten silently (CA4). */
-  | { ok: false; reason: "conflict"; saved: SavedEvaluation };
+  | { ok: false; reason: "conflict"; saved: SavedEvaluation }
+  /** NFR-DON-04 (E7.7): the teacher notice not read yet: nothing written. */
+  | { ok: false; reason: "notice_required" };
 
 /**
  * REV-03, REV-04: saves the whole form of the teacher's own copy. Under the
@@ -297,11 +309,13 @@ export async function saveEvaluation(
         status: submissions.status,
         versionNumber: submissions.currentVersion,
         proposalId: submissions.currentProposalId,
+        noticeRead: sql<boolean>`${acknowledgedNotice(grant.userId, "teacher_review")}`,
       })
       .from(submissions)
       .where(and(eq(submissions.id, seen.submissionId), ownedBy(grant, { teacher: submissions.teacherId })))
       .for("update");
     if (!row) return null;
+    if (!row.noticeRead) return { ok: false, reason: "notice_required" };
     if (row.versionNumber !== seen.versionNumber || row.proposalId !== seen.proposalId) return { ok: false, reason: "replaced" };
     if (row.status !== "to_review" || !row.proposalId) return { ok: false, reason: "not_open" };
 

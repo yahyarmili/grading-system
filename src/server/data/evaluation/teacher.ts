@@ -8,6 +8,7 @@ import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
 import { assignments, submissions } from "@/server/db/schema";
 import { ownedBy } from "../access";
+import { acknowledgedNotice } from "../notices/notices";
 import { appendJournal } from "../review/record";
 import { applyTransition, recordEvaluationRequest } from "../submissions/transitions";
 
@@ -41,7 +42,12 @@ export type RetryResult = { ok: true } | { ok: false; reason: "changed" | "not_f
 export type RelaunchResult = { ok: true } | { ok: false; reason: "changed" | "not_relaunchable" };
 export type ManualEvaluationResult = { ok: true } | { ok: false; reason: "changed" | "not_open" };
 
-const owned = (grant: Grant) => ownedBy(grant, { teacher: submissions.teacherId });
+/**
+ * The teacher's own copies, once their notice is read (NFR-DON-04, E7.7):
+ * before, a copy acts as absent.
+ */
+const owned = (grant: Grant) =>
+  and(ownedBy(grant, { teacher: submissions.teacherId }), acknowledgedNotice(grant.userId, "teacher_review"));
 
 /**
  * The copy's last run failed on the provider's budget (spending limit,

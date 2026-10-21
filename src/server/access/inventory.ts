@@ -79,6 +79,7 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/classes/actions.ts#disableInviteAction": { resource: "classInvite", action: "write" },
   "src/app/teacher/classes/actions.ts#removeStudentAction": { resource: "classRoster", action: "write" },
   "src/app/teacher/classes/actions.ts#readmitStudentAction": { resource: "classRoster", action: "write" },
+  "src/app/teacher/actions.ts#acknowledgeTeacherNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
   "src/app/teacher/assignments/actions.ts#createAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/actions.ts#editAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/actions.ts#deleteAssignmentAction": { resource: "assignment", action: "write" },

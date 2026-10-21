@@ -10,6 +10,7 @@ import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
 import { assignmentClasses, assignments, classes } from "@/server/db/schema";
 import { ownedBy } from "../access";
+import { acknowledgedNotice } from "../notices/notices";
 import { appendJournal } from "./record";
 
 // REV-01 (E7.2): the submissions of one of the teacher's assignments, one
@@ -113,12 +114,16 @@ const stampOf = (rows: ReviewRow[]) =>
     .digest("base64url")
     .slice(0, 22);
 
-/** REV-01: the list of one of the teacher's assignments; null when absent or another person's. */
-export async function listAssignmentCopies(actor: Actor, assignmentId: string): Promise<AssignmentCopies | null> {
+/**
+ * REV-01: the list of one of the teacher's assignments; null when absent or
+ * another person's; "notice_required" until the teacher read their notice
+ * (NFR-DON-04, E7.7): nothing is returned before.
+ */
+export async function listAssignmentCopies(actor: Actor, assignmentId: string): Promise<AssignmentCopies | "notice_required" | null> {
   const grant = authorize(actor, "submission", "read");
   const [recipients, rows] = await Promise.all([
     db
-      .select({ id: classes.id, name: classes.name })
+      .select({ id: classes.id, name: classes.name, noticeRead: sql<boolean>`${acknowledgedNotice(grant.userId, "teacher_review")}` })
       .from(assignments)
       .innerJoin(assignmentClasses, eq(assignmentClasses.assignmentId, assignments.id))
       .innerJoin(classes, eq(classes.id, assignmentClasses.classId))
@@ -127,8 +132,10 @@ export async function listAssignmentCopies(actor: Actor, assignmentId: string): 
   ]);
   // An assignment always has a recipient class (ASG-01 R3).
   if (recipients.length === 0) return null;
+  // NFR-DON-04 (E7.7): the teacher notice read first, checked by the server.
+  if (!recipients[0].noticeRead) return "notice_required";
   return {
-    classes: recipients.sort((a, b) => compareText(a.name, b.name)),
+    classes: recipients.map(({ id, name }) => ({ id, name })).sort((a, b) => compareText(a.name, b.name)),
     rows,
     stamp: stampOf(rows),
   };
@@ -139,7 +146,8 @@ export async function listAssignmentCopies(actor: Actor, assignmentId: string): 
  * database clock), for the measure of O1. Called by the page once shown,
  * never while rendering: a prefetch logs nothing (E7 plan §1.6). Gives the
  * list's stamp now, so a page shown from the router's cache is refreshed
- * when it changed. Null when absent or another person's: nothing logged.
+ * when it changed. Null when absent or another person's, or before the
+ * teacher notice is read: nothing logged.
  */
 export async function recordListOpened(actor: Actor, assignmentId: string): Promise<{ stamp: string } | null> {
   const grant = authorize(actor, "submission", "read");
@@ -147,7 +155,7 @@ export async function recordListOpened(actor: Actor, assignmentId: string): Prom
     const [found] = await tx
       .select({ id: assignments.id })
       .from(assignments)
-      .where(and(eq(assignments.id, assignmentId), owned(grant)));
+      .where(and(eq(assignments.id, assignmentId), owned(grant), acknowledgedNotice(grant.userId, "teacher_review")));
     if (!found) return false;
     await appendJournal(tx, [{ assignmentId, submissionId: null, actorId: grant.userId, event: "list_opened" }]);
     return true;

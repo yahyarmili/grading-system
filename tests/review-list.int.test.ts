@@ -13,7 +13,7 @@ import { createClass } from "@/server/data/classes/classes";
 import { removeStudent } from "@/server/data/classes/roster";
 import { getCurrentProposal } from "@/server/data/evaluation/proposals";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
-import { listAssignmentCopies, recordListOpened } from "@/server/data/review/list";
+import { recordListOpened } from "@/server/data/review/list";
 import { writeEvaluation } from "@/server/data/review/record";
 import { submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
@@ -21,6 +21,7 @@ import { aiProposals, assignments, classMemberships, evaluationRuns, reviewJourn
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import type { SweepResult } from "@/server/evaluation/sweep";
 import { openReviewList, type ListOpenContext } from "@/server/review/list";
+import { listAssignmentCopies, readTeacherNotice } from "./helpers/review";
 
 // REV-01 (E7.2): one line per student of an assignment, removed students
 // with a submission included (CLS-04 CA3), "Late" visible (SUB-04 CA3);
@@ -39,6 +40,7 @@ async function createUsers(role: "student" | "teacher", n: number): Promise<(Act
       }),
     )
     .returning({ id: users.id });
+  if (role === "teacher") await readTeacherNotice(...rows.map((user) => user.id));
   return rows.map((user) => ({ kind: "user", userId: user.id, role }));
 }
 

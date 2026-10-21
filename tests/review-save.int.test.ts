@@ -10,12 +10,13 @@ import { createAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { getCurrentProposal } from "@/server/data/evaluation/proposals";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
-import { getCopy, recordCopyOpened, saveEvaluation, type SeenEvaluation } from "@/server/data/review/copy";
+import { recordCopyOpened, saveEvaluation, type SeenEvaluation } from "@/server/data/review/copy";
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { aiProposals, classMemberships, reviewJournalEntries, submissions, teacherEvaluations, users } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { saveTeacherEvaluation, EVALUATION_MESSAGES } from "@/server/review/evaluation";
+import { getCopy, readTeacherNotice } from "./helpers/review";
 
 // REV-03, REV-04 (E7.4): the teacher saves the whole form of a copy. Each
 // save is checked field by field, written with its log entries in one
@@ -31,6 +32,7 @@ async function createUser(role: "student" | "teacher"): Promise<Actor & { kind: 
     .insert(users)
     .values({ email: `save-${role}${n}@example.test`, emailVerified: true, name: `${role} ${n}`, firstName: role, lastName: `${n}`, role })
     .returning({ id: users.id });
+  if (role === "teacher") await readTeacherNotice(user.id);
   return { kind: "user", userId: user.id, role };
 }
 

@@ -11,13 +11,14 @@ import { createAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { removeStudent } from "@/server/data/classes/roster";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
-import { getCopy, getStudentIdentity, recordCopyOpened } from "@/server/data/review/copy";
+import { getStudentIdentity, recordCopyOpened } from "@/server/data/review/copy";
 import { writeEvaluation } from "@/server/data/review/record";
 import { submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { aiProposals, classMemberships, evaluationRuns, reviewJournalEntries, submissions, users } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { openCopy } from "@/server/review/copy";
+import { getCopy, readTeacherNotice } from "./helpers/review";
 
 // REV-02 (E7.3): one student's copy for one of the teacher's assignments,
 // with their recipient classes only, their text as submitted and the
@@ -34,6 +35,7 @@ async function createUser(role: "student" | "teacher", firstName = "F", lastName
     .insert(users)
     .values({ email: `copy-${role}${n}@example.test`, emailVerified: true, name: `${firstName} ${lastName}`, firstName, lastName, role })
     .returning({ id: users.id });
+  if (role === "teacher") await readTeacherNotice(user.id);
   return { kind: "user", userId: user.id, role };
 }
 
