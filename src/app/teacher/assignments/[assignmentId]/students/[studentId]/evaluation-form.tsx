@@ -17,6 +17,7 @@ import type { CurrentProposal } from "@/server/data/evaluation/proposals";
 import type { SavedEvaluation, SeenEvaluation } from "@/server/data/review/copy";
 import type { EvaluationField, SaveEvaluationState } from "@/server/review/evaluation";
 import { saveEvaluationAction } from "./actions";
+import { useCopyNotice } from "./copy-notice";
 import { LevelPicker } from "./level-picker";
 
 // REV-03, REV-04: the AI proposal, read-only and never shown to the student,
@@ -92,11 +93,13 @@ export function EvaluationForm({
   language: AssignmentLanguage;
 }) {
   const router = useRouter();
+  const showNotice = useCopyNotice();
   const [saved, setSaved] = useState<SavedEvaluation>(() => evaluation ?? { ...fieldsFromProposal(proposal), revision: 0 });
   const [draft, setDraft] = useState<Draft>(() => draftOf(saved));
   const [state, save, pending] = useActionState(saveEvaluationAction, { status: "idle" } as SaveEvaluationState);
   const [gradeError, setGradeError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const conflictRef = useRef<HTMLDivElement>(null);
 
   // A new answer of the server: what it saved becomes the form's starting point.
   const [handled, setHandled] = useState(state);
@@ -108,13 +111,18 @@ export function EvaluationForm({
     }
   }
 
-  // Replaced or closed meanwhile: the page shows the copy as it is now (R5).
+  // Replaced or closed meanwhile: the page shows the copy as it is now, the message above it (R5).
   useEffect(() => {
-    if (state.status === "replaced" || state.status === "not_open") router.refresh();
+    if (state.status === "replaced" || state.status === "not_open") {
+      showNotice(state.message);
+      router.refresh();
+    }
     if (state.status === "invalid") {
       formRef.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
     }
-  }, [state, router]);
+    // Saved from anywhere on a long page: the conflict and its two choices come into view.
+    if (state.status === "conflict") conflictRef.current?.scrollIntoView({ block: "center" });
+  }, [state, router, showNotice]);
 
   const dirty = !sameDraft(draft, draftOf(saved));
   // A change typed and not saved is not lost by closing the tab.
@@ -144,8 +152,8 @@ export function EvaluationForm({
 
   const change = (next: Partial<Draft>) => setDraft((d) => ({ ...d, ...next }));
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
+  /** Sends the whole form, from the revision `base` the teacher last saw. */
+  function send(base: SavedEvaluation) {
     if (draft.gradeFixed && typed && "error" in typed) {
       setGradeError(typed.error);
       document.getElementById("grade")?.focus();
@@ -154,7 +162,7 @@ export function EvaluationForm({
     setGradeError(null);
     startTransition(() =>
       save({
-        seen: { ...seen, revision: saved.revision },
+        seen: { ...seen, revision: base.revision },
         levels: draft.levels,
         remarks: draft.remarks,
         generalComment: draft.generalComment,
@@ -163,6 +171,11 @@ export function EvaluationForm({
         rereadDone: draft.rereadDone,
       }),
     );
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    send(saved);
   }
 
   const shownGradeError = gradeError ?? fieldError("grade");
@@ -415,31 +428,49 @@ export function EvaluationForm({
           Check the fields marked below.
         </Alert>
       )}
-      {(state.status === "replaced" || state.status === "not_open" || state.status === "not_found") && (
+      {state.status === "not_found" && (
         <Alert tone="error" title="Not saved" live>
           {state.message}
         </Alert>
       )}
       {state.status === "conflict" && state.saved.revision !== saved.revision && (
-        <Alert
-          tone="warning"
-          title="Changed in another tab or window"
-          live
-          action={
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                setSaved(state.saved);
-                setDraft(draftOf(state.saved));
-              }}
-            >
-              Load saved version
-            </button>
-          }
-        >
-          {state.message} Your changes are still in the form.
-        </Alert>
+        <div ref={conflictRef}>
+          <Alert
+            tone="warning"
+            title="Changed in another tab or window"
+            live
+            action={
+              <span className="flex flex-wrap gap-2">
+                {/* Discards the form: the saved evaluation is shown instead. */}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={pending}
+                  onClick={() => {
+                    setSaved(state.saved);
+                    setDraft(draftOf(state.saved));
+                  }}
+                >
+                  Load saved version
+                </button>
+                {/* Keeps the form and saves it over the saved one, knowingly: logged like any save. */}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={pending}
+                  onClick={() => {
+                    setSaved(state.saved);
+                    send(state.saved);
+                  }}
+                >
+                  Save mine over it
+                </button>
+              </span>
+            }
+          >
+            {state.message} Your changes are still in the form: load the saved version, or save yours over it.
+          </Alert>
+        </div>
       )}
 
       {/* Stays in view on long copies: the grade, what is saved, and the save action. */}

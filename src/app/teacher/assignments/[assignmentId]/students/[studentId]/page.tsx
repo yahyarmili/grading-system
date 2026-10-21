@@ -11,6 +11,7 @@ import { evaluationFailureLabel, notAssessableCauseLabels } from "@/lib/evaluati
 import { parseReviewListQuery, reviewListSearch } from "@/lib/review-list";
 import { getActor } from "@/server/auth/session";
 import { getCopy, getStudentIdentity, type StudentIdentity, type TeacherCopy } from "@/server/data/review/copy";
+import { CopyNoticeArea } from "./copy-notice";
 import { CopyOpened } from "./copy-opened";
 import { CopyPanel } from "./copy-panel";
 import { EvaluationForm } from "./evaluation-form";
@@ -49,32 +50,34 @@ export default async function Page({ params, searchParams }: Props) {
         {copy.assignment.title}: submissions
       </BackLink>
       <Identity copy={copy} identity={identity} />
-      {copy.version === null ? (
-        <StatusCard copy={copy} />
-      ) : (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <div className="flex flex-col xl:sticky xl:top-[calc(var(--spacing-header)+1rem)] xl:max-h-[calc(100dvh-var(--spacing-header)-2rem)]">
-            <CopyPanel
-              text={copy.version.text}
-              mode={copy.version.mode}
-              subject={copy.assignment.subject}
-              language={copy.assignment.language}
-            />
+      <CopyNoticeArea>
+        {copy.version === null ? (
+          <StatusCard copy={copy} />
+        ) : (
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+            <div className="flex flex-col xl:sticky xl:top-[calc(var(--spacing-header)+1rem)] xl:max-h-[calc(100dvh-var(--spacing-header)-2rem)]">
+              <CopyPanel
+                text={copy.version.text}
+                mode={copy.version.mode}
+                subject={copy.assignment.subject}
+                language={copy.assignment.language}
+              />
+            </div>
+            {reviewable && copy.proposal && copy.seen ? (
+              <EvaluationForm
+                // A copy changed under the page (replaced, saved elsewhere) starts a new form.
+                key={`${copy.seen.versionNumber}:${copy.seen.proposalId}:${copy.seen.revision}`}
+                proposal={copy.proposal}
+                evaluation={copy.evaluation}
+                seen={copy.seen}
+                language={copy.assignment.language}
+              />
+            ) : (
+              <StatusCard copy={copy} />
+            )}
           </div>
-          {reviewable && copy.proposal && copy.seen ? (
-            <EvaluationForm
-              // A copy changed under the page (replaced, saved elsewhere) starts a new form.
-              key={`${copy.seen.versionNumber}:${copy.seen.proposalId}:${copy.seen.revision}`}
-              proposal={copy.proposal}
-              evaluation={copy.evaluation}
-              seen={copy.seen}
-              language={copy.assignment.language}
-            />
-          ) : (
-            <StatusCard copy={copy} />
-          )}
-        </div>
-      )}
+        )}
+      </CopyNoticeArea>
     </>
   );
 }

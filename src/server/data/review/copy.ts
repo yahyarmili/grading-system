@@ -273,23 +273,28 @@ export async function saveEvaluation(
         status: submissions.status,
         versionNumber: submissions.currentVersion,
         proposalId: submissions.currentProposalId,
-        proposal: aiProposals,
-        rubricVersion: evaluationRuns.rubricVersion,
-        evaluation: teacherEvaluations,
       })
       .from(submissions)
-      .leftJoin(aiProposals, eq(aiProposals.id, submissions.currentProposalId))
-      .leftJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
-      .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, submissions.id))
       .where(and(eq(submissions.id, seen.submissionId), ownedBy(grant, { teacher: submissions.teacherId })))
-      .for("update", { of: submissions });
+      .for("update");
     if (!row) return null;
     if (row.versionNumber !== seen.versionNumber || row.proposalId !== seen.proposalId) return { ok: false, reason: "replaced" };
-    if (row.status !== "to_review" || !row.proposal || !row.rubricVersion) return { ok: false, reason: "not_open" };
+    if (row.status !== "to_review" || !row.proposalId) return { ok: false, reason: "not_open" };
 
-    const proposal = row.proposal;
-    const stored: SavedEvaluation = row.evaluation
-      ? { ...fieldsFromRow(row.evaluation), revision: row.evaluation.revision }
+    // Read once the lock is held, by a statement of its own: a save that
+    // waited for the lock sees what the other one committed (READ COMMITTED
+    // re-reads the locked row only, never the rows joined to it).
+    const [current] = await tx
+      .select({ proposal: aiProposals, rubricVersion: evaluationRuns.rubricVersion, evaluation: teacherEvaluations })
+      .from(aiProposals)
+      .innerJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
+      .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, aiProposals.submissionId))
+      .where(eq(aiProposals.id, row.proposalId));
+    if (!current?.rubricVersion) return { ok: false, reason: "not_open" };
+
+    const { proposal, evaluation } = current;
+    const stored: SavedEvaluation = evaluation
+      ? { ...fieldsFromRow(evaluation), revision: evaluation.revision }
       : { ...fieldsFromProposal(proposalFromRow(proposal)), revision: 0 };
     if (stored.revision !== seen.revision) return { ok: false, reason: "conflict", saved: stored };
 
@@ -301,7 +306,7 @@ export async function saveEvaluation(
       versionNumber: row.versionNumber,
       actorId: grant.userId,
       fromRevision,
-      start: { origin: "proposal", proposalId: proposal.id, rubricVersion: row.rubricVersion },
+      start: { origin: "proposal", proposalId: proposal.id, rubricVersion: current.rubricVersion },
       before,
       after,
     });
