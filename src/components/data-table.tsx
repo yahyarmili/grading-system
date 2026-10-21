@@ -18,15 +18,33 @@ export type Column<Row> = {
    * Strings compare case- and accent-insensitively.
    */
   sortValue?: (row: Row) => string | number | null;
+  /** Sortable by the caller (`controlled`), which sorts the rows itself. */
+  sortable?: boolean;
   /** Custom comparison of two non-null values, e.g. last name then first name. */
   compare?: (a: Row, b: Row) => number;
   className?: string;
 };
 
-type Sort = { key: string; direction: "ascending" | "descending" };
+export type Sort = { key: string; direction: "ascending" | "descending" };
 
 /**
- * Table with sortable columns and client-side pagination. Filtering stays
+ * Sort and pages kept by the caller (e.g. in the URL, the server sorting the
+ * whole list): rows arrive sorted and cut to the page; the table shows them.
+ */
+export type ControlledTable = {
+  sort: Sort;
+  onSortChange: (sort: Sort) => void;
+  page: number;
+  /** Rows over every page. */
+  total: number;
+  onPageChange: (page: number) => void;
+  /** A new page is on its way: the rows shown are dimmed and marked busy. */
+  pending?: boolean;
+};
+
+/**
+ * Table with sortable columns and client-side pagination, or both kept by
+ * the caller (`controlled`). Filtering stays
  * with the caller (toolbar slot + filtered rows), so filters can later move
  * to the server without changing the table.
  * On narrow screens the table scrolls inside its own frame, never the page.
@@ -42,6 +60,7 @@ export function DataTable<Row>({
   entityName = "rows",
   loading = false,
   empty,
+  controlled,
 }: {
   label: string;
   columns: Column<Row>[];
@@ -53,20 +72,22 @@ export function DataTable<Row>({
   entityName?: string;
   loading?: boolean;
   empty?: ReactNode;
+  controlled?: ControlledTable;
 }) {
-  const [sort, setSort] = useState<Sort | undefined>(initialSort);
-  const [requestedPage, setPage] = useState(1);
+  const [ownSort, setOwnSort] = useState<Sort | undefined>(initialSort);
+  const [requestedPage, setOwnPage] = useState(1);
+  const sort = controlled ? controlled.sort : ownSort;
 
   // New rows (a filter changed): back to the first page.
   const [previousRows, setPreviousRows] = useState(rows);
   if (rows !== previousRows) {
     setPreviousRows(rows);
-    setPage(1);
+    setOwnPage(1);
   }
 
   const sorted = useMemo(() => {
     const column = columns.find((c) => c.key === sort?.key);
-    if (!sort || !column?.sortValue) return rows;
+    if (controlled || !sort || !column?.sortValue) return rows;
     const value = column.sortValue;
     const factor = sort.direction === "ascending" ? 1 : -1;
     return [...rows].sort((a, b) => {
@@ -80,20 +101,25 @@ export function DataTable<Row>({
           : compareText(String(va), String(vb));
       return order * factor;
     });
-  }, [rows, columns, sort]);
+  }, [rows, columns, sort, controlled]);
 
   // Safety net: never point past the last page.
-  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const page = Math.min(requestedPage, pageCount);
-  const visible = sorted.slice((page - 1) * pageSize, page * pageSize);
+  const total = controlled ? controlled.total : sorted.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = controlled ? controlled.page : Math.min(requestedPage, pageCount);
+  const visible = controlled ? rows : sorted.slice((page - 1) * pageSize, page * pageSize);
+  const setPage = controlled ? controlled.onPageChange : setOwnPage;
 
   function toggleSort(key: string) {
-    setSort((current) =>
-      current?.key === key && current.direction === "ascending"
+    const next: Sort =
+      sort?.key === key && sort.direction === "ascending"
         ? { key, direction: "descending" }
-        : { key, direction: "ascending" },
-    );
-    setPage(1);
+        : { key, direction: "ascending" };
+    if (controlled) controlled.onSortChange(next);
+    else {
+      setOwnSort(next);
+      setOwnPage(1);
+    }
   }
 
   return (
@@ -133,7 +159,7 @@ export function DataTable<Row>({
                       column.className,
                     )}
                   >
-                    {column.sortValue ? (
+                    {column.sortValue || column.sortable ? (
                       <button
                         type="button"
                         onClick={() => toggleSort(column.key)}
@@ -158,7 +184,10 @@ export function DataTable<Row>({
               })}
             </tr>
           </thead>
-          <tbody aria-busy={loading || undefined}>
+          <tbody
+            aria-busy={loading || controlled?.pending || undefined}
+            className={cn(controlled?.pending && "opacity-60 transition-opacity")}
+          >
             {loading
               ? Array.from({ length: Math.min(pageSize, 5) }, (_, i) => (
                   <tr key={i} className="border-b border-border-subtle last:border-0">
@@ -187,7 +216,7 @@ export function DataTable<Row>({
           </tbody>
         </table>
         {loading && <p className="sr-only" role="status">Loading {entityName}…</p>}
-        {!loading && rows.length === 0 &&
+        {!loading && total === 0 &&
           (empty ?? (
             <EmptyState
               icon={SearchX}
@@ -197,12 +226,12 @@ export function DataTable<Row>({
           ))}
       </div>
 
-      {!loading && rows.length > 0 && (
+      {!loading && total > 0 && (
         <Pagination
           className="border-t border-border-subtle px-4 py-3 md:px-6"
           page={page}
           pageSize={pageSize}
-          total={rows.length}
+          total={total}
           onPageChange={setPage}
           entityName={entityName}
         />

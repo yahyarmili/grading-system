@@ -19,6 +19,7 @@ import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
+import { listAssignmentCopies, recordListOpened } from "@/server/data/review/list";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { getCurrentProposal } from "@/server/data/evaluation/proposals";
 import {
@@ -238,7 +239,7 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   // the concerned student already made to another (SUB-05): the student writes
   // their own; another student finds nothing; a teacher is refused. Never read
   // back by the student (A3). The owner teacher reads the copies offered for
-  // a relaunch (PRC-02 R4, E6.3); the list of REV-01 comes in E7.
+  // a relaunch (PRC-02 R4, E6.3) and the list of REV-01 (E7.2).
   submission: {
     setup: async () => {
       const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
@@ -250,9 +251,12 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       await forceState(first.ref.submissionId, "not_assessable", "ai_unavailable");
       return { ...fixture, submittedId };
     },
-    read: {
-      run: async (actor, { submittedId }) => (await listRelaunchable(actor, submittedId, AI_BACK)).length > 0 || null,
-    },
+    read: [
+      { run: async (actor, { submittedId }) => (await listRelaunchable(actor, submittedId, AI_BACK)).length > 0 || null },
+      // REV-01 (E7.2): the list of the assignment's submissions, and its opening logged.
+      { run: (actor, { submittedId }) => listAssignmentCopies(actor, submittedId) },
+      { run: (actor, { submittedId }) => recordListOpened(actor, submittedId) },
+    ],
     write: [
       {
         run: (actor, { assignmentId }) =>

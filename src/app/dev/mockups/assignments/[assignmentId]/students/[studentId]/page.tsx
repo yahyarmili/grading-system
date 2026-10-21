@@ -59,7 +59,7 @@ async function CopyScreen({ params }: Pick<Props, "params">) {
 
   return (
     <>
-      <BackLink href={`/dev/mockups/assignments/${assignment.id}`}>{assignment.title}</BackLink>
+      <BackLink href="/dev/mockups">Mockups</BackLink>
       <Identity row={row} />
       {row.status === "to_submit" || !copy || !row.mode ? (
         // REV-02 R4: no text yet, a status page without a form.

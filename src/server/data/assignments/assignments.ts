@@ -68,7 +68,7 @@ export async function createAssignment(actor: Actor, input: NewAssignment): Prom
 /** The student reads what they received or submitted to (received.ts). */
 const owners = { teacher: assignments.teacherId, student: visibleTo };
 
-/** ASG-02 R1: one row of the teacher's list. Counts stay 0 until submissions exist (E4, E7). */
+/** ASG-02 R1: one row of the teacher's list, with its submissions and its copies to review (E7.2). */
 export type TeacherAssignmentItem = {
   id: string;
   title: string;
@@ -131,10 +131,24 @@ function byAssignment(rows: AssignmentRow[]): TeacherAssignment[] {
 export async function listTeacherAssignments(actor: Actor): Promise<TeacherAssignmentItem[]> {
   const grant = authorize(actor, "assignment", "read");
   authorize(actor, "assignmentRecipients", "read");
-  const rows = byAssignment(await assignmentRows(ownedBy(grant, owners)));
-  // Submissions arrive in E4, copies to review in E7.
+  const copies = authorize(actor, "submission", "read");
+  const [rows, counts] = await Promise.all([
+    assignmentRows(ownedBy(grant, owners)).then(byAssignment),
+    db
+      .select({
+        assignmentId: submissions.assignmentId,
+        submissions: sql<number>`count(*)::int`,
+        toReview: sql<number>`(count(*) filter (where ${submissions.status} = 'to_review'))::int`,
+      })
+      .from(submissions)
+      .where(ownedBy(copies, { teacher: submissions.teacherId }))
+      .groupBy(submissions.assignmentId),
+  ]);
+  const countsOf = new Map(counts.map((c) => [c.assignmentId, c]));
   return rows.map(({ id, title, level, language, deadline, classes }) => ({
-    id, title, level, language, deadline, classes, submissions: 0, toReview: 0,
+    id, title, level, language, deadline, classes,
+    submissions: countsOf.get(id)?.submissions ?? 0,
+    toReview: countsOf.get(id)?.toReview ?? 0,
   }));
 }
 

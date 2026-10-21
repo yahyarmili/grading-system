@@ -262,3 +262,18 @@ export const AI_TRIAL_PAUSE_MS = 1_000;
  * instruction (EVL-03 CA3: "écart maximal à définir").
  */
 export const ADVERSARIAL_MAX_LEVEL_GAP = 1;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Rows of one page of an assignment's
+ * submissions (REV-01): a class fits on one page; the sort and the filters
+ * cover the whole list beyond it (R4).
+ */
+export const REVIEW_LIST_PAGE_SIZE = 50;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] How long opening an assignment's submissions
+ * waits for the evaluation sweep (E7, [D, 2026-10-20]: the Vercel cron does
+ * not run on the preview) before answering; the sweep then ends after the
+ * response (after()). The list is shown before, never held by it (TRT-03).
+ */
+export const SWEEP_ON_OPEN_MAX_MS = 2_000;
