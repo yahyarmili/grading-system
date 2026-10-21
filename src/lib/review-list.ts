@@ -13,6 +13,10 @@ export type RowClass = { id: string; name: string; removed: boolean };
 /** One line per student (R2, R3); "to_submit" when nothing was submitted. */
 export type ReviewRow = {
   studentId: string;
+  /** The submission and its active version: what a relaunch acts upon (E7.6); null when not submitted. */
+  submission: { id: string; versionNumber: number } | null;
+  /** E7.6: a retry or relaunch the teacher asked waits for its run. */
+  requested: boolean;
   firstName: string;
   lastName: string;
   /** By name. */

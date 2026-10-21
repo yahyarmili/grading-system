@@ -15,6 +15,8 @@ import {
 let next = 0;
 const row = (over: Partial<ReviewRow> = {}): ReviewRow => ({
   studentId: `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`,
+  submission: { id: "s1", versionNumber: 1 },
+  requested: false,
   firstName: "Sam",
   lastName: "Doe",
   classes: [{ id: "c1", name: "Grade 10 — A", removed: false }],
@@ -28,7 +30,7 @@ const row = (over: Partial<ReviewRow> = {}): ReviewRow => ({
   ...over,
 });
 const notSubmitted = (over: Partial<ReviewRow> = {}) =>
-  row({ status: "to_submit", mode: null, versionAt: null, proposedGrade: null, ...over });
+  row({ status: "to_submit", submission: null, mode: null, versionAt: null, proposedGrade: null, ...over });
 
 const query = (over: Partial<ReviewListQuery> = {}): ReviewListQuery => ({ ...DEFAULT_REVIEW_QUERY, ...over });
 const names = (rows: ReviewRow[]) => rows.map((r) => r.lastName);

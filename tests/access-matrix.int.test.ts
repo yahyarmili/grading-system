@@ -310,6 +310,19 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       { run: (actor, { failedId }) => saveEvaluation(actor, { submissionId: failedId, versionNumber: 1, proposalId: null, revision: 0 }, SAVED_FORM) },
     ],
   },
+  // REV-04 R3 (E7.6): the copy reads from the log whether the teacher's last
+  // request was dropped; the corrector only.
+  reviewLog: {
+    setup: async () => {
+      const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
+      const submitted = await submitText(people.concernedStudent, {
+        assignmentId: fixture.assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
+      });
+      if (!submitted?.ok) throw new Error("Not submitted");
+      return fixture;
+    },
+    read: { run: (actor, { assignmentId }) => getCopy(actor, assignmentId, people.concernedStudent.userId) },
+  },
   // Invariant 9: the concerned student's name and email, for themself and
   // the teacher of their class (REV-02, E7.3); another person finds nothing.
   studentAccount: {

@@ -22,6 +22,7 @@ const done: EvaluationOutcome = { status: "to_review", attempts: 1, durationMs: 
 const fakes = (evaluate: (r: EvaluationRef, t: string) => Promise<EvaluationOutcome>) => ({
   evaluate: vi.fn(evaluate),
   release: vi.fn<(r: EvaluationRef, t: string) => Promise<boolean>>(async () => true),
+  abandon: vi.fn<(r: EvaluationRef) => Promise<boolean>>(async () => true),
   sleep: vi.fn<(ms: number) => Promise<void>>(async () => {}),
 });
 
@@ -49,6 +50,23 @@ describe("orchestrate", () => {
     expect(await orchestrate(ref, TOKEN, deps)).toEqual({ status: "busy" });
     expect(deps.sleep).toHaveBeenCalledTimes(EVALUATION_BUSY_MAX_WAITS);
     expect(deps.evaluate).toHaveBeenCalledTimes(EVALUATION_BUSY_MAX_WAITS + 1);
+    expect(deps.abandon).not.toHaveBeenCalled();
+  });
+
+  it.each(["retry", "relaunch"] as const)("E7.6: a teacher's %s that found no place is dropped once, after the last wait", async (origin) => {
+    const asked = { ...ref, origin, request: "00000000-0000-4000-8000-000000000002" };
+    const deps = fakes(async () => ({ status: "busy" }));
+    expect(await orchestrate(asked, TOKEN, deps)).toEqual({ status: "busy" });
+    expect(deps.abandon.mock.calls).toEqual([[asked]]);
+    expect(deps.abandon.mock.contexts).toEqual([undefined]);
+    expect(deps.evaluate).toHaveBeenCalledTimes(EVALUATION_BUSY_MAX_WAITS + 1);
+  });
+
+  it("E7.6: a teacher's request evaluated after a wait is not dropped", async () => {
+    const outcomes: EvaluationOutcome[] = [{ status: "busy" }, done];
+    const deps = fakes(async () => outcomes.shift()!);
+    expect(await orchestrate({ ...ref, origin: "retry", request: "r" }, TOKEN, deps)).toEqual(done);
+    expect(deps.abandon).not.toHaveBeenCalled();
   });
 
   it("releases its own claim when the step fails, then lets the error end the run", async () => {

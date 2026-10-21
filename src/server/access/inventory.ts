@@ -83,6 +83,8 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/assignments/actions.ts#editAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/actions.ts#deleteAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/[assignmentId]/actions.ts#recordListOpenedAction": { resource: "submission", action: "read" },
+  "src/app/teacher/assignments/[assignmentId]/actions.ts#retryEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
+  "src/app/teacher/assignments/[assignmentId]/actions.ts#relaunchEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
   "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#recordCopyOpenedAction": { resource: "submission", action: "read" },
   "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#saveEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
@@ -149,6 +151,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/review/record.ts#writeEvaluation": "internal: the one writer of the teacher's evaluation, with its log entries (REV-03, REV-04), inside a transaction that has authorized the actor and locked the submission row",
   "src/server/data/evaluation/proposals.ts#proposalFromRow": "pure mapping of a proposal row read by a function that has authorized the actor (getCurrentProposal, getCopy)",
   "src/server/data/submissions/transitions.ts#markRestarted": "internal: dates the restart of received submissions, inside the sweep's transaction (E6.6, system processing)",
+  "src/server/data/submissions/transitions.ts#clearEvaluationRequest": "internal: drops a teacher's request that found no evaluation place (E7.6), inside abandonEvaluationRequest's transaction (system processing)",
   "src/server/data/evaluation/system.ts#claimForEvaluation": "system processing (§5.5, transition 2; 6 and 7 for the teacher's retry and relaunch, authorized beforehand by retryEvaluation and relaunchEvaluation, E6.3, and claimed with the request they stored, E6.6), called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#stillEvaluating": "system processing (§5.5): whether a claim still holds before a new attempt, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#recordEvaluation": "system processing (§5.5, transition 5): adds the run and the proposal, called only by src/server/evaluation/",
@@ -157,9 +160,11 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/evaluation/system.ts#releaseStuckEvaluations": "system processing (§5.5, transition 5, PRC-02 R1): submissions evaluating for too long end evaluation_failed, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#takeStaleReceived": "system processing (E6, the sweep): identifiers and active version of the text submissions still received after the grace, dated as taken (E6.6), called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#readAiGuardCounts": "system processing (E6, EXP-02): token sums of this month's Anthropic runs, the calls without usage (E6.6) and the count of access failures, counts only, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#countUnreachableFailures": "system processing (E7.6, EXP-02): distinct submissions failed on an unreachable provider within the window, a count only, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#abandonEvaluationRequest": "system processing (E7.6): drops a teacher's retry or relaunch whose run found no place, its request only, and logs retry_abandoned without actor; called only by src/server/evaluation/ (the workflow's abandonStep)",
   "src/server/data/evaluation/measures.ts#readEvaluationMeasures":
     "scripts only (ai:report, E6.4, EXP-01): runs and copies by assignment, outcomes, attempts, durations, token sums and states; no name, email, text or proposal",
-  "src/server/data/evaluation/system.ts#claimAiAlert": "system processing (E6, EXP-02): hands the administrators' addresses to the alert's sending and records the cost cap, breaker or configuration alert once sent, once per period, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#claimAiAlert": "system processing (E6, EXP-02): hands the administrators' addresses to the alert's sending and records the cost cap, breaker, configuration or unreachable alert once sent, once per period, called only by src/server/evaluation/",
 };
 
 /**

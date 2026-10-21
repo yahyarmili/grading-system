@@ -8,6 +8,7 @@ import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
 import { assignments, submissions } from "@/server/db/schema";
 import { ownedBy } from "../access";
+import { appendJournal } from "../review/record";
 import { applyTransition, recordEvaluationRequest } from "../submissions/transitions";
 
 // PRC-02 (E6.3): what the owner teacher does with a copy the AI did not
@@ -17,6 +18,7 @@ import { applyTransition, recordEvaluationRequest } from "../submissions/transit
 // (system.ts), for that request only. The manual evaluation (6 or 7, to
 // to_review) is written here. Never automatic: only these functions leave
 // evaluation_failed and not_assessable; the sweep takes the received copies only.
+// Each request is logged with it (E7.6, REV-04): retry_requested, relaunch_requested.
 
 /** Starts the evaluation of a version once the request answered: after() in the Server Action (E7), a recorder in the tests. */
 export type EvaluationStartContext = { onStart: (ref: EvaluationRef) => void };
@@ -113,6 +115,15 @@ const requestRef = (seen: SeenVersion, origin: "retry" | "relaunch", request: st
   request,
 });
 
+/** The log entry of a teacher's request, written in its transaction (E7.6). */
+const requestEntry = (grant: Grant, assignmentId: string, seen: SeenVersion, event: "retry_requested" | "relaunch_requested") => ({
+  assignmentId,
+  submissionId: seen.submissionId,
+  actorId: grant.userId,
+  event,
+  versionNumber: seen.versionNumber,
+});
+
 /**
  * Transition 6, by the teacher (PRC-02 R3, CA2): an evaluation_failed copy
  * is evaluated again; a refusal too (the teacher may ask again). Stores a new
@@ -129,6 +140,7 @@ export async function retryEvaluation(actor: Actor, seen: SeenVersion, ctx: Eval
   const result = await db.transaction(async (tx): Promise<RetryResult | null> => {
     const [row] = await tx
       .select({
+        assignmentId: submissions.assignmentId,
         status: submissions.status,
         versionNumber: submissions.currentVersion,
         started: sql<boolean>`${submissions.teacherStartedAt} is not null`,
@@ -140,6 +152,7 @@ export async function retryEvaluation(actor: Actor, seen: SeenVersion, ctx: Eval
     if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" };
     if (row.status !== "evaluation_failed" || row.started) return { ok: false, reason: "not_failed" };
     await recordEvaluationRequest(tx, seen.submissionId, request, eq(submissions.status, "evaluation_failed"));
+    await appendJournal(tx, [requestEntry(grant, row.assignmentId, seen, "retry_requested")]);
     return { ok: true };
   });
   if (result?.ok) ctx.onStart(requestRef(seen, "retry", request));
@@ -162,7 +175,11 @@ export async function relaunchEvaluation(
   const request = randomUUID();
   const result = await db.transaction(async (tx): Promise<RelaunchResult | null> => {
     const [row] = await tx
-      .select({ versionNumber: submissions.currentVersion, offered: sql<boolean>`${relaunchable(conditions)}` })
+      .select({
+        assignmentId: submissions.assignmentId,
+        versionNumber: submissions.currentVersion,
+        offered: sql<boolean>`${relaunchable(conditions)}`,
+      })
       .from(submissions)
       .innerJoin(assignments, eq(assignments.id, submissions.assignmentId))
       .where(and(eq(submissions.id, seen.submissionId), owned(grant)))
@@ -171,6 +188,7 @@ export async function relaunchEvaluation(
     if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" };
     if (!row.offered) return { ok: false, reason: "not_relaunchable" };
     await recordEvaluationRequest(tx, seen.submissionId, request, eq(submissions.status, "not_assessable"));
+    await appendJournal(tx, [requestEntry(grant, row.assignmentId, seen, "relaunch_requested")]);
     return { ok: true };
   });
   if (result?.ok) ctx.onStart(requestRef(seen, "relaunch", request));

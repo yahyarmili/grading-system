@@ -100,6 +100,22 @@ export async function recordEvaluationRequest(tx: Tx, submissionId: string, requ
 }
 
 /**
+ * E7.6: a teacher's request that found no evaluation place in time
+ * (orchestrate.ts) is dropped, this request only: a newer one stays, and a
+ * request already claimed is gone with its transition. No transition: the
+ * copy stays failed or not assessable, for the teacher to ask again. False
+ * when the request is no longer the stored one.
+ */
+export async function clearEvaluationRequest(tx: Tx, submissionId: string, request: string): Promise<boolean> {
+  const [updated] = await tx
+    .update(submissions)
+    .set({ evaluationRequest: null })
+    .where(and(eq(submissions.id, submissionId), eq(submissions.evaluationRequest, request)))
+    .returning({ id: submissions.id });
+  return !!updated;
+}
+
+/**
  * The teacher's first act without a transition (E7, REV-03): the first write
  * of their evaluation of a copy to review. teacher_started_at, kept when
  * already set, closes replacement (SUB-05 R3), retry and relaunch. Guarded by

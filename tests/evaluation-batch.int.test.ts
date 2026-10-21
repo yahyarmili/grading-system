@@ -17,7 +17,7 @@ import { getCaptureSender } from "@/server/email";
 import { createAiGuard, type AiGuardState } from "@/server/evaluation/budget";
 import { evaluateSubmission, type EvaluationDeps, type EvaluationOutcome } from "@/server/evaluation/evaluate";
 import { orchestrate } from "@/server/evaluation/orchestrate";
-import { evaluateStep, releaseStep } from "@/server/evaluation/steps";
+import { abandonStep, evaluateStep, releaseStep } from "@/server/evaluation/steps";
 import { sweepEvaluations } from "@/server/evaluation/sweep";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { recordTriggers } from "./helpers/triggers";
@@ -96,6 +96,7 @@ const run = (ref: EvaluationRef, step: Step = evaluateStep) =>
   orchestrate(ref, randomUUID(), {
     evaluate: step,
     release: releaseStep,
+    abandon: abandonStep,
     sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 50))),
   });
 

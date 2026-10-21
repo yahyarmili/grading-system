@@ -17,7 +17,7 @@ import type { CurrentProposal } from "@/server/data/evaluation/proposals";
 import type { SavedEvaluation, SeenEvaluation } from "@/server/data/review/copy";
 import type { EvaluationField, SaveEvaluationState } from "@/server/review/evaluation";
 import { saveEvaluationAction } from "./actions";
-import { useCopyNotice } from "./copy-notice";
+import { useNotice } from "../../notice";
 import { LevelPicker } from "./level-picker";
 
 // REV-03, REV-04: the AI proposal, read-only and never shown to the student,
@@ -93,7 +93,7 @@ export function EvaluationForm({
   language: AssignmentLanguage;
 }) {
   const router = useRouter();
-  const showNotice = useCopyNotice();
+  const showNotice = useNotice();
   const [saved, setSaved] = useState<SavedEvaluation>(() => evaluation ?? { ...fieldsFromProposal(proposal), revision: 0 });
   const [draft, setDraft] = useState<Draft>(() => draftOf(saved));
   const [state, save, pending] = useActionState(saveEvaluationAction, { status: "idle" } as SaveEvaluationState);
@@ -114,7 +114,7 @@ export function EvaluationForm({
   // Replaced or closed meanwhile: the page shows the copy as it is now, the message above it (R5).
   useEffect(() => {
     if (state.status === "replaced" || state.status === "not_open") {
-      showNotice(state.message);
+      showNotice({ title: "Not saved", message: state.message });
       router.refresh();
     }
     if (state.status === "invalid") {

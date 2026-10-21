@@ -83,7 +83,11 @@ This link works once and expires in ${validFor}.`,
  * administrators. No student, submission or content: what happened and when
  * it ends only.
  */
-export function aiAlertMessage(to: string, alert: "cost_cap" | "breaker" | "configuration", detail: string): EmailMessage {
+export function aiAlertMessage(
+  to: string,
+  alert: "cost_cap" | "breaker" | "configuration" | "unreachable",
+  detail: string,
+): EmailMessage {
   const what = {
     cost_cap: {
       subject: "AI stopped: monthly cost cap reached",
@@ -96,6 +100,10 @@ export function aiAlertMessage(to: string, alert: "cost_cap" | "breaker" | "conf
     configuration: {
       subject: "AI stopped: not configured",
       body: `The application could not set up the AI (${detail}). No call is made; new submissions end "Evaluation failed", and teachers may retry them once the configuration is fixed.`,
+    },
+    unreachable: {
+      subject: "AI unreachable: evaluations failing",
+      body: `The AI provider could not be reached for several submissions (${detail}). Calls go on; the submissions concerned end "Evaluation failed", and teachers may retry them once the provider answers again. Check the provider's status page.`,
     },
   }[alert];
   return { kind: "ai_alert", to, subject: what.subject, text: `Hello,\n\n${what.body}` };

@@ -1,7 +1,7 @@
 import { getWorkflowMetadata, sleep } from "workflow";
 import type { EvaluationRef } from "@/lib/evaluation";
 import { orchestrate } from "@/server/evaluation/orchestrate";
-import { evaluateStep, releaseStep } from "@/server/evaluation/steps";
+import { abandonStep, evaluateStep, releaseStep } from "@/server/evaluation/steps";
 
 // PRC-01: one run per trigger, started by trigger.ts once the submission or
 // replacement committed, or by the sweep (sweep.ts). The workflow body runs
@@ -15,5 +15,5 @@ import { evaluateStep, releaseStep } from "@/server/evaluation/steps";
 export async function evaluateSubmissionWorkflow(ref: EvaluationRef) {
   "use workflow";
   const { workflowRunId } = getWorkflowMetadata();
-  return orchestrate(ref, workflowRunId, { evaluate: evaluateStep, release: releaseStep, sleep });
+  return orchestrate(ref, workflowRunId, { evaluate: evaluateStep, release: releaseStep, abandon: abandonStep, sleep });
 }

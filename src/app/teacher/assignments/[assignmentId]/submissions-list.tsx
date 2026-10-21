@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Ban, Check, ClipboardCheck, FileText, Image as ImageIcon, TriangleAlert, UserMinus, type LucideIcon } from "lucide-react";
+import { Ban, Check, ClipboardCheck, FileText, Hourglass, Image as ImageIcon, TriangleAlert, UserMinus, type LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import { DataTable, type Column, type Sort } from "@/components/data-table";
 import { LateTag, StatusTag } from "@/components/status-tag";
@@ -23,6 +23,7 @@ import {
   type StatusFilter,
 } from "@/lib/review-list";
 import { statusLabels, submissionStatuses } from "@/lib/submission-status";
+import { RequestButton } from "./request-button";
 
 // REV-01: the submissions of one assignment. The state (sort, filters, page)
 // lives in the URL and the server sorts the whole list (src/lib/review-list.ts):
@@ -96,6 +97,7 @@ export function SubmissionsList({
   query,
   classes,
   pageSize,
+  relaunchable,
 }: {
   assignmentId: string;
   /** The page asked, sorted and filtered by the server. */
@@ -105,10 +107,13 @@ export function SubmissionsList({
   query: ReviewListQuery;
   classes: { id: string; name: string }[];
   pageSize: number;
+  /** PRC-02 R4: the submissions listRelaunchable offers (E7.6). */
+  relaunchable: string[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
+  const offered = new Set(relaunchable);
 
   /** A new state: back to page 1 unless a page is asked; the old rows stay, dimmed, until the new ones arrive. */
   const go = (change: Partial<ReviewListQuery>) =>
@@ -157,6 +162,20 @@ export function SubmissionsList({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {r.status === "to_submit" ? <span className="text-fg-muted">Not submitted</span> : <StatusTag status={r.status} />}
           {r.cause && <span className="text-xs text-fg-muted">{notAssessableCauseLabels[r.cause]}</span>}
+          {r.requested ? (
+            <Tag icon={Hourglass}>{r.status === "evaluation_failed" ? "Retry requested" : "Relaunch requested"}</Tag>
+          ) : (
+            r.submission &&
+            offered.has(r.submission.id) && (
+              <RequestButton
+                kind="relaunch"
+                seen={{ submissionId: r.submission.id, versionNumber: r.submission.versionNumber }}
+                label="Relaunch"
+                small
+                context={`${r.firstName} ${r.lastName}`}
+              />
+            )
+          )}
         </div>
       ),
     },

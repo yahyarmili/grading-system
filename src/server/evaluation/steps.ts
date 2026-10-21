@@ -1,7 +1,7 @@
 import { FatalError } from "workflow";
 import { EVALUATION_CONCURRENCY, EVALUATION_STUCK_AFTER_MS } from "@/config/provisional";
 import type { EvaluationRef } from "@/lib/evaluation";
-import { releaseEvaluation } from "@/server/data/evaluation/system";
+import { abandonEvaluationRequest, releaseEvaluation } from "@/server/data/evaluation/system";
 import { defaultDeps, errorKind, evaluateSubmission, type EvaluationOutcome } from "@/server/evaluation/evaluate";
 
 // The steps of the automatic evaluation (PRC-01, E6). Workflows keeps each
@@ -54,5 +54,20 @@ export async function releaseStep(ref: EvaluationRef, claimToken: string): Promi
     return await releaseEvaluation({ ...ref, claimToken });
   } catch (error) {
     throw new Error(`release step failed: ${errorKind(error)}`);
+  }
+}
+
+/**
+ * E7.6: a teacher's retry or relaunch whose run found no place in time is
+ * dropped, its request only, and logged (abandonEvaluationRequest). Retried
+ * by Workflows (no AI call; a second time finds nothing to drop); an error
+ * by its kind only.
+ */
+export async function abandonStep(ref: EvaluationRef): Promise<boolean> {
+  "use step";
+  try {
+    return await abandonEvaluationRequest(ref);
+  } catch (error) {
+    throw new Error(`abandon step failed: ${errorKind(error)}`);
   }
 }

@@ -6,9 +6,11 @@ import {
   AI_CALL_PROMPT_TOKENS_CEILING,
   AI_MAX_OUTPUT_TOKENS,
   AI_MONTHLY_COST_CAP_USD,
+  AI_UNREACHABLE_FAILURES,
+  AI_UNREACHABLE_WINDOW_MS,
 } from "@/config/provisional";
 import type { AiProvider } from "@/lib/evaluation";
-import { claimAiAlert, readAiGuardCounts, type AiAlert, type AiGuardCounts } from "@/server/data/evaluation/system";
+import { claimAiAlert, countUnreachableFailures, readAiGuardCounts, type AiAlert, type AiGuardCounts } from "@/server/data/evaluation/system";
 import { getEmailSender } from "@/server/email";
 import { aiAlertMessage } from "@/server/email/templates";
 import { estimateRunsCostUsd } from "@/server/evaluation/prices";
@@ -55,13 +57,13 @@ export function createAiGuard(settings: AiGuardSettings = SETTINGS): AiGuard {
     const counts = await readAiGuardCounts(provider, settings.breakerWindowMs);
     const costUsd = monthCostUsd(counts);
     if (costUsd >= settings.capUsd) {
-      await alertAdmins("ai_cost_cap_reached", settings, `about ${costUsd.toFixed(2)} USD, cap ${settings.capUsd} USD`);
+      await alertAdmins("ai_cost_cap_reached", settings.breakerWindowMs, `about ${costUsd.toFixed(2)} USD, cap ${settings.capUsd} USD`);
       return "cost_cap";
     }
     if (counts.breakerFailures >= settings.breakerFailures) {
       await alertAdmins(
         "ai_breaker_tripped",
-        settings,
+        settings.breakerWindowMs,
         `${counts.breakerFailures} submissions within ${settings.breakerWindowMs / 60_000} minutes`,
       );
       return "breaker";
@@ -81,10 +83,37 @@ export async function costCapReached(settings: AiGuardSettings = SETTINGS): Prom
 
 /** E6.6: the AI could not be set up (evaluate.ts); the administrators are told once per window. */
 export async function alertAiConfiguration(settings: AiGuardSettings = SETTINGS): Promise<void> {
-  await alertAdmins("ai_configuration_failed", settings, "AI_PROVIDER, its key, or a forbidden variable");
+  await alertAdmins("ai_configuration_failed", settings.breakerWindowMs, "AI_PROVIDER, its key, or a forbidden variable");
 }
 
-const ALERT_KIND = { ai_cost_cap_reached: "cost_cap", ai_breaker_tripped: "breaker", ai_configuration_failed: "configuration" } as const;
+export type UnreachableSettings = { failures: number; windowMs: number };
+
+/**
+ * E7.6 (EXP-02, plan of E7 §1.11): after a submission failed on unavailable
+ * or timeout, the administrators are told once per window when
+ * AI_UNREACHABLE_FAILURES submissions did within AI_UNREACHABLE_WINDOW_MS.
+ * Nothing is stopped: unlike a wrong key, an overloaded provider recovers by
+ * itself. A failure is logged by kind, never thrown.
+ */
+export async function alertIfUnreachable(
+  provider: AiProvider,
+  settings: UnreachableSettings = { failures: AI_UNREACHABLE_FAILURES, windowMs: AI_UNREACHABLE_WINDOW_MS },
+): Promise<void> {
+  try {
+    const failures = await countUnreachableFailures(provider, settings.windowMs);
+    if (failures < settings.failures) return;
+    await alertAdmins("ai_provider_unreachable", settings.windowMs, `${failures} submissions within ${settings.windowMs / 60_000} minutes`);
+  } catch (error) {
+    console.error(`[evaluation] AI alert not sent: ${error instanceof Error ? error.name : "unknown"}`);
+  }
+}
+
+const ALERT_KIND = {
+  ai_cost_cap_reached: "cost_cap",
+  ai_breaker_tripped: "breaker",
+  ai_configuration_failed: "configuration",
+  ai_provider_unreachable: "unreachable",
+} as const;
 
 /**
  * Once per period, an email to each administrator, recorded once sent
@@ -92,9 +121,9 @@ const ALERT_KIND = { ai_cost_cap_reached: "cost_cap", ai_breaker_tripped: "break
  * The sending is bounded by AI_ALERT_SEND_MAX_MS, counted in the step's
  * longest duration. A failure is logged by kind and never stops the evaluation.
  */
-async function alertAdmins(alert: AiAlert, settings: AiGuardSettings, detail: string): Promise<void> {
+async function alertAdmins(alert: AiAlert, windowMs: number, detail: string): Promise<void> {
   try {
-    await claimAiAlert(alert, settings.breakerWindowMs, (recipients) =>
+    await claimAiAlert(alert, windowMs, (recipients) =>
       within(AI_ALERT_SEND_MAX_MS, async () => {
         for (const to of recipients) await getEmailSender().send(aiAlertMessage(to, ALERT_KIND[alert], detail));
       }),

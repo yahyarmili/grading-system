@@ -14,7 +14,8 @@ import type { TransitionId } from "@/lib/submission-status";
 import type { EvaluationInput } from "@/server/ai/request";
 import { db } from "@/server/db/client";
 import { aiProposals, assignments, evaluationRuns, securityEvents, submissions, submissionVersions, users } from "@/server/db/schema";
-import { applyTransition, markRestarted } from "../submissions/transitions";
+import { appendJournal } from "../review/record";
+import { applyTransition, clearEvaluationRequest, markRestarted } from "../submissions/transitions";
 
 // System processing of the evaluation (§5.5, transitions 2, 5, 6 and 7): no Actor,
 // called only by the evaluation service (src/server/evaluation/). Listed in
@@ -325,6 +326,43 @@ export async function releaseEvaluation(claim: ClaimRef): Promise<boolean> {
 }
 
 /**
+ * E7.6 (E6.6's open point, plan of E7 §1.11): a teacher's retry or relaunch
+ * whose run found no evaluation place in time. Its request is dropped, it
+ * only, and the log says so, by the system (no actor): the copy shows the
+ * teacher why nothing happened. False when the request is no longer stored
+ * (claimed, replaced by a newer one, or the copy replaced): nothing logged.
+ */
+export async function abandonEvaluationRequest(ref: EvaluationRef): Promise<boolean> {
+  if (ref.origin === undefined || ref.origin === "auto" || ref.request === undefined) return false;
+  const { request, origin } = ref;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ assignmentId: submissions.assignmentId })
+      .from(submissions)
+      .where(
+        and(
+          eq(submissions.id, ref.submissionId),
+          eq(submissions.currentVersion, ref.versionNumber),
+          eq(submissions.evaluationRequest, request),
+        ),
+      )
+      .for("update");
+    if (!row || !(await clearEvaluationRequest(tx, ref.submissionId, request))) return false;
+    await appendJournal(tx, [
+      {
+        assignmentId: row.assignmentId,
+        submissionId: ref.submissionId,
+        actorId: null,
+        event: "retry_abandoned",
+        newValue: { origin },
+        versionNumber: ref.versionNumber,
+      },
+    ]);
+    return true;
+  });
+}
+
+/**
  * PRC-02 R1: no submission stays evaluating. Those claimed longer ago than
  * `afterMs` (compared in SQL, on the database clock of the claim) go to
  * evaluation_failed, without a run: what the abandoned evaluation did is not
@@ -441,8 +479,29 @@ export async function readAiGuardCounts(provider: AiProvider, breakerWindowMs: n
   };
 }
 
-/** The alerts of the AI to the administrators (E6; the configuration, E6.6). */
-export type AiAlert = "ai_cost_cap_reached" | "ai_breaker_tripped" | "ai_configuration_failed";
+/**
+ * E7.6 (EXP-02, E6.6's open point): distinct submissions with a run of this
+ * provider, within the window, that failed last on unavailable or timeout
+ * (the provider not reached, its attempts spent). Read only after such a failure.
+ */
+export async function countUnreachableFailures(provider: AiProvider, windowMs: number): Promise<number> {
+  const errors = evaluationRuns.attemptErrors;
+  const [row] = await db
+    .select({ failures: sql<number>`count(distinct ${evaluationRuns.submissionId})::int` })
+    .from(evaluationRuns)
+    .where(
+      and(
+        eq(evaluationRuns.provider, provider),
+        eq(evaluationRuns.outcome, "failed"),
+        sql`${errors}[cardinality(${errors})] in ('unavailable', 'timeout')`,
+        sql`${evaluationRuns.createdAt} > now() - make_interval(secs => ${windowMs / 1000})`,
+      ),
+    );
+  return row.failures;
+}
+
+/** The alerts of the AI to the administrators (E6; the configuration, E6.6; the provider unreachable, E7.6). */
+export type AiAlert = "ai_cost_cap_reached" | "ai_breaker_tripped" | "ai_configuration_failed" | "ai_provider_unreachable";
 
 /**
  * Records an alert once per period (the UTC month for the cost cap, the

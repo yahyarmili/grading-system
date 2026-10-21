@@ -26,7 +26,7 @@ import {
   type RunRecord,
 } from "@/server/data/evaluation/system";
 import { checkBlockingAlerts, isVeryShort } from "@/server/evaluation/alerts";
-import { aiGuard, alertAiConfiguration, type AiGuard } from "@/server/evaluation/budget";
+import { aiGuard, alertAiConfiguration, alertIfUnreachable, type AiGuard } from "@/server/evaluation/budget";
 
 // The evaluation of a submission by the AI (EVL-03), transitions 2 and 5 of
 // §5.5: claim, request built from the whitelist, bounded attempts, answer
@@ -282,6 +282,10 @@ export async function evaluateSubmission(
       await releaseEvaluation(claim).catch(() => false);
       throw error;
     }
+  }
+  const lastError = result.run.attemptErrors.at(-1);
+  if (recorded.status === "evaluation_failed" && (lastError === "unavailable" || lastError === "timeout")) {
+    await alertIfUnreachable(resolved.evaluator.provider);
   }
   return {
     status: recorded.status,

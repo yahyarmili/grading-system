@@ -2,16 +2,22 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Ban, CalendarClock, CircleDashed, FileText, Hourglass, Image as ImageIcon, Mail, TriangleAlert, UserMinus, Users, type LucideIcon } from "lucide-react";
 import { z } from "zod";
+import { Alert } from "@/components/alert";
 import { EmptyState } from "@/components/empty-state";
 import { BackLink } from "@/components/shell/shell-parts";
 import { LateTag, StatusTag } from "@/components/status-tag";
 import { Tag } from "@/components/tag";
+import { EVALUATION_BUSY_MAX_WAITS, EVALUATION_BUSY_WAIT_MS } from "@/config/provisional";
 import { formatDateTime } from "@/lib/dates";
 import { evaluationFailureLabel, notAssessableCauseLabels } from "@/lib/evaluation";
 import { parseReviewListQuery, reviewListSearch } from "@/lib/review-list";
 import { getActor } from "@/server/auth/session";
+import { listRelaunchable } from "@/server/data/evaluation/teacher";
 import { getCopy, getStudentIdentity, type StudentIdentity, type TeacherCopy } from "@/server/data/review/copy";
-import { CopyNoticeArea } from "./copy-notice";
+import { relaunchConditions } from "@/server/evaluation/relaunch";
+import { NoticeArea } from "../../notice";
+import { RefreshWhileEvaluating } from "../../refresh-while";
+import { RequestButton } from "../../request-button";
 import { CopyOpened } from "./copy-opened";
 import { CopyPanel } from "./copy-panel";
 import { EvaluationForm } from "./evaluation-form";
@@ -26,6 +32,9 @@ type Props = PageProps<"/teacher/assignments/[assignmentId]/students/[studentId]
 // The check runs before any streaming, which would fix the status at 200:
 // the page blocks on it. No result of the student's other work is read (R2).
 export const instant = false;
+
+/** How long a request waits for an evaluation slot before it is dropped (orchestrate.ts). */
+const SLOT_WAIT_MINUTES = Math.round((EVALUATION_BUSY_WAIT_MS * EVALUATION_BUSY_MAX_WAITS) / 60_000);
 
 export default async function Page({ params, searchParams }: Props) {
   const { assignmentId, studentId } = await params;
@@ -42,6 +51,10 @@ export default async function Page({ params, searchParams }: Props) {
     copy.classes.map((c) => c.id),
   );
   const reviewable = copy.proposal !== null && ["to_review", "validated", "published"].includes(copy.status);
+  // PRC-02 R4: read only for a copy not assessable (two round trips otherwise spared).
+  const relaunchable =
+    copy.status === "not_assessable" && copy.seen !== null &&
+    (await listRelaunchable(actor, assignmentId, await relaunchConditions())).some((c) => c.submissionId === copy.seen?.submissionId);
 
   return (
     <>
@@ -50,9 +63,9 @@ export default async function Page({ params, searchParams }: Props) {
         {copy.assignment.title}: submissions
       </BackLink>
       <Identity copy={copy} identity={identity} />
-      <CopyNoticeArea>
+      <NoticeArea>
         {copy.version === null ? (
-          <StatusCard copy={copy} />
+          <StatusCard copy={copy} relaunchable={relaunchable} />
         ) : (
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
             <div className="flex flex-col xl:sticky xl:top-[calc(var(--spacing-header)+1rem)] xl:max-h-[calc(100dvh-var(--spacing-header)-2rem)]">
@@ -73,26 +86,89 @@ export default async function Page({ params, searchParams }: Props) {
                 language={copy.assignment.language}
               />
             ) : (
-              <StatusCard copy={copy} />
+              <StatusCard copy={copy} relaunchable={relaunchable} />
             )}
           </div>
         )}
-      </CopyNoticeArea>
+      </NoticeArea>
     </>
   );
 }
 
-/** REV-02 R4: a copy without a proposal to review shows why, without a form (actions: E7.6, E8). */
-function StatusCard({ copy }: { copy: TeacherCopy }) {
-  const { icon, title, description } = statusPage(copy);
+/**
+ * REV-02 R4: a copy without a proposal to review shows why, without a form.
+ * PRC-02 (E7.6): a failed copy offers "Retry"; a not assessable one,
+ * "Relaunch" when listRelaunchable offers it. A request waiting for its run,
+ * or dropped for want of a place, is said. Manual evaluation: E8.
+ */
+function StatusCard({ copy, relaunchable }: { copy: TeacherCopy; relaunchable: boolean }) {
+  const { icon, title, description } = statusPage(copy, relaunchable);
+  const seen = copy.seen;
+  const refused = copy.status === "evaluation_failed" && copy.lastError === "refused";
+  const retry = copy.status === "evaluation_failed" && seen;
+  const relaunch = copy.status === "not_assessable" && relaunchable && seen;
+  const waiting = copy.request === "pending" || ["received", "evaluating"].includes(copy.status);
+  const asked = copy.status === "evaluation_failed" ? "Retry" : "Relaunch";
+
   return (
     <div className="card">
-      <EmptyState icon={icon} title={title} description={description} />
+      {waiting && <RefreshWhileEvaluating />}
+      <EmptyState
+        icon={icon}
+        title={title}
+        description={description}
+        action={
+          (retry || relaunch || copy.request) && (
+            <div className="flex max-w-md flex-col items-center gap-3 text-left">
+              {copy.request === "pending" && (
+                <Alert tone="info" title={`${asked} requested`}>
+                  Waiting for an evaluation slot. This page updates by itself.
+                </Alert>
+              )}
+              {copy.request === "abandoned" && (
+                <Alert tone="warning" title={`${asked} not started`}>
+                  No evaluation slot was freed within {SLOT_WAIT_MINUTES} minutes. Nothing was evaluated. Try again later.
+                </Alert>
+              )}
+              {refused && (
+                <Alert tone="warning" title="A refusal usually repeats">
+                  <span id="refusal-warning">
+                    The AI declined this text. Asked again, it will most likely decline again.
+                  </span>
+                </Alert>
+              )}
+              {retry && (
+                <RequestButton
+                  kind="retry"
+                  seen={seen}
+                  label={refused ? "Retry anyway" : "Retry"}
+                  primary
+                  describedBy={refused ? "refusal-warning" : undefined}
+                />
+              )}
+              {relaunch && <RequestButton kind="relaunch" seen={seen} label="Relaunch" primary />}
+            </div>
+          )
+        }
+      />
     </div>
   );
 }
 
-function statusPage(copy: TeacherCopy): { icon: LucideIcon; title: string; description: string } {
+/** Why a cause is still there, or that it went: what the teacher may do. */
+function causeHelp(copy: TeacherCopy, relaunchable: boolean): string {
+  if (copy.cause === "no_content") return "The text has nothing the rubric can assess. It cannot be relaunched.";
+  if (relaunchable) {
+    return copy.cause === "rubric_unavailable"
+      ? "The rubric for this language is now validated: the AI can evaluate this copy."
+      : "The AI is available again: it can evaluate this copy.";
+  }
+  return copy.cause === "rubric_unavailable"
+    ? "A relaunch is offered once the rubric for this language is validated."
+    : "A relaunch is offered once the AI is available again.";
+}
+
+function statusPage(copy: TeacherCopy, relaunchable = false): { icon: LucideIcon; title: string; description: string } {
   switch (copy.status) {
     case "to_submit":
       return { icon: CircleDashed, title: "Not submitted", description: "This student has not submitted anything for this assignment yet." };
@@ -107,8 +183,8 @@ function statusPage(copy: TeacherCopy): { icon: LucideIcon; title: string; descr
     case "not_assessable":
       return {
         icon: Ban,
-        title: "Not assessable",
-        description: copy.cause ? notAssessableCauseLabels[copy.cause] : "This copy could not be assessed.",
+        title: copy.cause ? `Not assessable: ${notAssessableCauseLabels[copy.cause]}` : "Not assessable",
+        description: copy.cause ? causeHelp(copy, relaunchable) : "This copy could not be assessed.",
       };
     default:
       return { icon: CircleDashed, title: "No AI proposal", description: "There is no AI proposal for this copy." };

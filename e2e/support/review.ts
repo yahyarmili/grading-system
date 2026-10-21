@@ -77,6 +77,15 @@ export async function seedTeacher(page: Page, classNames: string[], teacher: [st
       return id;
     },
 
+    /** A run of version 1 that failed on these errors, one per attempt (E7.6). */
+    async fail(submissionId: string, errors: string[]) {
+      await client.query(
+        `INSERT INTO evaluation_runs (submission_id, version_number, outcome, provider, model_requested, prompt_version, rubric_version, attempts, attempt_errors, duration_ms)
+         VALUES ($1, 1, 'failed', 'simulator', 'simulator', 'evaluation-2', 'en-1', $2, $3::evaluation_error[], 10)`,
+        [submissionId, errors.length, errors],
+      );
+    },
+
     /**
      * A proposal in force, its grade the sum of `levels`, now To review;
      * with `teacherGrade`, the teacher's evaluation too, its grade fixed.

@@ -14,8 +14,12 @@ import { arrangeReviewList, parseReviewListQuery } from "@/lib/review-list";
 import { ASSIGNMENT_LOCKED_NOTICE, ASSIGNMENT_NOT_DELETED_NOTICE } from "@/lib/texts";
 import { getActor } from "@/server/auth/session";
 import { getTeacherAssignment } from "@/server/data/assignments/assignments";
+import { listRelaunchable } from "@/server/data/evaluation/teacher";
 import { listAssignmentCopies } from "@/server/data/review/list";
+import { relaunchConditions } from "@/server/evaluation/relaunch";
 import { AssignmentActions } from "./assignment-actions";
+import { NoticeArea } from "./notice";
+import { RefreshWhileEvaluating } from "./refresh-while";
 import { ReviewListOpened } from "./review-list-opened";
 import { SubmissionsList } from "./submissions-list";
 
@@ -96,17 +100,25 @@ export default async function Page({ params, searchParams }: Props) {
 
 /** REV-01: the whole list read once, then filtered, sorted and cut here, on the server. */
 async function Submissions({ assignmentId, searchParams }: { assignmentId: string } & Pick<Props, "searchParams">) {
-  const copies = await listAssignmentCopies(await getActor(), assignmentId);
+  const actor = await getActor();
+  const copies = await listAssignmentCopies(actor, assignmentId);
   // Deleted meanwhile: the 404 was decided above, the section says it.
   if (!copies) return <p className="text-fg-muted">This assignment was not found. It may have been deleted.</p>;
 
   const query = parseReviewListQuery(await searchParams, copies.classes.map((c) => c.id));
   const list = arrangeReviewList(copies.rows, query, REVIEW_LIST_PAGE_SIZE);
   const submitted = copies.rows.filter((r) => r.status !== "to_submit").length;
+  // PRC-02 R4, CA3: asked only when a copy is not assessable (two round trips otherwise spared).
+  const relaunchable = copies.rows.some((r) => r.status === "not_assessable" && !r.requested)
+    ? (await listRelaunchable(actor, assignmentId, await relaunchConditions())).map((c) => c.submissionId)
+    : [];
+  // E7.6: a copy under way, or a request waiting, shows its outcome without a reload.
+  const underWay = copies.rows.some((r) => r.requested || r.status === "received" || r.status === "evaluating");
 
   return (
     <>
       <ReviewListOpened assignmentId={assignmentId} stamp={copies.stamp} />
+      {underWay && <RefreshWhileEvaluating />}
       <h2 id="submissions-title" className="text-base font-semibold">
         Submissions{" "}
         <span className="font-normal text-fg-muted">
@@ -122,15 +134,18 @@ async function Submissions({ assignmentId, searchParams }: { assignmentId: strin
           />
         </div>
       ) : (
-        <SubmissionsList
-          assignmentId={assignmentId}
-          rows={list.rows}
-          total={list.total}
-          counts={list.counts}
-          query={{ ...query, page: list.page }}
-          classes={copies.classes}
-          pageSize={REVIEW_LIST_PAGE_SIZE}
-        />
+        <NoticeArea>
+          <SubmissionsList
+            assignmentId={assignmentId}
+            rows={list.rows}
+            total={list.total}
+            counts={list.counts}
+            query={{ ...query, page: list.page }}
+            classes={copies.classes}
+            pageSize={REVIEW_LIST_PAGE_SIZE}
+            relaunchable={relaunchable}
+          />
+        </NoticeArea>
       )}
     </>
   );

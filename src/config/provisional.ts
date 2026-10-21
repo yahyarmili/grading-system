@@ -150,13 +150,14 @@ export const AI_ALERT_SEND_MAX_MS = 10_000;
 
 /**
  * [PROVISIONAL, [P] derived] The longest evaluation step: every attempt at its
- * timeout, the longest wait between two, and one alert (E6.6: an alert stops
- * the attempts; twice its bound, for the wait on another step's sending). 260 s
- * with the values above, under the 300 s of a Vercel Hobby function
+ * timeout, the longest wait between two, and two alerts (E6.6: an alert stops
+ * the attempts; E7.6: the provider unreachable, after them; each twice its
+ * bound, for the wait on another step's sending). 280 s with the values
+ * above, under the 300 s of a Vercel Hobby function
  * (src/server/evaluation/orchestrate.test.ts).
  */
 export const EVALUATION_STEP_MAX_MS =
-  AI_MAX_ATTEMPTS * AI_CALL_TIMEOUT_MS + (AI_MAX_ATTEMPTS - 1) * AI_RETRY_MAX_WAIT_MS + 2 * AI_ALERT_SEND_MAX_MS;
+  AI_MAX_ATTEMPTS * AI_CALL_TIMEOUT_MS + (AI_MAX_ATTEMPTS - 1) * AI_RETRY_MAX_WAIT_MS + 4 * AI_ALERT_SEND_MAX_MS;
 
 /** A Vercel Hobby function's longest duration (a fact, read 2026-10-19: https://vercel.com/docs/functions/limitations). */
 export const VERCEL_FUNCTION_MAX_MS = 300_000;
@@ -164,7 +165,7 @@ export const VERCEL_FUNCTION_MAX_MS = 300_000;
 /**
  * [PROVISIONAL, [P] derived] How long a submission may stay evaluating before
  * it is released to evaluation_failed (PRC-02 R1): the longest step, plus 5
- * minutes for the database and the validator. 9 minutes with the values
+ * minutes for the database and the validator. 9 min 40 s with the values
  * above, beyond a function's 300 s: a step still running is never released.
  */
 export const EVALUATION_STUCK_AFTER_MS = EVALUATION_STEP_MAX_MS + 5 * 60_000;
@@ -227,6 +228,15 @@ export const AI_BREAKER_FAILURES = 3;
 export const AI_BREAKER_WINDOW_MS = 60 * 60_000;
 
 /**
+ * [PROVISIONAL, [P] arbitrary, E7.6] The administrators are told the provider
+ * cannot be reached (EXP-02) when this many distinct submissions failed on
+ * unavailable or timeout, their attempts spent, within
+ * AI_UNREACHABLE_WINDOW_MS; once per window. No call is stopped: a 529 passes.
+ */
+export const AI_UNREACHABLE_FAILURES = 3;
+export const AI_UNREACHABLE_WINDOW_MS = 60 * 60_000;
+
+/**
  * [PROVISIONAL, [P] arbitrary] Edits allowed between a quote and the text, per
  * character of the quote, once both are normalized; to be set on the very
  * faulty texts of the development set (E5.7).
@@ -284,3 +294,12 @@ export const SWEEP_ON_OPEN_MAX_MS = 2_000;
  * the length of a student's text (SUBMISSION_TEXT_MAX_LENGTH).
  */
 export const REVIEW_TEXT_MAX_LENGTH = 4000;
+
+/**
+ * [PROVISIONAL, [P] arbitrary, E7.6] While a copy is evaluated or a teacher's
+ * retry or relaunch waits, its page (or the list) renders again this often,
+ * for this long at most: a copy evaluated in seconds shows without a reload.
+ * About 3 round trips to the database each time.
+ */
+export const EVALUATION_REFRESH_MS = 4_000;
+export const EVALUATION_REFRESH_MAX_MS = 10 * 60_000;

@@ -55,6 +55,12 @@ export type TeacherCopy = {
   cause: NotAssessableCause | null;
   /** The last attempt's error of the active version's last run: why it failed. */
   lastError: EvaluationError | null;
+  /**
+   * E7.6, a failed or not assessable copy: the teacher's retry or relaunch
+   * waits for its run ("pending"), or found no evaluation place in time and
+   * was dropped ("abandoned"); null otherwise.
+   */
+  request: "pending" | "abandoned" | null;
   proposal: (CurrentProposal & { model: string | null; evaluatedAt: string }) | null;
   /** The teacher's evaluation, once they changed something (E7.4). */
   evaluation: (EvaluationFields & { revision: number }) | null;
@@ -94,6 +100,8 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
   const grant = authorize(actor, "submission", "read");
   authorize(actor, "aiProposal", "read");
   authorize(actor, "unpublishedEvaluation", "read");
+  // Whether the last request was dropped is read from the log (E7.6).
+  authorize(actor, "reviewLog", "read");
   const [row] = await db
     .select({
       assignment: {
@@ -123,6 +131,14 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
         where r.submission_id = ${submissions.id} and r.version_number = ${submissions.currentVersion}
         order by r.created_at desc, r.id desc limit 1
       )`,
+      requested: sql<boolean>`${submissions.evaluationRequest} is not null`,
+      // The active version's last request, dropped by the system (E7.6).
+      abandoned: sql<boolean>`coalesce((
+        select j.event = 'retry_abandoned' from review_journal_entries j
+        where j.submission_id = ${submissions.id} and j.version_number = ${submissions.currentVersion}
+          and j.event in ('retry_requested', 'relaunch_requested', 'retry_abandoned')
+        order by j.created_at desc limit 1
+      ), false)`,
       proposal: aiProposals,
       run: { model: evaluationRuns.modelAnswered, createdAt: evaluationRuns.createdAt },
       evaluation: teacherEvaluations,
@@ -152,6 +168,14 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
         : null,
     cause: submission?.cause ?? null,
     lastError: submission ? row.lastError : null,
+    request:
+      submission?.status !== "evaluation_failed" && submission?.status !== "not_assessable"
+        ? null
+        : row.requested
+          ? "pending"
+          : row.abandoned
+            ? "abandoned"
+            : null,
     proposal: proposal && run ? { ...proposalFromRow(proposal), model: run.model, evaluatedAt: run.createdAt.toISOString() } : null,
     evaluation: evaluation ? { ...fieldsFromRow(evaluation), revision: evaluation.revision } : null,
     seen: submission
