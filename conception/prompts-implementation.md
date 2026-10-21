@@ -859,7 +859,8 @@ Revue faite le 2026-10-20 (`feature-reviewer`) : aucun bloquant, 2 majeurs, 6 mi
 ## E7 — Revue par le professeur : liste, copie, modification libre, journal (REV-01 à REV-04)
 
 Préalables :
-- **Q4 et Q8** (échéance : avant E7, `fonctionnalites.md` §9) : à trancher par vous avant E7.0. Recommandations : Q4, aucune correction de la transcription dans le MVP (sans effet sur une copie texte ; écran de copie image en E9) ; Q8, toute modification d'une évaluation validée ou publiée la repasse à « À valider », republication explicite (règle déjà écrite dans REV-03 R5). Sans décision, la recommandation est codée [P] et signalée.
+- **Q4** tranchée [D, 2026-10-22] : l'élève vérifie et corrige une fois sa transcription avant l'envoi, le professeur ne la corrige pas, pas de PDF ; l'élève relit sa remise après l'envoi (révise A3 : sa relecture du texte collé arrive en E8.3). Sans effet sur l'écran de copie texte d'E7.
+- **Q8** (échéance : avant E7, `fonctionnalites.md` §9) : à trancher par vous avant E7.0. Recommandation : toute modification d'une évaluation validée ou publiée la repasse à « À valider », republication explicite (règle déjà écrite dans REV-03 R5). Sans décision, la recommandation est codée [P] et signalée.
 - **Balayage côté professeur** [D, 2026-10-20] : le cron Vercel ne tourne pas sur la preview ; l'ouverture de la liste des remises d'un devoir lance `sweepEvaluations`, qui libère les remises bloquées en évaluation et relance les remises reçues oubliées.
 - **Deux points ouverts d'E6.6**, à trancher au plan : l'alerte « prestataire injoignable » de NFR-EXP-02 (une série de 529 ou de délais dépassés n'alerte personne) ; la relance du professeur abandonnée sans retour quand les 10 places restent prises plus de 5 min (la copie reste en échec, relançable).
 - **Notice du professeur** (NFR-DON-04, « E4 à E8 ») : avant son premier accès aux copies, le professeur apprend ce que mesure le journal (temps de revue, concordance avec l'IA). Elle arrive avec le journal (`schema/notices.ts` l'annonce).
@@ -966,7 +967,7 @@ Utilise le sous-agent feature-reviewer pour relire de façon indépendante la re
 Points : copie, évaluation ou journal d'un autre élève (homonymes, mauvais identifiant), écriture sans journal, proposition modifiable par un chemin quelconque, perte silencieuse entre onglets, remplacement et premier acte simultanés, identité ou classes d'un autre professeur, préchargement qui journalise, cache qui sert une évaluation périmée, journal ou proposition lisibles par l'élève, matrice des nouvelles actions, lenteur de la liste.
 Ne modifie rien. Renvoie d'abord la revue.
 ```
-Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q4, Q8, la notice du professeur et les valeurs provisoires.
+Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour Q8, la notice du professeur et les valeurs provisoires.
 
 ---
 
@@ -976,6 +977,7 @@ Préalables :
 - **Q5** tranchée [D, 2026-10-15] : remarques dans la langue du devoir, modifiables avant publication ; mention de l'IA affichée à l'élève (formulation à confirmer avec le cadre légal) ; « note ajustée par le professeur » sans justification quand la note diffère de la note calculée. La mention de l'IA répond aussi à l'information demandée par la politique d'usage d'Anthropic (« Education and credentials », champ à confirmer) ; formulation [P] dans `src/lib/texts.ts`.
 - **Q8** : tranchée, ou recommandation provisoire, depuis E7.
 - Notice élève v4 déjà en place. L'élève ne voit jamais un refus de l'IA, ni sa cause, ni un état technique.
+- **Relecture de la remise** [D, 2026-10-22, Q4] : l'élève relit son texte collé après l'envoi. Le code d'E4 l'interdit encore (textes `NO_READ_BACK_NOTICE` et `SUBMITTED_NO_READ_BACK_NOTICE`, ligne `ownSubmissionStatus`, tests « aucune réponse ne contient son texte ») : E8 le change.
 - `startManualEvaluation` (E6.3) passe aujourd'hui la copie à « To review » sans évaluation : E8 la rend cohérente avec le formulaire.
 
 #### E8.0 — Planifier · Plan
@@ -987,11 +989,12 @@ Il faut :
 - la publication (PUB-01) : depuis « Validated » seulement, copie par copie ; action répétée = une publication ; retrait vers « Validated » ; « Validate and publish » enchaîne deux actes journalisés séparément ; si le second échoue, la copie reste validée et le professeur le voit (dis comment un test provoque cet échec) ;
 - une copie validée ou publiée modifiée repasse à « To review » (transition 10, Q8) ; la version publiée disparaît pour l'élève ;
 - l'évaluation manuelle (REV-06) : même formulaire, depuis une évaluation échouée (refus compris) ou non évaluable (sans contenu, rubrique non validée, IA indisponible) ; origine « manual » et version de rubrique enregistrées ; journalisée « entered manually, without AI proposal » ; réconcilie startManualEvaluation : aucune copie « To review » sans proposition ni évaluation du professeur ; la transition 6 ou 7 se fait avec la première écriture, dans la même transaction ; dis quels critères s'affichent pour un devoir en français tant que sa rubrique n'est pas validée (Q6) ;
-- la vue de l'élève (PUB-02) : projection dédiée à liste blanche, un DTO fermé lu sur la ligne « Évaluation publiée » ; note telle que fixée, niveaux, remarque par critère, commentaire, pistes, rubrique ; mention de l'IA seulement si une proposition a existé (dis ce qu'affiche une évaluation manuelle) ; « Grade adjusted by your teacher » quand la note diffère de la somme des niveaux ; attribut lang sur les remarques ; jamais la proposition ni ses justifications d'origine, les alertes, le journal, la transcription, un état technique, une cause d'échec ou un refus ;
+- la vue de l'élève (PUB-02) : projection dédiée à liste blanche, un DTO fermé lu sur la ligne « Évaluation publiée » ; note telle que fixée, niveaux, remarque par critère, commentaire, pistes, rubrique ; mention de l'IA seulement si une proposition a existé (dis ce qu'affiche une évaluation manuelle) ; « Grade adjusted by your teacher » quand la note diffère de la somme des niveaux ; attribut lang sur les remarques ; jamais la proposition ni ses justifications d'origine, les alertes, le journal, un état technique, une cause d'échec ou un refus ;
 - « rien avant publication » (PUB-02 R2) dans toutes les réponses reçues par l'élève : pages, charges RSC, Server Actions, messages d'erreur, liste, état ; retrait effectif au prochain accès, bouton retour compris ; dis quelle parade couvre chaque canal ;
 - le balayage automatique de la fuite (E8.4) : marqueurs uniques dans la proposition simulée et dans l'évaluation, cherchés dans toutes les réponses de l'élève ; un contrôle bloquant (EXP-04) ;
 - l'état « Marked, result available » (toStudentStatus) pour « Published » seulement ;
 - l'élève retiré lit son résultat publié (CLS-04 CA3, SUB-01 CA3) ;
+- la relecture de sa remise par l'élève (SUB-01 R2 [D, 2026-10-22]) : son texte, sur la ligne « Remise » en lecture, distincte du résultat ; disponible dès l'envoi, sans rien du traitement ; textes et tests d'E4 qui l'interdisaient, à remplacer ;
 - lignes de matrice et d'inventaire touchées, fonctions dans REAL.
 Montre : transitions et leurs gardes, flux du raccourci, évaluation manuelle, projection de l'élève et sa liste blanche, canaux de fuite et leur parade, textes et valeurs provisoires, et la vérification.
 ```
@@ -1016,6 +1019,7 @@ Couvre CA1 et CA2 (devoir en français sans rubrique française validée). Doubl
 ```
 /build-ui Implémente la vue du résultat de l'élève, sur téléphone d'abord, depuis My assignments : état « Marked, result available », note telle que fixée, niveau par critère avec son libellé, remarque par critère, commentaire général, pistes, lien vers la rubrique ; mention de l'IA et « Grade adjusted by your teacher » selon le plan (textes dans src/lib/texts.ts).
 La projection renvoie le DTO fermé du plan, rien d'autre ; sa requête ne lit aucun champ de la proposition, du journal ni des alertes.
+Ajoute la relecture de la remise (SUB-01 R2 [D, 2026-10-22]) : l'élève revoit son texte tel qu'envoyé, dès l'envoi ; remplace les textes et les tests d'E4 qui l'interdisaient.
 Couvre CA1, CA3 (évaluation modifiée avant publication : seule la version du professeur ; l'élève B qui ouvre le résultat de A : 404 réel) et EVL-04 CA3 (aucune alerte). Un élève retiré lit son résultat publié.
 ```
 **Vous validez :** sur téléphone, l'élève lit sa note et ses remarques ; une note fixée à 15 pour des niveaux qui font 13 affiche « Grade adjusted by your teacher ».
@@ -1057,14 +1061,15 @@ Puis **T4** pour un constat douteux, **T3**, **T1** (critères de sortie d'E8, `
 
 | Étape | Prompts prévus | Outils du guide introduits |
 |---|---|---|
-| **E9** Canal image | E9.0 reprend E5.8 avec `claude-haiku-5-5` [D, 2026-10-19] (photos fictives, sans nom, avec `.txt` de référence, hors de git), puis enquête par sous-agents (limites de 4,5 Mo par requête Vercel et de 1 Go ; 1 Mo par défaut pour une Server Action, à vérifier) ; confirme ou non Haiku derrière `Reader` [P] · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur (grand côté ≤ 2 576 px **et** ⌈l/28⌉×⌈h/28⌉ ≤ 4 784 tokens), type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 `Reader` et `transcription-1` en sortie structurée, image en base64 avant le texte, jamais d'URL, contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · notice v5 et fiche DON-02 étendue à la lecture · revue | Sous-agents, revue |
+| **E9** Canal image | Q4 [D, 2026-10-22] : images seules (pas de PDF) ; transcription avant l'envoi, montrée à l'élève qui reprend la photo ou corrige une fois les mots mal lus, puis confirme ; version du moteur conservée, changements enregistrés et surlignés pour le professeur ; l'élève relit images et transcription après l'envoi ; échec de transcription avant l'envoi : à définir · E9.0 reprend E5.8 avec `claude-haiku-5-5` [D, 2026-10-19] (photos fictives, sans nom, avec `.txt` de référence, hors de git), puis enquête par sous-agents (limites de 4,5 Mo par requête Vercel et de 1 Go ; 1 Mo par défaut pour une Server Action, à vérifier) ; confirme ou non Haiku derrière `Reader` [P] · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur (grand côté ≤ 2 576 px **et** ⌈l/28⌉×⌈h/28⌉ ≤ 4 784 tokens), type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 `Reader` et `transcription-1` en sortie structurée, image en base64 avant le texte, jamais d'URL, contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · notice v5 et fiche DON-02 étendue à la lecture · revue | Sous-agents, revue |
 | **E10** Durcissement et mesure | A : matrice complète automatisée, balayage (journaux sans contenu ni clé), étanchéité (flux image compris), pannes, sessions et liens, accessibilité (USA-03), export de sauvegarde, procédure de montée de version du SDK (relire le diff, rejouer les tests de garanties, vérifier l'en-tête d'authentification) ; revue externe facultative (CodeRabbit s'il reste gratuit pour ce dépôt, sinon `/code-review`) ; tri des constats ; T3. B : scripts de mesure depuis le journal, selon le protocole validé par le client ; mesures pour quelques centimes (stabilité sur N exécutions, CA3, alertes, fidélité de lecture) ; vote k = 3 et variante de réflexion décidés là, chacun avec sa version (rejouer a03, seul texte adverse hors de l'écart en E5.16, accepté [D, 2026-10-19]) | Revue indépendante |
 | **E11** Démonstration | Déploiement final, à trancher en E11 (2026-10-20) : garder la preview, faire de `preview` la branche de production de Vercel (adresse courte, cron ; variables à recopier en Production), ou fusionner dans `main` et la déployer avec une base Neon à elle (E1.8 : aucune production sur la base dev) ; jeu de données fictif en anglais, scénarios scriptés, préchauffage de Neon, notice « demo, fictitious data », répétition sous la limite de l'espace de travail (répétition et séance). Avant : abonnement actif, crédit restant, fin du cycle, expiration de la clé ; repli : REV-06 ou le simulateur ; après : clé révoquée | — |
 | **Fin** | Revue de toute l'application ; vérification des parcours admin, teacher, student ; synchronisation finale de CLAUDE.md | — |
 
 ## 4. Points ouverts qui touchent ces prompts
 
-- Q2 (premier administrateur), Q4, Q8, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
+- Q4 tranchée [D, 2026-10-22] : l'élève vérifie et corrige une fois sa transcription avant l'envoi ; pas de PDF ; l'élève relit sa remise.
+- Q2 (premier administrateur), Q8, Q9 : valeurs provisoires dans les prompts, à trancher avant l'étape concernée (voir fonctionnalites.md §9).
 - Fuseau de la date limite tranché [D, 2026-10-14] : `Africa/Casablanca`.
 - Q3, Q10 et longueur maximale d'un texte tranchées [D, 2026-10-15] : 2 remplacements au plus jusqu'au premier acte du professeur, sans avertissement d'image illisible ; consigne « pas de nom » seule ; 4000 caractères. Codées dans `src/config/decisions.ts` (E4).
 - Q7 tranchée [D, 2026-10-14] : lien et code de classe valables 1 heure après la création du lien (CLS-02 R4). Code aligné (`src/config/decisions.ts`).

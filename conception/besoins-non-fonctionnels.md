@@ -15,7 +15,7 @@
 - **Pays : Maroc. Âge des élèves : 18 ans.** À confirmer : la problématique parle de « tous niveaux scolaires », donc tous les élèves visés ont-ils 18 ans ou plus (QNF-1) ?
 - **Exploitation : l'administrateur exploite l'application en V1** (restaurations, suppressions, alertes, journal de sécurité) ; une équipe technique distincte est reportée à plus tard.
 - **Échelle : démonstration avec acteurs de simulation** (remplace le pilote d'un professeur, 2026-10-12) ; on ne dimensionne rien au-delà. Seul chiffre connu : plus de 100 copies à corriger en une journée, utilisé comme « lot de référence de 100 remises » (ordre de grandeur de test, pas un volume décidé), en copies fictives.
-- **L'élève ne revoit pas l'image de sa copie** : il voit seulement le résultat publié.
+- **L'élève relit sa remise** [D, 2026-10-22, remplace « l'élève ne revoit pas l'image de sa copie »] : son texte collé, ou ses images et sa transcription confirmée, puis son résultat publié (Q4).
 - **IA : API d'Anthropic en direct, modèle `claude-haiku-5-5`, payée par le crédit API mensuel de l'abonnement Max du développeur [D, 2026-10-19]** (100 $ par mois, sans report : perdu à la fin de chaque cycle, [crédits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)) ; aucun moyen de paiement dans la Console : 0 MAD décaissé. Vaut pendant le projet ; ensuite : clé du client (coût par copie mesuré en E5.16 : environ 0,0011 $), sinon simulateur ou évaluation manuelle (REV-06). Risque : l'IA dépend de cet abonnement actif. Remplace « un LLM gratuit en V1 » (QNF-5).
 - **Plateforme : application web responsive en V1.** Élèves surtout sur téléphone, professeurs sur ordinateur.
 - Trois acteurs : administrateur, professeur, élève. D10 : la mesure de qualité est un test après construction, jamais un jalon bloquant.
@@ -36,7 +36,7 @@ Les copies de 18 ans quittent l'application vers un prestataire d'IA tiers : Ant
 
 | ID | Exigence | Valeur | Priorité |
 |---|---|---|---|
-| NFR-DON-01 | **Inventaire, conservation, suppression.** Un registre donne, par catégorie de donnée, sa finalité, qui y accède, les tiers et pays destinataires, la durée. Supprimer une copie ou un compte supprime aussi versions, transcription, propositions, journal et sauvegardes échues. L'élève ne revoit jamais l'image de sa copie : elle peut être supprimée dès la fin de la revue. | Durées et délais : à définir (QNF-4) | Obligatoire · avant tout usage réel |
+| NFR-DON-01 | **Inventaire, conservation, suppression.** Un registre donne, par catégorie de donnée, sa finalité, qui y accède, les tiers et pays destinataires, la durée. Supprimer une copie ou un compte supprime aussi versions, transcription, propositions, journal et sauvegardes échues. L'élève relit l'image de sa copie [D, 2026-10-22] : sa durée de conservation suit celle de la remise (QNF-4). | Durées et délais : à définir (QNF-4) | Obligatoire · avant tout usage réel |
 | NFR-DON-02 | **Prestataire d'IA et de lecture.** Aucune copie réelle n'est envoyée à un prestataire avant qu'une fiche écrite (usage des contenus pour entraîner des modèles, pays, conservation, sous-traitants) soit validée par le client. D'ici là, données synthétiques. Une offre gratuite peut autoriser l'usage des contenus pour améliorer ses modèles (cas documenté pour l'offre gratuite de l'[API Gemini](https://ai.google.dev/gemini-api/docs/pricing)) : la fiche doit trancher. Hors du Maroc, le transfert exige l'autorisation de la CNDP. | 1 fiche par prestataire ; 0 envoi réel sans activation tracée | Obligatoire · avant tout envoi réel |
 | NFR-DON-03 | **Conformité marocaine paramétrable.** Information ou consentement, mention de l'IA, notices, durées et coordonnées du responsable sont des paramètres modifiables sans toucher aux règles métier, fixés par une fiche de décision validée. Avant l'usage réel : déclaration à la CNDP et, si le prestataire est hors du Maroc, demande d'autorisation de transfert. Élèves de 18 ans : aucun consentement parental supposé. | Fiche complète et déclaration déposée avant tout usage réel | Obligatoire · avant tout usage réel |
 | NFR-DON-04 | **Notices exactes.** Le professeur est informé, avant son premier accès, de ce que mesure le journal (temps de revue, concordance avec l'IA). L'élève lit, avant sa première remise, le responsable du traitement, la finalité, ce qui est envoyé à une IA tierce, ce que voit le professeur, ses droits d'accès et de rectification. Aucune notice ne promet que son nom n'est pas transmis (Q10). | 100 % des utilisateurs, avant le premier usage | Obligatoire · E4 à E8 |
@@ -110,7 +110,7 @@ Prépare l'étape 6 sans la remplacer.
 
 | | Administrateur | Professeur | Élève |
 |---|---|---|---|
-| **Accès** | Dans l'application : crée, réémet, annule une invitation de professeur ; aucune copie ni journal pédagogique (SEC-01). Hors application, en V1 : exploite l'application et peut techniquement tout lire (risque assumé, QNF-7). | Ses classes, devoirs, copies, évaluations et le journal de ses copies. | Son espace : ses devoirs, sa remise, son résultat publié (note, niveaux, remarques). Jamais l'image de sa copie après correction. |
+| **Accès** | Dans l'application : crée, réémet, annule une invitation de professeur ; aucune copie ni journal pédagogique (SEC-01). Hors application, en V1 : exploite l'application et peut techniquement tout lire (risque assumé, QNF-7). | Ses classes, devoirs, copies, évaluations et le journal de ses copies. | Son espace : ses devoirs, sa remise (texte, ou images et transcription confirmée [D, 2026-10-22]), son résultat publié (note, niveaux, remarques). |
 | **Contraintes** | Compte à protéger plus fortement (QNF-7) ; ses accès aux données sont journalisés (DON-05) ; essais et sessions limités (SEC-02). | Notice avant le premier accès (DON-04) ; revue de plus de 100 copies par jour sans lenteur (TRT-03). | Téléphone (USA-01) ; notice avant la première remise (DON-04) ; code de classe tolérant (SEC-03). |
 
 Hors des trois acteurs : le visiteur non connecté (inscription, connexion). L'exploitation est assurée par l'administrateur en V1.
@@ -128,7 +128,7 @@ Hors des trois acteurs : le visiteur non connecté (inscription, connexion). L'e
 - Reproductibilité exacte des sorties de l'IA : non garantie par un prestataire externe, non nécessaire (proposition immuable, professeur garde-fou).
 - Choix techniques (hébergement, supervision, chiffrement applicatif) : étape 7.
 
-**À reporter à l'étape 4** : écran de notice et paramètres de conformité (DON-03, DON-04) ; relance proposée au professeur après un plafond d'usage de l'IA (EXP-02) ; conservation du tri et des filtres au retour à la liste ; **l'élève ne revoit pas l'image de sa copie** : à vérifier dans SUB-01 (lecture de sa remise), PUB-02 et CLS-04 (lecture seule d'un élève retiré).
+**À reporter à l'étape 4** : écran de notice et paramètres de conformité (DON-03, DON-04) ; relance proposée au professeur après un plafond d'usage de l'IA (EXP-02) ; conservation du tri et des filtres au retour à la liste ; **l'élève relit sa remise** [D, 2026-10-22] : à vérifier dans SUB-01 (lecture de sa remise), SUB-03 (transcription confirmée), PUB-02 et CLS-04 (lecture seule d'un élève retiré).
 
 ---
 
@@ -156,7 +156,7 @@ Hors des trois acteurs : le visiteur non connecté (inscription, connexion). L'e
 | QNF-1 (pays, âge) | Maroc ; 18 ans. Reste une confirmation et le responsable du traitement (ci-dessous). |
 | QNF-2 (exploitation) | L'administrateur exploite l'application en V1. Conséquence : QNF-7. |
 | QNF-3 (échelle) | Recommandation acceptée : pilote d'un professeur et de ses classes, rien au-delà. Remplacée le 2026-10-12 par une démonstration avec acteurs de simulation. |
-| QNF-4 (image) | L'élève ne revoit pas l'image de sa copie, il voit seulement le résultat. Les durées restent à définir. |
+| QNF-4 (image) | [D, 2026-10-22, remplace « l'élève ne revoit pas l'image de sa copie »] L'élève relit sa remise : images et transcription confirmée, ou texte collé (Q4). Les durées restent à définir. |
 | QNF-5 (budget d'IA) | [D, 2026-10-19] API d'Anthropic en direct, `claude-haiku-5-5`, payée par le crédit API du développeur pendant le projet, puis clé du client, sinon simulateur ou évaluation manuelle : détail en section 1. Données fictives tant que le client n'a pas validé la fiche DON-02. Relevés de la Console faits le 2026-10-19 (`stack-technologique.md` §3) ; coût mesuré en E5.16 : environ 0,0011 $ par copie. Remplace « LLM gratuit en V1 » (historique ci-dessous). |
 | QNF-6 (appareils) | Application web responsive en V1. |
 

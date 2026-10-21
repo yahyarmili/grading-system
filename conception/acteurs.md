@@ -36,7 +36,7 @@
 
 ### 2.3 Élève
 - **Responsabilités.** S'inscrire et confirmer son email (AUTH-01) ; rejoindre une ou plusieurs classes avec un lien ou un code (CLS-03) ; voir ses devoirs et l'état de ses remises (SUB-01) ; remettre un texte collé ou des images scannées (SUB-02, SUB-03) ; remplacer sa remise avant la correction du professeur (SUB-05) ; lire son résultat une fois publié (PUB-02).
-- **Il voit** ses devoirs, l'état de sa remise (« À remettre », « Remis, en cours de correction », « Corrigé ») et, après publication, la **note, les niveaux et les remarques validées** [D]. **Jamais** la proposition brute de l'IA, les alertes, le journal, un état technique, le résultat d'un autre élève, ni l'image de sa copie après correction, ni son texte collé (A3) [D].
+- **Il voit** ses devoirs, l'état de sa remise (« À remettre », « Remis, en cours de correction », « Corrigé ») et, après publication, la **note, les niveaux et les remarques validées** [D]. Il relit sa remise : son texte collé, ou ses images et la transcription qu'il a vérifiée et confirmée avant l'envoi [D, 2026-10-22, Q4]. **Jamais** la proposition brute de l'IA, les alertes, le journal, un état technique ni le résultat d'un autre élève [D].
 - **Il ne peut pas** modifier un devoir, voir la liste des élèves d'une classe, ni remettre sans devoir lié (D3). Un retard est accepté et marqué (D8).
 - **Parcours principal.** S'inscrit → confirme son email → rejoint une classe → reçoit un devoir → remet sur son téléphone → attend → lit son résultat.
 - **Attention.** Il ne sait pas si sa photo est lisible avant la correction (alerte de qualité d'image : V2). Une note ajustée par le professeur peut différer des niveaux affichés (Q5). Élèves supposés avoir 18 ans ou plus (QNF-1) ; en démonstration, acteurs adultes.
@@ -92,7 +92,7 @@ AUTH-02 et AUTH-05 sont partagées par les trois acteurs, et PRC-02 par le syst�
 
 - **Un compte, un seul rôle** [P] : pas de professeur qui est aussi élève, pas d'administrateur qui est aussi professeur avec le même compte. Si une même personne a les deux fonctions, elle a deux comptes avec deux emails différents [D] (A1).
 - **Le professeur est lié à l'élève par la classe.** Un élève dans deux classes de deux professeurs est corrigé par chacun pour ses devoirs : le professeur créateur du devoir est son correcteur [P].
-- **Cloisonnement.** Les droits exacts de chaque acteur sur chaque ressource sont dans la matrice d'accès de `fonctionnalites.md` 5.4, source des tests (NFR-SEC-01). Seul changement de l'étape 5 : l'élève ne revoit pas l'image de sa copie après correction ; A3 y ajoute son texte collé.
+- **Cloisonnement.** Les droits exacts de chaque acteur sur chaque ressource sont dans la matrice d'accès de `fonctionnalites.md` 5.4, source des tests (NFR-SEC-01). Changement de l'étape 5 (l'élève ne revoit pas l'image) et A3 (ni son texte) : remplacés le 2026-10-22, l'élève relit sa remise (Q4).
 
 ---
 
@@ -104,7 +104,7 @@ AUTH-02 et AUTH-05 sont partagées par les trois acteurs, et PRC-02 par le syst�
 |---|---|---|
 | A1. L'administrateur peut-il aussi être professeur ? | Non avec le même compte : deux comptes distincts, deux emails différents. | Aucun accès de l'administrateur aux copies dans l'application. |
 | A2. Combien d'administrateurs en V1 ? | Un seul, désigné par le client. | Compte critique unique : QNF-7 (second facteur) reste ouverte. |
-| A3. L'élève relit-il son texte collé après l'envoi ? | Non. | Il voit l'état de sa remise, puis le résultat publié. SUB-01 R2 est à corriger dans `fonctionnalites.md`, comme pour l'image. |
+| A3. L'élève relit-il son texte collé après l'envoi ? | Non. **Révisée [D, 2026-10-22]** : oui, texte collé, ou images et transcription confirmée (Q4). | Il voit sa remise, son état, puis le résultat publié (SUB-01 R2). |
 
 ### Encore ouvertes
 - **QNF-1, QNF-4, QNF-7** de l'étape 5 : responsable du traitement et CNDP, durées de conservation, second facteur pour l'administrateur. QNF-5 (choix du LLM) est tranchée : Anthropic, `claude-haiku-5-5` [D, 2026-10-19] (`besoins-non-fonctionnels.md` §6).

@@ -79,7 +79,7 @@ Toutes les mesures se font après construction (D10), valeurs cibles « à défi
 - Droits de l'élève sur ses données (page « mes données », accès, rectification, suppression).
 - Alerte de qualité d'image avant l'envoi (flou, sombre, coupé) et état élève « à revoir » (Q3).
 - Gestion avancée du devoir et de la classe : ajouter une classe, prolonger, clore, archiver, dupliquer ; archivage de classe en fin d'année.
-- Correction de la transcription par le professeur, selon Q4.
+- Remise d'un PDF [D, 2026-10-22] : exclue du MVP, images seules (Q4).
 - Retour d'une copie à l'élève pour un nouveau dépôt, modes de remise par devoir, import de fichier texte, brouillon enregistré.
 - Suspension de compte professeur, changement d'adresse email, classes à plusieurs professeurs.
 - Masquage automatique d'un nom écrit dans la copie (Q10), export des notes, relecture à l'aveugle de la proposition de l'IA.
@@ -129,7 +129,7 @@ Toutes les mesures se font après construction (D10), valeurs cibles « à défi
 | F4 | L'élève dépose une ou plusieurs images scannées de sa production manuscrite. | Fidèle, précisée | Le scan est à la charge de l'élève (dépôt par le professeur : V2). Formats, poids, pages : à définir. Un nom écrit sur la copie peut atteindre l'IA (Q10). Photo défectueuse : remplacement (Q3). | SUB-03, SUB-04, SUB-05, EVL-02 |
 | F5 | L'élève colle sa production sous forme de texte. | Fidèle | Forme exacte à définir ; 4000 caractères au plus [D, 2026-10-15]. Authenticité non vérifiable ; l'autocorrection de l'éditeur peut modifier Mechanics. Limites assumées. | SUB-02, SUB-04, SUB-05 |
 | F6 | L'élève consulte sa note et le résultat une fois validé et rendu visible par le professeur. | Fidèle ; D6 et D7 précisent les actes et le contenu | Rien d'exposé avant publication, par aucune voie. Langue des remarques, mention de l'IA, note ajustée : Q5. | PUB-02, PUB-01, REV-05, SUB-01, AUTH-04 |
-| F7 | Si une image est remise, son texte est extrait pour le professeur. | Fidèle, étendue à la fidélité (étape 2) | Le texte extrait est aussi l'entrée de l'IA : une erreur de lecture devient une erreur de note. Correction par le professeur : Q4. | TRX-01, REV-02, PRC-01, PRC-02, EVL-04 |
+| F7 | Si une image est remise, son texte est extrait pour le professeur. | Fidèle, étendue à la fidélité (étape 2) | Le texte extrait est aussi l'entrée de l'IA : une erreur de lecture devient une erreur de note. L'élève le vérifie et le corrige avant l'envoi ; le professeur ne le corrige pas (Q4 [D, 2026-10-22]). | TRX-01, REV-02, PRC-01, PRC-02, EVL-04 |
 | F8 | Chaque remise est évaluée par un LLM selon la rubrique. | Décomposée, sens conservé | Fiabilité non acquise : mesurée après construction (D10). Un nom écrit dans la copie peut passer. Rubrique française à valider (Q6). Repli manuel si l'IA échoue. | EVL-01 à EVL-04, PRC-01, PRC-02, REV-06 |
 | F9 | Après l'évaluation, une note est donnée avec des remarques. | Fidèle, scindée en remarques (IA) et note (règle de calcul) | Format de la note : Q1. Langue des remarques : Q5. Le professeur peut fixer la note (D5). | EVL-01, EVL-03, REV-03 |
 | F10 | Le professeur consulte chaque résultat, le supervise, modifie la note et l'évaluation. | Décomposée : consultation, modification, journal, validation, repli manuel | Note libre (D5) : elle peut différer des niveaux. Ancrage et halo possibles, non empêchés. | REV-02 à REV-06, AUTH-04 |
@@ -195,8 +195,8 @@ L = lecture, É = écriture, — = refus (test négatif exécutable). « Propri�
 | Compte professeur | — | — | L É (le sien) | — | É (invitation) | — |
 | Classe, lien, code, liste d'élèves | L (ses classes, sans la liste) | — | L É | — | — | — |
 | Devoir | L (ceux de ses classes, ou avec remise) | — | L É (selon verrouillage) | — | — | — |
-| Remise et images | É (la sienne : remplacement SUB-05, pas de lecture) | — | L | — | — | — |
-| Transcription | — | — | L | — | — | — |
+| Remise et images | L É (la sienne : relecture de son texte ou de ses images [D, 2026-10-22], remplacement SUB-05) | — | L | — | — | — |
+| Transcription | L É (la sienne : vérifiée et corrigée une fois avant l'envoi, puis relue [D, 2026-10-22]) | — | L | — | — | — |
 | Proposition IA et alertes | — | — | L | — | — | — |
 | Évaluation non publiée | — | — | L É | — | — | — |
 | Évaluation publiée (note, niveaux, remarques, commentaire, pistes) | L | — | L É (retrait) | — | — | — |
@@ -222,6 +222,8 @@ L = lecture, É = écriture, — = refus (test négatif exécutable). « Propri�
 | 9 | Validée -> Publiée | Le professeur publie (PUB-01). « Valider et publier » enchaîne 8 et 9 en une action (D6). |
 | 10 | Publiée -> Validée ; Validée ou Publiée -> À valider | Retrait de la publication (PUB-01) ; modification de l'évaluation (REV-03, Q8). |
 | 11 | Remise reçue ... À valider -> Remise reçue | L'élève remplace sa remise (SUB-05) tant que le professeur n'a ni modifié ni validé, 2 fois au plus (Q3 [D]). Un traitement lancé sur une version devenue non active produit un résultat conservé mais non courant. |
+
+[D, 2026-10-22] Copie image (Q4) : la transcription précède la remise ; l'élève la confirme, et la remise reçue porte déjà son texte confirmé. Les transitions 2 à 4 côté image sont à revoir au plan d'E9 ; la suite d'un échec de transcription avant l'envoi est à définir.
 
 Règles transverses :
 - Aucune remise ne reste indéfiniment « en cours » ; l'échec d'une remise ne bloque aucune autre.
@@ -377,7 +379,7 @@ Le professeur peut modifier ou supprimer un devoir tant qu'il n'a reçu aucune r
 L'élève dispose d'un espace qui liste les devoirs reçus de ses classes et l'état de sa remise pour chacun.
 *Acteur : Élève · Origine et statut : F3, D3 [D] · Dépend de : CLS-03, ASG-01 · Problèmes : — · Tests : intégration, E2E*
 - **R1** [D] Chaque élève a son espace de remise ; toute remise est liée à un devoir reçu, pas de dépôt libre (F3, D3).
-- **R2** [P] Par devoir : titre, sujet, instructions, langue, date limite, état. L'élève ne relit ni son texte ni ses images après l'envoi (étape 5, A3). Un devoir envoyé à deux classes de l'élève n'apparaît qu'une fois ; sans classe, état vide explicite.
+- **R2** [P] Par devoir : titre, sujet, instructions, langue, date limite, état. [D, 2026-10-22] Après l'envoi, l'élève relit sa remise : son texte collé, ou ses images et sa transcription confirmée (révise A3 et QNF-4 ; Q4). Jamais la proposition, les alertes ni le journal. Un devoir envoyé à deux classes de l'élève n'apparaît qu'une fois ; sans classe, état vide explicite.
 - **R3** [P] États visibles, liste fermée : « À remettre » (mention « date limite dépassée »), « Remis, en cours de correction » (mention « en retard »), « Corrigé, résultat disponible ». Les états techniques ne sont jamais montrés.
 - **R4** [P] Un élève retiré d'une classe garde en lecture seule les devoirs pour lesquels il a une remise (état et résultat publié) ; il ne reçoit plus de nouveau devoir et ne peut plus remettre.
 - **CA1** Élève de C1 et devoir envoyé à C1 : le devoir apparaît avec sujet, langue, date limite et état « À remettre ». Devoir envoyé à C2 seulement : absent.
@@ -401,10 +403,12 @@ L'élève peut déposer une ou plusieurs images scannées de sa production manus
 - **R1** [D] Une ou plusieurs pages de copie manuscrite scannée, rattachées à un devoir (F4, D3). [P] Pages ordonnées, avec aperçu et réordonnancement avant l'envoi.
 - **R2** [P] Formats, poids, nombre de pages maximum : à définir ; type vérifié sur le contenu du fichier. Un fichier refusé ne crée aucune remise et rien n'est stocké.
 - **R3** [P] Image stockée sans ses métadonnées d'origine, accessible au seul professeur correcteur et à l'élève auteur (matrice 5.4) ; durée de conservation : étape 5. Un nouvel essai après coupure réseau ne crée pas de doublon.
-- **R4** [P] Mêmes consignes que SUB-02. Le scan est à la charge de l'élève ; dépôt par le professeur : V2.
+- **R4** [P] Mêmes consignes que SUB-02. Le scan est à la charge de l'élève ; dépôt par le professeur : V2. [D, 2026-10-22] Images seules : pas de PDF dans le MVP.
+- **R5** [D, 2026-10-22] (Q4) Avant l'envoi, la copie est transcrite et la transcription montrée à l'élève. Photo floue ou mal lue : il reprend la photo. Mot mal lu : il le corrige lui-même dans la transcription, une seule fois, puis confirme ; plus aucune correction ensuite (un changement passe par SUB-05). Seule la version confirmée part à l'évaluation. La transcription du moteur est conservée à côté ; les changements de l'élève sont enregistrés (mot d'origine, mot de l'élève) et surlignés pour le professeur. Limite assumée : l'élève peut corriger une vraie faute en la disant mal lue ; le professeur le voit, l'application ne l'empêche pas.
 - **CA1** Devoir et image conforme : une remise est créée, l'image stockée, une confirmation datée affichée.
 - **CA2** Format refusé, fichier trop lourd ou corrompu, extension qui ne correspond pas au contenu : remise refusée, rien de créé ni de stocké.
 - **CA3** Trois pages réordonnées avant l'envoi : l'ordre enregistré est celui choisi. Coupure réseau puis nouvel essai : une seule remise.
+- **CA4** Transcription corrigée d'un mot puis confirmée : l'évaluation reçoit la version de l'élève ; la version du moteur et le changement sont conservés et visibles du professeur ; une seconde correction est refusée. Fichier PDF : refusé.
 
 #### SUB-04 — Accepter les remises tardives et les marquer « en retard »
 Le système accepte une remise déposée après la date limite et la marque « en retard », visible du professeur et de l'élève.
@@ -432,9 +436,9 @@ L'élève peut remplacer sa remise tant que le professeur n'a ni modifié ni val
 #### TRX-01 — Transcription fidèle d'une copie manuscrite, sans correction
 Le système transcrit en texte chaque copie remise en image, sans corriger l'orthographe ni la ponctuation et en marquant les passages illisibles, afin que ce texte soit accessible au professeur et serve d'entrée à l'évaluation.
 *Acteur : Système · Origine et statut : F7, étape 2 [D] · Dépend de : SUB-03, PRC-01, EVL-04, REV-02 · Problèmes : P1, P3 · Tests : intégration, évaluation IA, recette*
-- **R1** [D] Le texte extrait est accessible au professeur (F7). [D] Transcription fidèle : orthographe, ponctuation et majuscules conservées, sans correction ; le critère Mechanics en dépend.
+- **R1** [D] Le texte extrait est accessible au professeur (F7), et à l'élève, qui le vérifie avant l'envoi (SUB-03 R5, [D, 2026-10-22]). [D] Transcription fidèle : orthographe, ponctuation et majuscules conservées, sans correction ; le critère Mechanics en dépend.
 - **R2** [P] Pages assemblées dans l'ordre remis ; passage indéchiffrable marqué « [illisible] », jamais deviné ; anglais et français. Ce que contient l'image est transcrit, jamais exécuté.
-- **R3** [P] Texte stocké avec la version du moteur. Une image sans écriture lisible est signalée (EVL-04), pas inventée ; un échec de lecture relève de PRC-02. Correction par le professeur : Q4.
+- **R3** [P] Texte stocké avec la version du moteur. Une image sans écriture lisible est signalée (EVL-04), pas inventée ; un échec de lecture relève de PRC-02. Pas de correction par le professeur ; l'élève corrige une fois avant l'envoi et la version du moteur reste conservée (Q4 [D, 2026-10-22]).
 - **R4** [P] Une erreur de lecture devient une erreur de note. La fidélité est une mesure sur de vraies écritures d'élèves (E10), pas une condition de livraison (D10).
 - **CA1** (contrat, testé en E9) Trois pages remises : le texte est dans l'ordre des pages. La version du moteur est enregistrée.
 - **CA2** (contrat, testé en E9) Un marqueur « [illisible] » produit par le moteur est conservé et affiché ; une image sans écriture ne produit aucun contenu inventé et la copie est signalée (EVL-04).
@@ -535,7 +539,7 @@ En cliquant sur le nom d'un élève, le professeur voit son nom, son prénom, so
 *Acteur : Professeur · Origine et statut : F13, F10, F7, D9 [D] · Dépend de : REV-01, EVL-03 · Problèmes : P1, P3 · Tests : intégration, E2E*
 - **R1** [D] Un clic sur le nom ouvre la copie pour ce devoir avec nom, prénom, email, classe (D9). Sont affichées toutes les classes de l'élève destinataires du devoir et appartenant à ce professeur. L'identité n'est pas masquée.
 - **R2** [P] Aucun historique des résultats précédents de l'élève à l'écran de correction (ni note ni moyenne), pour ne pas ajouter d'effet de halo.
-- **R3** [D] Le texte de la copie est accessible (F7). Copie texte : texte seul. Copie image : transcription en premier avec la mention « transcrit automatiquement », image à la demande, côte à côte (rejoué en E9).
+- **R3** [D] Le texte de la copie est accessible (F7). Copie texte : texte seul. Copie image : transcription confirmée par l'élève en premier, avec la mention « transcrit automatiquement, vérifié par l'élève » et les mots qu'il a changés surlignés à côté de la lecture du moteur [D, 2026-10-22] ; image à la demande, côte à côte (rejoué en E9).
 - **R4** [P] Sont affichés : 5 niveaux avec justifications, remarques, note proposée, alertes, mode de remise, « en retard ». La proposition d'origine n'est pas modifiable à l'écran. Un élève « non remis » ouvre une page de statut sans formulaire.
 - **CA1** Clic sur un nom : s'ouvre la copie de cet élève pour ce devoir avec nom, prénom, email, classe. Deux élèves homonymes : chaque clic ouvre la bonne copie.
 - **CA2** Élève membre de deux classes du professeur et d'une classe d'un autre professeur, toutes destinataires : les deux premières sont affichées, pas la troisième.
@@ -596,7 +600,7 @@ Le professeur peut rendre visible de l'élève une évaluation validée (la publ
 #### PUB-02 — Consultation par l'élève de sa note, de ses niveaux et des remarques validées
 L'élève peut consulter la note, les niveaux par critère et les remarques de l'évaluation de sa production une fois que le professeur l'a validée et publiée.
 *Acteur : Élève · Origine et statut : F6, D7 [D] · Dépend de : PUB-01, SUB-01, AUTH-04 · Problèmes : — · Tests : intégration, E2E*
-- **R1** [D] L'élève voit la note, les niveaux et les remarques validées (D7). Précisément [P] : note, niveaux par critère, remarque par critère, commentaire général et pistes, dans leur version validée par le professeur, plus la rubrique. Jamais la proposition brute, le journal, les alertes, la transcription ni un état technique.
+- **R1** [D] L'élève voit la note, les niveaux et les remarques validées (D7). Précisément [P] : note, niveaux par critère, remarque par critère, commentaire général et pistes, dans leur version validée par le professeur, plus la rubrique. Jamais la proposition brute, le journal, les alertes ni un état technique. Son texte, ses images et sa transcription confirmée se relisent avec sa remise (SUB-01 R2, [D, 2026-10-22]).
 - **R2** [D] Rien n'est visible avant validation et publication (F6) : la règle vaut pour l'interface, les listes, les états, les messages d'erreur et toute réponse reçue par l'élève.
 - **R3** [P] L'élève ne voit que ses résultats. Note affichée telle que fixée par le professeur, même si elle diffère des niveaux (D5). Mention de l'IA, langue des remarques, mention d'une note ajustée : Q5.
 - **CA1** Copie publiée : l'élève voit la note, les niveaux par critère, les remarques, le commentaire et les pistes.
@@ -699,10 +703,10 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 #### E9 — Canal image : remise de copies scannées et lecture fidèle
 **Objectif.** Étendre le cycle aux copies manuscrites scannées : remise d'images, transcription fidèle, affichage au professeur, rejeu des critères d'image des fonctionnalités déjà livrées. **Fonctionnalités.** SUB-03, TRX-01. **Dépend de.** E4 à E8
 - **Ouverture (E9.0) [D, 2026-10-19].** Essai exploratoire de lecture manuscrite repris d'E5.8 : hors produit, avec `claude-haiku-5-5`, sur des copies fictives, consigné tel quel (D10) pour informer le contrat de transcription ; script d'exploration gardé, à réécrire. [P] Lecture par un appel séparé, derrière une interface `Reader` distincte de l'évaluation, puis évaluation du texte stocké ; à confirmer ou non par cet essai.
-- **Conception.** Pages ordonnées avec aperçu ; formats, poids, pages : à définir ; type vérifié sur le contenu ; fichier refusé = ni remise ni stockage ; métadonnées retirées ; nouvel essai sans doublon. Images sans lien public ni permanent, accès contrôlé à chaque lecture (professeur correcteur et élève auteur). Transcription fidèle : fautes conservées, « [illisible] » jamais deviné, pages ordonnées, contenu transcrit jamais exécuté, version du moteur enregistrée. Le moteur de lecture doit être remplaçable sans modifier les règles métier (choix : étape 7). Branchement au traitement : états « transcription en cours » et « échouée » (PRC-02), image sans écriture -> « non évaluable » (EVL-04). Écran de copie : transcription en premier (« transcrit automatiquement »), image à la demande ; pas de correction de la transcription (Q4) ; relance de la transcription seulement après un échec ; limite assumée : l'image visible peut réintroduire l'influence de l'écriture. Critères rejoués pour l'image : SUB-04, SUB-05, PRC-01, PRC-02, EVL-02, EVL-04, REV-01 (mode et états image), REV-02, REV-06 (après échec de transcription).
+- **Conception.** Pages ordonnées avec aperçu ; formats, poids, pages : à définir ; type vérifié sur le contenu ; fichier refusé = ni remise ni stockage ; métadonnées retirées ; nouvel essai sans doublon. Images sans lien public ni permanent, accès contrôlé à chaque lecture (professeur correcteur et élève auteur). Transcription fidèle : fautes conservées, « [illisible] » jamais deviné, pages ordonnées, contenu transcrit jamais exécuté, version du moteur enregistrée. Le moteur de lecture doit être remplaçable sans modifier les règles métier (choix : étape 7). Branchement au traitement : états « transcription en cours » et « échouée » (PRC-02), image sans écriture -> « non évaluable » (EVL-04). Transcription avant l'envoi, vérifiée et corrigée une fois par l'élève, puis confirmée ; version du moteur conservée ; pas de PDF (Q4 [D, 2026-10-22]). Écran de copie : transcription confirmée en premier, mots changés par l'élève surlignés, image à la demande ; pas de correction par le professeur ; limite assumée : l'image visible peut réintroduire l'influence de l'écriture. Critères rejoués pour l'image : SUB-04, SUB-05, PRC-01, PRC-02, EVL-02, EVL-04, REV-01 (mode et états image), REV-02, REV-06 (après échec de transcription).
 - **Implémentation.** Dépôt de plusieurs fichiers, ordre, aperçu, reprise ; validation du type ; retrait des métadonnées ; moteur de lecture, assemblage des pages, marqueurs d'illisibilité ; raccordement au traitement et aux états d'échec ; affichage dans l'écran de copie ; matrice étendue aux images.
 - **Tests.** Unitaires : ordre des pages, marqueurs, extension incohérente. Intégration : critères de SUB-03 et de TRX-01 (contrat) ; tous les critères rejoués ; lot mixte texte et image dont une lecture en échec ; aucune métadonnée dans les requêtes sortantes. Sécurité : fichier corrompu, accès direct à l'image d'autrui, absence de lien public, consigne cachée dans l'image. E2E : trois pages scannées, transcription, proposition, comparaison image/transcription, « valider et publier », consultation.
-- **Critères de sortie.** Critères de SUB-03 et du contrat de TRX-01 passés ; liste des critères rejoués passée en entier ; cycle image démontré sans intervention technique, lot mixte compris ; matrice 5.4 vérifiée pour les images ; Q4 tranchée ou recommandation provisoire ; essai de fidélité consigné tel quel, non bloquant (D10).
+- **Critères de sortie.** Critères de SUB-03 et du contrat de TRX-01 passés ; liste des critères rejoués passée en entier ; cycle image démontré sans intervention technique, lot mixte compris ; matrice 5.4 vérifiée pour les images ; essai de fidélité consigné tel quel, non bloquant (D10).
 - **Risques.** La lecture est le point technique le plus incertain : une erreur devient une erreur de note, surtout sur Mechanics ; un moteur qui corrige les fautes fausse Mechanics et se détecte difficilement sans copies de référence ; photos floues ou coupées (alerte : V2) ; poids, coût et confidentialité d'images d'élèves (18 ans ; données fictives en démonstration) ; scan à la charge de l'élève.
 
 #### E10 — Durcissement (partie A), puis mesure de la qualité (partie B)
@@ -786,7 +790,8 @@ Option B (D10) : tout est construit, sans jalon de mesure bloquant ni décision 
 ### Q4 — Le professeur peut-il corriger la transcription d'une copie image, avec relance de l'évaluation ?
 - **Pourquoi.** Sans correction, une erreur de lecture devient une erreur de note et le professeur ne peut qu'ajuster niveaux et note ; avec correction, il peut normaliser les fautes de l'élève, ce qui fausse Mechanics. La réponse change l'écran de copie, le journal et l'entité Transcription.
 - **Options.** Non dans le MVP : le professeur lit transcription et image, modifie niveaux et note ; relance de la transcription seulement après un échec. Oui : version du professeur conservée à côté de celle du moteur, écart journalisé, évaluation relancée.
-- **Recommandation.** Non dans le MVP ; à reconsidérer en V2 si E10 montre des erreurs de lecture fréquentes. **Échéance** : avant E7.
+- **Recommandation** (non retenue). Non dans le MVP ; à reconsidérer en V2 si E10 montre des erreurs de lecture fréquentes. **Échéance** : avant E7.
+- **Décision** [D, 2026-10-22]. Le professeur ne corrige pas la transcription : l'élève la vérifie avant l'envoi. Il reprend une photo floue ou mal lue, corrige lui-même les mots mal lus une seule fois, puis confirme ; seule la version confirmée part à l'évaluation. La version du moteur est conservée ; les changements de l'élève sont enregistrés et surlignés pour le professeur, image à côté. Après l'envoi, l'élève relit sa remise (texte collé, ou images et transcription confirmée), ce qui révise A3 et QNF-4. Pas de PDF dans le MVP. Limite assumée : une vraie faute peut être corrigée sous couvert de mot mal lu. À définir : la suite d'un échec de transcription avant l'envoi. Détail : SUB-01 R2, SUB-03 R5, TRX-01, §5.4, §5.5.
 
 ### Q5 — Que lit l'élève : langue des remarques, mention de l'IA, mention d'une note qui diffère des niveaux ?
 - **Pourquoi.** Détermine le contrat de sortie de l'IA et PUB-02. Un jeune apprenant peut ne pas comprendre des remarques dans la langue apprise ; la mention de l'IA relève de la transparence et du cadre légal ; D5 permet une note différente des niveaux, que l'élève verra.
