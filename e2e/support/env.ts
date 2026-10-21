@@ -17,9 +17,19 @@ export const E2E_WORKFLOW_DIR = path.join(os.tmpdir(), "grading-e2e-workflow");
 /** The cron route's secret on the E2E server (E6.4: the measured batch calls it); a test value. */
 export const E2E_CRON_SECRET = "e2e-cron-secret";
 
-/** The test database: reset at each run, like the integration tests. */
+/**
+ * E7.8: the deployed preview a journey is replayed on (playwright.online.config.ts),
+ * or null for the local E2E server.
+ */
+export const E2E_ONLINE_URL = process.env.E2E_ONLINE_URL || null;
+
+/**
+ * The test database: reset at each run, like the integration tests. Online,
+ * the preview's own base (dev), never reset: the journeys only add
+ * fictitious accounts and copies to it.
+ */
 export function testDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL_TEST;
-  if (!url) throw new Error("DATABASE_URL_TEST is not set");
+  const url = E2E_ONLINE_URL ? process.env.DATABASE_URL : process.env.DATABASE_URL_TEST;
+  if (!url) throw new Error(E2E_ONLINE_URL ? "DATABASE_URL is not set" : "DATABASE_URL_TEST is not set");
   return url;
 }

@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { Client } from "pg";
-import { testDatabaseUrl } from "./support/env";
+import { E2E_ONLINE_URL, testDatabaseUrl } from "./support/env";
 import { seedTeacher } from "./support/review";
 
 // E7.8 (NFR-TRT-03, plan of E7 §6): the review screens' response times on
@@ -59,7 +59,9 @@ test("E7.8: list, copy and save on an assignment of 120 copies, measured", async
   }
   const result = {
     measuredOn: new Date().toISOString(),
-    where: "local: E2E server (next dev, Docker) on this machine, Neon us-east-2, simulator",
+    where: E2E_ONLINE_URL
+      ? `online: ${E2E_ONLINE_URL} (Vercel cle1, production build), Neon us-east-2, simulator; browser on this machine`
+      : "local: E2E server (next dev, Docker) on this machine, Neon us-east-2, simulator",
     copies: COPIES,
     pageSize: 50,
     runs: RUNS,
@@ -69,7 +71,7 @@ test("E7.8: list, copy and save on an assignment of 120 copies, measured", async
     samples: { list, openCopy: copy, save },
   };
   console.log(JSON.stringify(result, null, 2));
-  await writeFile("test-results/e7-review-measure.json", JSON.stringify(result, null, 2));
+  await writeFile(`test-results/e7-review-measure${E2E_ONLINE_URL ? "-online" : ""}.json`,JSON.stringify(result, null, 2));
 });
 
 type Sample = { shownMs: number; documentMs: number | null };

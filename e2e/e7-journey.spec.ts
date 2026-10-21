@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { beingMarked, studentInClass, teacherWithClass } from "./support/classes";
+import { E2E_ONLINE_URL } from "./support/env";
 import { sql } from "./support/helpers";
 
 // E7 (fonctionnalites.md §8): the journey of the step, in the real runtime,
@@ -12,7 +13,9 @@ import { sql } from "./support/helpers";
 // conflict, the typing kept. The student sees "Submitted, being marked" and
 // nothing of the review. The order differs from the prompt's on one point:
 // a replacement after the teacher's first change is refused (SUB-05 R3), so
-// it comes before. Each piece in depth: e2e/review-*.spec.ts.
+// it comes before. A prefetch logs nothing: checked for real on the preview,
+// where links prefetch (playwright.online.config.ts). Each piece in depth:
+// e2e/review-*.spec.ts.
 
 // Two evaluations to wait for and some sixty actions on Neon.
 test.setTimeout(300_000);
@@ -47,10 +50,21 @@ test("E7 journey: To review by itself; list, copy, a level then the grade, Histo
   await expect(beingMarked(lina.page)).toBeVisible();
   await expect.poll(() => stateOf(lina.email), { timeout: 60_000 }).toEqual({ status: "to_review", version: 1 });
 
+  // The router's prefetches, by path: production prefetches the links in view, next dev none.
+  const prefetched: string[] = [];
+  teacher.on("request", (r) => {
+    const h = r.headers();
+    if (h["next-router-prefetch"] || h["next-router-segment-prefetch"]) prefetched.push(new URL(r.url()).pathname);
+  });
+
   // 2. ASG-02 CA2: the assignment opens its list, after the teacher notice (DON-04).
   await teacher.goto("/teacher/assignments");
   const line = teacher.getByRole("row").filter({ hasText: "My town" });
   await expect(line.getByRole("cell").nth(6)).toHaveText("1");
+  // A prefetch logs nothing (E7 plan §1.6): the assignment's link is prefetched in production (the preview), not by next dev.
+  await teacher.waitForTimeout(3_000);
+  expect(await logged(lina.email, "list_opened")).toBe(0);
+  if (E2E_ONLINE_URL) expect(prefetched.filter((p) => /^\/teacher\/assignments\/[0-9a-f-]+$/.test(p)).length).toBeGreaterThan(0);
   await line.getByRole("link", { name: "My town" }).click();
   const notice = teacher.getByRole("region", { name: /what the review log records/ });
   await expect(notice).toBeVisible();
@@ -59,6 +73,10 @@ test("E7 journey: To review by itself; list, copy, a level then the grade, Histo
   const row = list.getByRole("row").filter({ hasText: "Amrani" });
   await expect(row).toContainText("To review");
   await expect(row).toContainText(/provisional/i);
+  await expect.poll(() => logged(lina.email, "list_opened")).toBe(1);
+  // The names are never prefetched; no copy is logged before its click.
+  await teacher.waitForTimeout(3_000);
+  expect(await logged(lina.email, "copy_opened")).toBe(0);
   await teacher.screenshot({ path: "test-results/e7-1-list-desktop.png", fullPage: true });
 
   // 3. REV-02: a click on the name opens the copy, the identity and the text beside the proposal.
@@ -67,6 +85,7 @@ test("E7 journey: To review by itself; list, copy, a level then the grade, Histo
   await expect(teacher.getByText(lina.email)).toBeVisible();
   await expect(teacher.getByRole("region", { name: "Student text" })).toContainText("beatiful");
   const copyUrl = teacher.url();
+  await expect.poll(() => logged(lina.email, "copy_opened")).toBe(1);
 
   // 4. REV-03 CA3, SUB-05: the student replaces the text while the copy is open: the save is refused, the copy reloaded.
   const firstLevel = await proposedTaskLevel(lina.email);
@@ -184,3 +203,13 @@ async function proposalOf(email: string) {
 }
 
 const proposedTaskLevel = async (email: string) => (await proposalOf(email)).level;
+
+/** Entries of this event in the log of the student's assignment. */
+async function logged(email: string, event: string) {
+  const [row] = await sql<{ n: number }>(
+    `SELECT count(*)::int AS n FROM review_journal_entries j
+     WHERE j.event = $2 AND j.assignment_id = (SELECT s.assignment_id FROM submissions s JOIN users u ON u.id = s.student_id WHERE u.email = $1)`,
+    [email, event],
+  );
+  return row.n;
+}
