@@ -31,6 +31,10 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   // the owner teacher reads the proposal in force.
   evaluation_runs: ["aiProposal"],
   ai_proposals: ["aiProposal"],
+  // E7: written by src/server/data/review/record.ts alone, the evaluation with
+  // the log entries of its changes (0017); the owner teacher reads both.
+  teacher_evaluations: ["unpublishedEvaluation"],
+  review_journal_entries: ["reviewLog"],
 };
 
 /**
@@ -137,6 +141,9 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/submissions/transitions.ts#applyTransition": "internal: the one status writer (§5.5), inside a transaction that has authorized the actor, or in the system processing of the evaluation (transitions 2, 5, 6 and 7)",
   "src/server/data/evaluation/system.ts#readEvaluationInput": "system processing (§5.5, transitions 2 and 5): the AI's whitelist of a submission, read for the evaluation service only, never a screen",
   "src/server/data/submissions/transitions.ts#recordEvaluationRequest": "internal: stores the teacher's request of a retry or relaunch (E6.6), inside the transaction of retryEvaluation or relaunchEvaluation, which authorized the actor",
+  "src/server/data/submissions/transitions.ts#markTeacherStarted": "internal: the teacher's first act (E7), inside writeEvaluation, in a transaction that has authorized the actor and locked the submission row",
+  "src/server/data/review/record.ts#appendJournal": "internal: adds review log entries (REV-04), inside a transaction that has authorized the actor (or the system's, for an abandoned retry)",
+  "src/server/data/review/record.ts#writeEvaluation": "internal: the one writer of the teacher's evaluation, with its log entries (REV-03, REV-04), inside a transaction that has authorized the actor and locked the submission row",
   "src/server/data/submissions/transitions.ts#markRestarted": "internal: dates the restart of received submissions, inside the sweep's transaction (E6.6, system processing)",
   "src/server/data/evaluation/system.ts#claimForEvaluation": "system processing (§5.5, transition 2; 6 and 7 for the teacher's retry and relaunch, authorized beforehand by retryEvaluation and relaunchEvaluation, E6.3, and claimed with the request they stored, E6.6), called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#stillEvaluating": "system processing (§5.5): whether a claim still holds before a new attempt, called only by src/server/evaluation/",

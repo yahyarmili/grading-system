@@ -100,6 +100,22 @@ export async function recordEvaluationRequest(tx: Tx, submissionId: string, requ
 }
 
 /**
+ * The teacher's first act without a transition (E7, REV-03): the first write
+ * of their evaluation of a copy to review. teacher_started_at, kept when
+ * already set, closes replacement (SUB-05 R3), retry and relaunch. Guarded by
+ * the caller's `where` (the active version), in its transaction, after the
+ * row lock. False when the guard is not met.
+ */
+export async function markTeacherStarted(tx: Tx, submissionId: string, where: SQL): Promise<boolean> {
+  const [updated] = await tx
+    .update(submissions)
+    .set({ teacherStartedAt: sql`coalesce(${submissions.teacherStartedAt}, now())` })
+    .where(and(eq(submissions.id, submissionId), where))
+    .returning({ id: submissions.id });
+  return !!updated;
+}
+
+/**
  * E6.6, the sweep: dates the restart of received submissions (updated_at, on
  * the database clock), so that the next sweeps leave them to their run for
  * another grace, and start the others first. No transition: they stay received.

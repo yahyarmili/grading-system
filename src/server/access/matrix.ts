@@ -116,6 +116,8 @@ export const ACCESS_MATRIX = {
     label: "Unpublished evaluation",
     // [P] E6.3, PRC-02 R3: the retry (transition 6), the relaunch (7) and the
     // manual evaluation (6 or 7 to to_review) write the evaluation in progress.
+    // E7, REV-03: the teacher's own evaluation (teacher_evaluations), apart
+    // from the AI proposal, written with its log entries.
     concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   publishedEvaluation: {
@@ -125,6 +127,8 @@ export const ACCESS_MATRIX = {
   },
   reviewLog: {
     label: "Log (of the teacher's own copies)",
+    // E7, REV-04 R3: review_journal_entries. Read by the corrector only; written
+    // by no role directly, only as the trace of their acts; never changed (0017).
     concernedStudent: NO, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
   },
   rubric: {

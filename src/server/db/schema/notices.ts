@@ -3,8 +3,8 @@ import { users } from "./auth";
 
 // NFR-DON-04: notices read before a first use, each reading recorded (E4).
 
-/** Which notice: the student's, before the first submission. The teacher's comes with the log (E7). */
-export const noticeKind = pgEnum("notice_kind", ["student_submission"]);
+/** Which notice: the student's, before the first submission; the teacher's, before the first access to copies (E7.7). */
+export const noticeKind = pgEnum("notice_kind", ["student_submission", "teacher_review"]);
 
 /** One reading of one version of a notice, by its account, dated by the database. */
 export const noticeAcknowledgements = pgTable(

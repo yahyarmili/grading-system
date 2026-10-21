@@ -194,6 +194,8 @@ export const securityEventType = pgEnum("security_event_type", [
   "ai_breaker_tripped",
   // E6.6: the AI could not be set up (AI_PROVIDER, its key, a forbidden variable); one email per window.
   "ai_configuration_failed",
+  // E7.6, EXP-02: a series of failed runs on 529s or timeouts; one email per window, calls go on.
+  "ai_provider_unreachable",
 ]);
 
 /** NFR-DON-05: security log, separate from the review log. No email, secret or content. */
