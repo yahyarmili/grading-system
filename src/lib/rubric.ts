@@ -143,7 +143,7 @@ export function publishedRubric(
   return registry.findLast((version) => version.language === language) ?? null;
 }
 
-/** The English rubric in force, for the screens that show a single one (mockups). */
+/** The English rubric in force, for the screens that show a single one (the copy, E7.3). */
 export const rubric = EN_1.criteria;
 export const levelNames: Record<Level, string> = {
   4: EN_1.levelNames[4].name,

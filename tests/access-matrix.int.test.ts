@@ -19,6 +19,7 @@ import { createClass, getClass } from "@/server/data/classes/classes";
 import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
+import { getCopy, getStudentIdentity, recordCopyOpened } from "@/server/data/review/copy";
 import { listAssignmentCopies, recordListOpened } from "@/server/data/review/list";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { getCurrentProposal } from "@/server/data/evaluation/proposals";
@@ -256,6 +257,14 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       // REV-01 (E7.2): the list of the assignment's submissions, and its opening logged.
       { run: (actor, { submittedId }) => listAssignmentCopies(actor, submittedId) },
       { run: (actor, { submittedId }) => recordListOpened(actor, submittedId) },
+      // REV-02 (E7.3): the copy of the concerned student, and its opening logged.
+      { run: (actor, { submittedId }) => getCopy(actor, submittedId, people.concernedStudent.userId) },
+      {
+        run: async (actor, { submittedId }) => {
+          const [{ id }] = await db.select({ id: submissions.id }).from(submissions).where(eq(submissions.assignmentId, submittedId));
+          return recordCopyOpened(actor, id);
+        },
+      },
     ],
     write: [
       {
@@ -287,6 +296,8 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       await forceState(ids[1], "not_assessable", "ai_unavailable");
       return { ...fixture, failedId: ids[0], unavailableId: ids[1] };
     },
+    // REV-02 (E7.3): the copy carries the evaluation in progress.
+    read: { run: (actor, { assignmentId }) => getCopy(actor, assignmentId, people.concernedStudent.userId) },
     write: [
       { run: (actor, { failedId }) => retryEvaluation(actor, { submissionId: failedId, versionNumber: 1 }, NO_START) },
       {
@@ -295,6 +306,12 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       },
       { run: (actor, { failedId }) => startManualEvaluation(actor, { submissionId: failedId, versionNumber: 1 }) },
     ],
+  },
+  // Invariant 9: the concerned student's name and email, for themself and
+  // the teacher of their class (REV-02, E7.3); another person finds nothing.
+  studentAccount: {
+    setup: ownedClass,
+    read: { run: (actor) => getStudentIdentity(actor, people.concernedStudent.userId) },
   },
   // EVL-01: every signed-in role reads the versions in force; a visitor is
   // refused. No write operation: none exists (CA1, tests/access-inventory.test.ts).
@@ -318,7 +335,10 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       if ((await evaluateSubmission(submissionId)).status !== "to_review") throw new Error("Not evaluated");
       return { ...fixture, submissionId };
     },
-    read: { run: (actor, { submissionId }) => getCurrentProposal(actor, submissionId) },
+    read: [
+      { run: (actor, { submissionId }) => getCurrentProposal(actor, submissionId) },
+      { run: (actor, { assignmentId }) => getCopy(actor, assignmentId, people.concernedStudent.userId) },
+    ],
   },
 };
 

@@ -115,14 +115,6 @@ test("ASG-02: the list and the page of an assignment; another teacher gets 404",
   await expect(karim.getByText("No assignments yet")).toBeVisible();
 });
 
-test("mockups 1.4 and 1.5 stay under /dev/mockups, out of the teacher space", async ({ page }) => {
-  await page.goto("/dev/mockups");
-  await page.getByRole("link").filter({ hasText: /./ }).first().click();
-  await expect(page).toHaveURL(/\/dev\/mockups\/assignments\//);
-  await page.waitForLoadState("networkidle");
-  await page.screenshot({ path: "test-results/asg02-3-mockup-1-4.png", fullPage: true });
-});
-
 test("ASG-03: edit, then delete with confirmation; once locked, only the title and level", async ({ page }) => {
   await signIn(page, await createTeacher("Sarah", "Bennett"));
   await expect(page).toHaveURL(/\/teacher\//);

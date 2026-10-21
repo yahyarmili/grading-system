@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { Client } from "pg";
-import { createClass, phone } from "./support/classes";
-import { createStudent, createTeacher, expectNotFound, signIn, sql } from "./support/helpers";
-import { testDatabaseUrl } from "./support/env";
+import { phone } from "./support/classes";
+import { createTeacher, expectNotFound, signIn } from "./support/helpers";
+import { journalCount, seedTeacher } from "./support/review";
 
 // REV-01 (E7.2), in a real browser: the list of an assignment's submissions, opened from the
 // assignments list (ASG-02 CA2), sorted and filtered on the whole list, its
@@ -13,123 +12,32 @@ import { testDatabaseUrl } from "./support/env";
 
 test.setTimeout(180_000);
 
-type Seeded = { assignmentId: string; teacherEmail: string };
-
-/** One proposal in force, its levels summing to `grade`; optionally the teacher's evaluation with a fixed grade. */
-async function evaluate(client: Client, submissionId: string, levels: number[], teacher?: { id: string; grade: number; assignmentId: string }) {
-  const [run] = (
-    await client.query<{ id: string }>(
-      `INSERT INTO evaluation_runs (submission_id, version_number, outcome, provider, model_requested, model_answered, prompt_version, rubric_version, attempts, duration_ms)
-       VALUES ($1, 1, 'proposed', 'simulator', 'simulator', 'simulator', 'evaluation-2', 'en-1', 1, 10) RETURNING id`,
-      [submissionId],
-    )
-  ).rows;
-  const [proposal] = (
-    await client.query<{ id: string }>(
-      `INSERT INTO ai_proposals (run_id, submission_id, version_number,
-         level_task, level_organization, level_vocabulary, level_grammar, level_mechanics,
-         justification_task, justification_organization, justification_vocabulary, justification_grammar, justification_mechanics,
-         quotes_task, quotes_organization, quotes_vocabulary, quotes_grammar, quotes_mechanics,
-         general_comment, next_steps, proposed_grade)
-       VALUES ($1, $2, 1, $3, $4, $5, $6, $7, 'J.', 'J.', 'J.', 'J.', 'J.', '{q}', '{q}', '{q}', '{q}', '{q}', 'Clear.', '{Read more.}', $8)
-       RETURNING id`,
-      [run.id, submissionId, ...levels, levels.reduce((a, b) => a + b, 0)],
-    )
-  ).rows;
-  await client.query(`UPDATE submissions SET status = 'to_review', current_proposal_id = $2 WHERE id = $1`, [submissionId, proposal.id]);
-  if (!teacher) return;
-  await client.query("BEGIN");
-  await client.query(`UPDATE submissions SET teacher_started_at = now() WHERE id = $1`, [submissionId]);
-  await client.query(
-    `INSERT INTO teacher_evaluations (submission_id, version_number, origin, proposal_id, rubric_version,
-       level_task, level_organization, level_vocabulary, level_grammar, level_mechanics, final_grade, grade_fixed, created_by)
-     VALUES ($1, 1, 'proposal', $2, 'en-1', $3, $4, $5, $6, $7, $8, true, $9)`,
-    [submissionId, proposal.id, ...levels, teacher.grade, teacher.id],
-  );
-  await client.query(
-    `INSERT INTO review_journal_entries (assignment_id, submission_id, actor_id, event, evaluation_revision, version_number)
-     VALUES ($1, $2, $3, 'evaluation_created', 1, 1)`,
-    [teacher.assignmentId, submissionId, teacher.id],
-  );
-  await client.query("COMMIT");
-}
-
 /**
  * Classes A and B; seven students: Bauer (A and B, late, graded 15.5 by the
  * teacher), d'Aubigné (proposal 12), Émile (not assessable), Eric (received),
  * Martin (not submitted), Okafor (removed from A, evaluation failed), Silva
  * (removed from A, nothing submitted: absent).
  */
-async function seed(page: Page): Promise<Seeded> {
-  const teacherEmail = await createTeacher("Sarah", "Bennett");
-  await signIn(page, teacherEmail);
-  await expect(page).toHaveURL(/\/teacher\//);
-  await page.goto("/teacher/classes");
-  for (const name of ["A", "B"]) await expect(await createClass(page, name)).toBeHidden();
-
-  const client = new Client({ connectionString: testDatabaseUrl() });
-  await client.connect();
+async function seed(page: Page) {
+  const seeder = await seedTeacher(page, ["A", "B"]);
   try {
-    const one = async <Row>(text: string, values: unknown[]) => (await client.query(text, values)).rows[0] as Row;
-    const teacher = await one<{ id: string }>(`SELECT id FROM users WHERE email = $1`, [teacherEmail]);
-    const classes = (await client.query<{ id: string; name: string }>(`SELECT id, name FROM classes WHERE teacher_id = $1`, [teacher.id])).rows;
-    const classId = (name: string) => classes.find((c) => c.name === name)!.id;
-    const { id: assignmentId } = await one<{ id: string }>(
-      `INSERT INTO assignments (teacher_id, title, subject, level, language, deadline, locked_at)
-       VALUES ($1, 'My town', 'Describe your town.', 'B1', 'en', now() + interval '7 days', now()) RETURNING id`,
-      [teacher.id],
-    );
-    await client.query(
-      `INSERT INTO assignment_classes (assignment_id, class_id, teacher_id) VALUES ($1, $2, $4), ($1, $3, $4)`,
-      [assignmentId, classId("A"), classId("B"), teacher.id],
-    );
-
-    const student = async (first: string, last: string, classNames: string[], removed = false) => {
-      const { id } = await one<{ id: string }>(`SELECT id FROM users WHERE email = $1`, [await createStudent(first, last)]);
-      for (const name of classNames) {
-        await client.query(
-          `INSERT INTO class_memberships (class_id, student_id, status, removed_at) VALUES ($1, $2, $3, $4)`,
-          [classId(name), id, removed ? "removed" : "active", removed ? new Date() : null],
-        );
-      }
-      return id;
-    };
-    const submit = async (studentId: string, status: string, { late = false, cause = null as string | null } = {}) => {
-      const { id } = await one<{ id: string }>(
-        `INSERT INTO submissions (assignment_id, teacher_id, student_id, status, late, content_version, not_assessable_cause)
-         VALUES ($1, $2, $3, $4, $5, 1, $6) RETURNING id`,
-        [assignmentId, teacher.id, studentId, status, late, cause],
-      );
-      await client.query(
-        `INSERT INTO submission_versions (submission_id, number, mode, text, request_id) VALUES ($1, 1, 'text', 'My town is small.', $2)`,
-        [id, randomUUID()],
-      );
-      return id;
-    };
-
-    const bauer = await submit(await student("Lena", "Bauer", ["A", "B"]), "received", { late: true });
-    await evaluate(client, bauer, [3, 3, 3, 3, 3], { id: teacher.id, grade: 15.5, assignmentId });
-    await evaluate(client, await submit(await student("Agrippa", "d'Aubigné", ["A"]), "received"), [3, 3, 2, 2, 2]);
-    await submit(await student("Zoé", "Émile", ["A"]), "not_assessable", { cause: "ai_unavailable" });
-    await submit(await student("Paul", "Eric", ["B"]), "received");
-    await student("Tom", "Martin", ["A"]);
-    await submit(await student("Ada", "Okafor", ["A"], true), "evaluation_failed");
-    await student("Rui", "Silva", ["A"], true);
-    return { assignmentId, teacherEmail };
+    const assignmentId = await seeder.assignment(["A", "B"]);
+    const submit = async (first: string, last: string, classNames: string[], status: string, options = {}) =>
+      seeder.submit(assignmentId, await seeder.student(first, last, classNames), status, options);
+    await seeder.evaluate(assignmentId, await submit("Lena", "Bauer", ["A", "B"], "received", { late: true }), [3, 3, 3, 3, 3], { teacherGrade: 15.5 });
+    await seeder.evaluate(assignmentId, await submit("Agrippa", "d'Aubigné", ["A"], "received"), [3, 3, 2, 2, 2]);
+    await submit("Zoé", "Émile", ["A"], "not_assessable", { cause: "ai_unavailable" });
+    await submit("Paul", "Eric", ["B"], "received");
+    await seeder.student("Tom", "Martin", ["A"]);
+    await seeder.submit(assignmentId, await seeder.student("Ada", "Okafor", ["A"], true), "evaluation_failed");
+    await seeder.student("Rui", "Silva", ["A"], true);
+    return { assignmentId };
   } finally {
-    await client.end();
+    await seeder.close();
   }
 }
 
-const listOpened = async (assignmentId: string) =>
-  Number(
-    (
-      await sql<{ n: string }>(
-        `SELECT count(*) AS n FROM review_journal_entries WHERE assignment_id = $1 AND event = 'list_opened'`,
-        [assignmentId],
-      )
-    )[0].n,
-  );
+const listOpened = (assignmentId: string) => journalCount(assignmentId, "list_opened");
 
 const table = (page: Page) => page.getByRole("table", { name: "Submissions" });
 const studentNames = async (page: Page) =>

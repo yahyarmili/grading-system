@@ -23,36 +23,10 @@ export type CurrentProposal = {
   proposedGrade: number;
 };
 
-/** Null when the submission is absent, another teacher's, or has no proposal in force. */
-export async function getCurrentProposal(actor: Actor, submissionId: string): Promise<CurrentProposal | null> {
-  const grant = authorize(actor, "aiProposal", "read");
-  const [p] = await db
-    .select({
-      versionNumber: aiProposals.versionNumber,
-      levelTask: aiProposals.levelTask,
-      levelOrganization: aiProposals.levelOrganization,
-      levelVocabulary: aiProposals.levelVocabulary,
-      levelGrammar: aiProposals.levelGrammar,
-      levelMechanics: aiProposals.levelMechanics,
-      justificationTask: aiProposals.justificationTask,
-      justificationOrganization: aiProposals.justificationOrganization,
-      justificationVocabulary: aiProposals.justificationVocabulary,
-      justificationGrammar: aiProposals.justificationGrammar,
-      justificationMechanics: aiProposals.justificationMechanics,
-      quotesTask: aiProposals.quotesTask,
-      quotesOrganization: aiProposals.quotesOrganization,
-      quotesVocabulary: aiProposals.quotesVocabulary,
-      quotesGrammar: aiProposals.quotesGrammar,
-      quotesMechanics: aiProposals.quotesMechanics,
-      generalComment: aiProposals.generalComment,
-      nextSteps: aiProposals.nextSteps,
-      alerts: aiProposals.alerts,
-      proposedGrade: aiProposals.proposedGrade,
-    })
-    .from(submissions)
-    .innerJoin(aiProposals, eq(aiProposals.id, submissions.currentProposalId))
-    .where(and(eq(submissions.id, submissionId), ownedBy(grant, { teacher: submissions.teacherId })));
-  if (!p) return null;
+type ProposalRow = typeof aiProposals.$inferSelect;
+
+/** A stored proposal, criterion by criterion. */
+export function proposalFromRow(p: ProposalRow): CurrentProposal {
   const criterion = (level: number, justification: string, quotes: string[]) => ({ level: level as Level, justification, quotes });
   return {
     versionNumber: p.versionNumber,
@@ -68,4 +42,15 @@ export async function getCurrentProposal(actor: Actor, submissionId: string): Pr
     alerts: p.alerts,
     proposedGrade: p.proposedGrade,
   };
+}
+
+/** Null when the submission is absent, another teacher's, or has no proposal in force. */
+export async function getCurrentProposal(actor: Actor, submissionId: string): Promise<CurrentProposal | null> {
+  const grant = authorize(actor, "aiProposal", "read");
+  const [found] = await db
+    .select({ p: aiProposals })
+    .from(submissions)
+    .innerJoin(aiProposals, eq(aiProposals.id, submissions.currentProposalId))
+    .where(and(eq(submissions.id, submissionId), ownedBy(grant, { teacher: submissions.teacherId })));
+  return found ? proposalFromRow(found.p) : null;
 }

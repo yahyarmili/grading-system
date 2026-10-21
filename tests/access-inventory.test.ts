@@ -127,7 +127,7 @@ describe("every data function goes through authorize()", () => {
     expect(problems).toEqual([]);
     expect([...resources].sort()).toEqual([
       "aiProposal", "assignment", "assignmentRecipients", "class", "classInvite", "classMembership", "classRoster",
-      "noticeAcknowledgement", "ownSubmissionStatus", "rubric", "submission", "teacherInvitation", "unpublishedEvaluation",
+      "noticeAcknowledgement", "ownSubmissionStatus", "rubric", "studentAccount", "submission", "teacherInvitation", "unpublishedEvaluation",
     ]);
   });
 

@@ -89,3 +89,36 @@ export type EvaluationOrigin = (typeof evaluationOrigins)[number];
 /** Information alerts of a proposal (EVL-04): read by the owner teacher only, never by the student. */
 export const proposalAlerts = ["very_short", "other_language", "off_topic", "addressed_to_marker"] as const;
 export type ProposalAlert = (typeof proposalAlerts)[number];
+
+/** [P] The teacher's label of each information alert (EVL-04 R2): best effort, never shown to the student. */
+export const proposalAlertLabels: Record<ProposalAlert, string> = {
+  very_short: "Very short text",
+  other_language: "Possibly written in another language",
+  off_topic: "Possibly off topic",
+  addressed_to_marker: "Contains a message addressed to the marker",
+};
+
+/**
+ * [P] Why the evaluation failed, for the teacher, from the last attempt's
+ * error of the last run (null: released by the sweep, or no run). Without
+ * any content of the answer.
+ */
+export function evaluationFailureLabel(error: EvaluationError | null): string {
+  switch (error) {
+    case "refused":
+      return "The AI declined to assess this text.";
+    case "timeout":
+    case "rate_limited":
+    case "unavailable":
+      return "The AI could not be reached.";
+    case "not_json":
+    case "schema":
+    case "quote_not_found":
+    case "truncated":
+      return "The AI's answer could not be used.";
+    case null:
+      return "The evaluation stopped before it finished.";
+    default:
+      return "The evaluation could not be completed.";
+  }
+}
