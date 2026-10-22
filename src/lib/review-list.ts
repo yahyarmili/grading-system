@@ -131,7 +131,8 @@ export function compareRows(sort: ReviewSort, dir: SortDirection): (a: ReviewRow
   };
 }
 
-export type ReviewCounts = { to_review: number; failed: number; not_assessable: number };
+/** E8.1: "validated", validated and not published yet: what is left to publish. */
+export type ReviewCounts = { to_review: number; failed: number; not_assessable: number; validated: number };
 
 export type ArrangedList = {
   /** The rows of the page asked, in order. */
@@ -160,6 +161,7 @@ export function arrangeReviewList(rows: readonly ReviewRow[], query: ReviewListQ
       to_review: rows.filter((row) => matchesStatus(row, "to_review")).length,
       failed: rows.filter((row) => matchesStatus(row, "failed")).length,
       not_assessable: rows.filter((row) => matchesStatus(row, "not_assessable")).length,
+      validated: rows.filter((row) => matchesStatus(row, "validated")).length,
     },
   };
 }

@@ -134,6 +134,20 @@
       "when": 1792669411913,
       "tag": "0018_guard_review_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792692302199,
+      "tag": "0019_guard_validated_rows",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792699466875,
+      "tag": "0020_date_review_entries_in_order",
+      "breakpoints": true
     }
   ]
 }

@@ -33,7 +33,8 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   ai_proposals: ["aiProposal"],
   // E7: written by src/server/data/review/record.ts alone, the evaluation with
   // the log entries of its changes (0017); the owner teacher reads both.
-  teacher_evaluations: ["unpublishedEvaluation"],
+  // E8: once published, the same row is the published evaluation (frozen outside To review, 0019).
+  teacher_evaluations: ["unpublishedEvaluation", "publishedEvaluation"],
   review_journal_entries: ["reviewLog"],
 };
 
@@ -118,7 +119,24 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
     action: "read",
     systemCalls: SWEEP_SYSTEM_CALLS,
   },
-  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#saveEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
+  // E8.1: a change of a Published copy also writes the published evaluation (it leaves the student's view, Q8).
+  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#saveEvaluationAction": {
+    resource: "unpublishedEvaluation",
+    action: "write",
+    also: [{ resource: "publishedEvaluation", action: "write" }],
+  },
+  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#validateEvaluationAction": {
+    resource: "unpublishedEvaluation",
+    action: "write",
+    also: [{ resource: "publishedEvaluation", action: "write" }],
+  },
+  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#validateAndPublishAction": {
+    resource: "unpublishedEvaluation",
+    action: "write",
+    also: [{ resource: "publishedEvaluation", action: "write" }],
+  },
+  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#publishEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
+  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#withdrawPublicationAction": { resource: "publishedEvaluation", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#replaceTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
@@ -181,6 +199,9 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/submissions/transitions.ts#markTeacherStarted": "internal: the teacher's first act (E7), inside writeEvaluation, in a transaction that has authorized the actor and locked the submission row",
   "src/server/data/review/record.ts#appendJournal": "internal: adds review log entries (REV-04), inside a transaction that has authorized the actor (or the system's, for an abandoned retry)",
   "src/server/data/review/record.ts#writeEvaluation": "internal: the one writer of the teacher's evaluation, with its log entries (REV-03, REV-04), inside a transaction that has authorized the actor and locked the submission row",
+  "src/server/data/review/copy.ts#lockCopy": "internal: locks the owner's submission row, filtered by the grant of a function that has authorized the actor (saveEvaluation, validateEvaluation, publishEvaluation, withdrawPublication)",
+  "src/server/data/review/copy.ts#lockedRefusal": "pure: the guards of a locked copy (notice, version, proposal), for the functions that locked it",
+  "src/server/data/review/copy.ts#editLocked": "internal: one save of the form on a copy locked by a function that has authorized the actor (saveEvaluation, validateEvaluation); authorizes the published evaluation's write itself when it changes one (Q8)",
   "src/server/data/evaluation/proposals.ts#proposalFromRow": "pure mapping of a proposal row read by a function that has authorized the actor (getCurrentProposal, getCopy)",
   "src/server/data/submissions/transitions.ts#markRestarted": "internal: dates the restart of received submissions, inside the sweep's transaction (E6.6, system processing)",
   "src/server/data/submissions/transitions.ts#clearEvaluationRequest": "internal: drops a teacher's request that found no evaluation place (E7.6), inside abandonEvaluationRequest's transaction (system processing)",

@@ -119,11 +119,13 @@ export const ACCESS_MATRIX = {
     // manual evaluation (6 or 7 to to_review) write the evaluation in progress.
     // E7, REV-03: the teacher's own evaluation (teacher_evaluations), apart
     // from the AI proposal, written with its log entries.
+    // E8.1, REV-05, PUB-01: validating it (transition 8) and publishing it (9).
     concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   publishedEvaluation: {
     label: "Published evaluation (grade, levels, remarks, comment, next steps)",
-    // Teacher: writes to withdraw the publication.
+    // Teacher: writes to withdraw the publication (transition 10, PUB-01 R2), and
+    // when a change of a published copy sends it back to review (Q8, E8.1).
     concernedStudent: L, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   reviewLog: {

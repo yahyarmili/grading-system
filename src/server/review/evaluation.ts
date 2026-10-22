@@ -6,7 +6,7 @@ import { criterionIds, levels as LEVELS, type CriterionId, type Level } from "@/
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
 import { recordSecurityEvent } from "@/server/data/auth/security-events";
-import { saveEvaluation, type SavedEvaluation } from "@/server/data/review/copy";
+import { saveEvaluation, type SavedEvaluation, type SeenEvaluation } from "@/server/data/review/copy";
 
 // REV-03 (E7.4), without Next request APIs so integration tests can call it:
 // the teacher saves the whole form of a copy. Everything the client sends is
@@ -28,7 +28,8 @@ export type EvaluationField = `level.${CriterionId}` | `remark.${CriterionId}` |
 export type SaveEvaluationState =
   | { status: "idle" }
   | { status: "invalid"; fieldErrors: Partial<Record<EvaluationField, string>> }
-  | { status: "saved"; changed: boolean; evaluation: SavedEvaluation }
+  /** sentBack: the copy was Validated or Published, and is To review again (Q8). */
+  | { status: "saved"; changed: boolean; evaluation: SavedEvaluation; sentBack?: boolean }
   | { status: "replaced" | "not_open" | "not_found"; message: string }
   | { status: "conflict"; message: string; saved: SavedEvaluation };
 
@@ -81,23 +82,36 @@ function fieldErrors(error: z.ZodError): Partial<Record<EvaluationField, string>
   return errors;
 }
 
-/** Validates, then saves; a role without the right is logged and refused like a missing copy. */
-export async function saveTeacherEvaluation(actor: Actor, raw: unknown): Promise<SaveEvaluationState> {
+/**
+ * The whole form as the server reads it, whatever the screen allowed: the
+ * copy seen and the changes, or the state that refuses it. Shared by the
+ * save and the validation (E8, src/server/review/publication.ts).
+ */
+export function readEvaluationForm(
+  raw: unknown,
+): { ok: true; seen: SeenEvaluation; changes: EvaluationChanges } | { ok: false; state: SaveEvaluationState } {
   const parsed = saveSchema.safeParse(raw);
   if (!parsed.success) {
     const errors = fieldErrors(parsed.error);
     // A malformed request, not a field the teacher typed: nothing to show next to a field.
     if (Object.keys(errors).some((key) => key === "seen" || key === "rereadDone")) {
-      return { status: "not_found", message: EVALUATION_MESSAGES.notFound };
+      return { ok: false, state: { status: "not_found", message: EVALUATION_MESSAGES.notFound } };
     }
-    return { status: "invalid", fieldErrors: errors };
+    return { ok: false, state: { status: "invalid", fieldErrors: errors } };
   }
   const { seen, grade, ...rest } = parsed.data;
-  const changes: EvaluationChanges = { ...rest, grade };
+  return { ok: true, seen, changes: { ...rest, grade } };
+}
+
+/** Validates, then saves; a role without the right is logged and refused like a missing copy. */
+export async function saveTeacherEvaluation(actor: Actor, raw: unknown): Promise<SaveEvaluationState> {
+  const form = readEvaluationForm(raw);
+  if (!form.ok) return form.state;
+  const { seen, changes } = form;
   try {
     const result = await saveEvaluation(actor, seen, changes);
     if (!result) return { status: "not_found", message: EVALUATION_MESSAGES.notFound };
-    if (result.ok) return { status: "saved", changed: result.changed, evaluation: result.evaluation };
+    if (result.ok) return { status: "saved", changed: result.changed, evaluation: result.evaluation, sentBack: result.sentBack };
     if (result.reason === "conflict") return { status: "conflict", message: EVALUATION_MESSAGES.conflict, saved: result.saved };
     // E7.7: the page reloads on the notice; the copy is not open to this teacher yet.
     if (result.reason === "notice_required") return { status: "not_open", message: EVALUATION_MESSAGES.noticeRequired };

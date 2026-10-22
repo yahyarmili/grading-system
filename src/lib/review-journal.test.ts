@@ -55,6 +55,25 @@ describe("historyOf", () => {
       ["Opened the copy", "Sarah Bennett", 0],
     ]);
   });
+
+  it("E8.1: a validation says its nature; a publication, its withdrawal and a change sending a copy back are acts of their own", () => {
+    const items = historyOf([
+      entry({ event: "sent_back_to_review", newValue: { from: "published" } }),
+      entry({ event: "unpublished", newValue: { revision: 2 } }),
+      entry({ event: "published", newValue: { revision: 2 } }),
+      entry({ event: "validated", newValue: { nature: "changed", revision: 2, finalGrade: 12 } }),
+      entry({ event: "validated", newValue: { nature: "unchanged", revision: 1, finalGrade: 10 } }),
+      entry({ event: "validated", newValue: { nature: "manual", revision: 1, finalGrade: 8 } }),
+    ]);
+    expect(items.map((i) => i.label)).toEqual([
+      "Sent back to review by a change",
+      "Withdrew the publication",
+      "Published the evaluation",
+      "Validated after changes",
+      "Validated without changes",
+      "Validated (entered manually)",
+    ]);
+  });
 });
 
 describe("values in words", () => {

@@ -44,8 +44,23 @@ const EVENT_LABELS: Record<ReviewEvent, string> = {
   validated: "Validated the evaluation",
   published: "Published the evaluation",
   unpublished: "Withdrew the publication",
-  sent_back_to_review: "Sent back to review",
+  sent_back_to_review: "Sent back to review by a change",
 };
+
+/** REV-05 R2 (E8.1): a validation says its nature, recorded with it (validationNature). */
+const VALIDATED_LABELS: Record<string, string> = {
+  unchanged: "Validated without changes",
+  changed: "Validated after changes",
+  manual: "Validated (entered manually)",
+};
+
+function eventLabel(entry: JournalEntryLike): string {
+  if (entry.event === "validated") {
+    const nature = (entry.newValue as { nature?: string } | null)?.nature;
+    return (nature && VALIDATED_LABELS[nature]) || EVENT_LABELS.validated;
+  }
+  return EVENT_LABELS[entry.event];
+}
 
 const criterionName = (id: string) => rubric.find((c) => c.id === id)?.name ?? id;
 
@@ -106,7 +121,7 @@ export function historyOf(entries: readonly JournalEntryLike[]): HistoryItem[] {
     if (!item) {
       item = {
         key: entry.id,
-        label: EVENT_LABELS[entry.event],
+        label: eventLabel(entry),
         author: authorOf(entry),
         createdAt: entry.createdAt,
         versionNumber: entry.versionNumber,

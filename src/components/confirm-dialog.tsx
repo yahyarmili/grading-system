@@ -18,6 +18,8 @@ import { Spinner } from "./loading";
  * Asks before an action that is hard to undo. Focus starts on Cancel
  * (first in the footer), so Enter never confirms by accident.
  * `onConfirm` may be async: the dialog stays open, busy, until it resolves.
+ * Without a trigger, the caller opens it (`open`, `onOpenChange`): a form
+ * submitted by Enter asks the same way as by its button.
  */
 export function ConfirmDialog({
   trigger,
@@ -27,16 +29,25 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   destructive = false,
   onConfirm,
+  open: openProp,
+  onOpenChange,
 }: {
-  trigger: ReactElement;
+  trigger?: ReactElement;
   title: string;
   description: string;
   confirmLabel: string;
   cancelLabel?: string;
   destructive?: boolean;
   onConfirm: () => void | Promise<void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const [busy, setBusy] = useState(false);
 
   async function confirm() {
@@ -51,7 +62,7 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

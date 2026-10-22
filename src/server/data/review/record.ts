@@ -68,6 +68,12 @@ export type EvaluationWrite = {
   start?: EvaluationStart;
   before: EvaluationFields;
   after: EvaluationFields;
+  /**
+   * E8, REV-05: write the new evaluation even when nothing changed. A
+   * validation without changes creates it from the proposal, logged
+   * evaluation_created alone. Ignored once the evaluation exists.
+   */
+  create?: boolean;
 };
 
 /** The write lost its revision although the caller held the row lock: a bug, never a user's doing. */
@@ -104,7 +110,7 @@ const columns = (fields: EvaluationFields) => ({
  * Writes one revision of the teacher's evaluation and, in the same
  * transaction, one log entry per changed field (old and new value, author,
  * revision; REV-04 CA1), plus evaluation_created for the first. Nothing when
- * nothing changed: null. The first write is the teacher's first act: it sets
+ * nothing changed (null), unless `create` asks for the first. The first write is the teacher's first act: it sets
  * teacher_started_at on the active version, which closes replacement
  * (SUB-05 R3). The AI proposal is never touched (invariant 5).
  */
@@ -113,7 +119,7 @@ export async function writeEvaluation(
   write: EvaluationWrite,
 ): Promise<{ revision: number; changes: FieldChange[] } | null> {
   const changes = diffEvaluation(write.before, write.after);
-  if (changes.length === 0) return null;
+  if (changes.length === 0 && !(write.create && write.fromRevision === 0)) return null;
   const revision = write.fromRevision + 1;
   const entry = { assignmentId: write.assignmentId, submissionId: write.submissionId, actorId: write.actorId, versionNumber: write.versionNumber, evaluationRevision: revision };
 

@@ -32,6 +32,7 @@ import { joinClass } from "@/server/data/classes/memberships";
 import { listClassStudents, readmitStudent, removeStudent } from "@/server/data/classes/roster";
 import { getCopy, getStudentIdentity, recordCopyOpened, saveEvaluation } from "@/server/data/review/copy";
 import { listCopyJournal } from "@/server/data/review/journal";
+import { publishEvaluation, validateEvaluation, withdrawPublication } from "@/server/data/review/publication";
 import type { EvaluationChanges } from "@/lib/review";
 import { listAssignmentCopies, recordListOpened } from "@/server/data/review/list";
 import { acknowledgeNotice, getNoticeAcknowledgement } from "@/server/data/notices/notices";
@@ -375,7 +376,54 @@ const REAL: Partial<Record<Resource, RealResource>> = {
           return result;
         },
       },
+      // REV-05, PUB-01 (E8.1): the owner validates the copy just saved, then publishes it.
+      {
+        run: async (actor, { toReviewId, proposalId }) => {
+          const result = await validateEvaluation(actor, { submissionId: toReviewId, versionNumber: 1, proposalId, revision: 1 }, SAVED_FORM);
+          if (result && !(result.ok && !result.already && (await statusOf(toReviewId)) === "validated")) {
+            throw new Error(`Not validated: ${JSON.stringify(result)}`);
+          }
+          return result;
+        },
+      },
+      {
+        run: async (actor, { toReviewId, proposalId }) => {
+          const result = await publishEvaluation(actor, { submissionId: toReviewId, versionNumber: 1, proposalId, revision: 1 });
+          if (result && !(result.ok && !result.already && (await statusOf(toReviewId)) === "published")) {
+            throw new Error(`Not published: ${JSON.stringify(result)}`);
+          }
+          return result;
+        },
+      },
     ],
+  },
+  // PUB-01 R2 (E8.1): the owner withdraws the publication of a published copy;
+  // another teacher finds nothing; the student, who reads it (E8.3), cannot.
+  publishedEvaluation: {
+    setup: async () => {
+      const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
+      const submitted = await submitText(people.concernedStudent, {
+        assignmentId: fixture.assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
+      });
+      if (!submitted?.ok) throw new Error("Not submitted");
+      const submissionId = submitted.ref.submissionId;
+      if ((await evaluateSubmission(submissionId)).status !== "to_review") throw new Error("Not evaluated");
+      const [{ proposalId }] = await db.select({ proposalId: submissions.currentProposalId }).from(submissions).where(eq(submissions.id, submissionId));
+      const seen = { submissionId, versionNumber: 1, proposalId, revision: 1 };
+      const validated = await validateEvaluation(people.ownerTeacher, { ...seen, revision: 0 }, SAVED_FORM);
+      const published = await publishEvaluation(people.ownerTeacher, seen);
+      if (!validated?.ok || !published?.ok) throw new Error("Not published");
+      return { ...fixture, submissionId, proposalId: proposalId! };
+    },
+    write: {
+      run: async (actor, { submissionId, proposalId }) => {
+        const result = await withdrawPublication(actor, { submissionId, versionNumber: 1, proposalId, revision: 1 });
+        if (result && !(result.ok && !result.already && (await statusOf(submissionId)) === "validated")) {
+          throw new Error(`Not withdrawn: ${JSON.stringify(result)}`);
+        }
+        return result;
+      },
+    },
   },
   // REV-04 R3 (E7.6, E7.7): the copy reads from the log whether the teacher's last
   // request was dropped; the corrector only.
@@ -445,6 +493,9 @@ async function openInvitation(): Promise<Fixture> {
   if (!created.ok) throw new Error(`Not invited: ${created.reason}`);
   return { invitationId: created.invitation.invitationId };
 }
+
+/** The stored state of a submission: what an owner's act really changed. */
+const statusOf = async (id: string) => (await db.select({ status: submissions.status }).from(submissions).where(eq(submissions.id, id)))[0]?.status;
 
 /** Puts a submission in a state the evaluation reaches, directly. */
 const forceState = (id: string, status: "evaluation_failed" | "not_assessable", cause?: "ai_unavailable") =>

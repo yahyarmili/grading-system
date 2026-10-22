@@ -103,7 +103,7 @@ describe("filters and counters (R5)", () => {
   });
 
   it("counts over the whole list, whatever the filters", () => {
-    const counts = { to_review: 2, failed: 2, not_assessable: 1 };
+    const counts = { to_review: 2, failed: 2, not_assessable: 1, validated: 0 };
     expect(arrangeReviewList(rows, query(), 50).counts).toEqual(counts);
     expect(arrangeReviewList(rows, query({ classId: "c2", status: "failed" }), 50).counts).toEqual(counts);
   });

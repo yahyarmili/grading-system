@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { compareText } from "@/lib/collation";
 import type { EvaluationError, NotAssessableCause } from "@/lib/evaluation";
-import { applyChanges, fieldsFromProposal, type EvaluationChanges, type EvaluationFields } from "@/lib/review";
+import { applyChanges, diffEvaluation, fieldsFromProposal, isComplete, type EvaluationChanges, type EvaluationFields } from "@/lib/review";
 import type { RowClass } from "@/lib/review-list";
 import type { CriterionId, Level } from "@/lib/rubric";
 import type { SubmissionMode, SubmissionStatus } from "@/lib/submission-status";
@@ -24,6 +24,7 @@ import {
 import { ownedBy } from "../access";
 import { proposalFromRow, type CurrentProposal } from "../evaluation/proposals";
 import { acknowledgedNotice } from "../notices/notices";
+import { applyTransition } from "../submissions/transitions";
 import { appendJournal, writeEvaluation } from "./record";
 
 // REV-02 (E7.3): one student's copy for one of the teacher's assignments,
@@ -75,6 +76,8 @@ export type TeacherCopy = {
   proposal: (CurrentProposal & { model: string | null; evaluatedAt: string }) | null;
   /** The teacher's evaluation, once they changed something (E7.4). */
   evaluation: (EvaluationFields & { revision: number }) | null;
+  /** REV-05 CA1, PUB-01 (E8): who validated or published the copy in its state, and when; null in any other state. */
+  decision: { event: "validated" | "published"; at: string; by: string } | null;
   /** Null when not submitted: nothing to log, nothing to write. */
   seen: CopySeen | null;
 };
@@ -111,6 +114,8 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
   const grant = authorize(actor, "submission", "read");
   authorize(actor, "aiProposal", "read");
   authorize(actor, "unpublishedEvaluation", "read");
+  // A published copy shows its published evaluation (E8, PUB-01).
+  authorize(actor, "publishedEvaluation", "read");
   // Whether the last request was dropped is read from the log (E7.6).
   authorize(actor, "reviewLog", "read");
   const [row] = await db
@@ -151,6 +156,14 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
           and j.event in ('retry_requested', 'relaunch_requested', 'retry_abandoned')
         order by j.created_at desc limit 1
       ), false)`,
+      // REV-05 CA1, PUB-01: when the copy reached its state, by whom (E8): the log's last decision.
+      decision: sql<{ event: "validated" | "published"; at: string; firstName: string; lastName: string } | null>`(
+        select json_build_object('event', j.event, 'at', j.created_at, 'firstName', u.first_name, 'lastName', u.last_name)
+        from review_journal_entries j join users u on u.id = j.actor_id
+        where j.submission_id = ${submissions.id} and j.version_number = ${submissions.currentVersion}
+          and j.event = (case ${submissions.status} when 'validated' then 'validated' when 'published' then 'published' end)::review_event
+        order by j.created_at desc limit 1
+      )`,
       proposal: aiProposals,
       run: { model: evaluationRuns.modelAnswered, createdAt: evaluationRuns.createdAt },
       evaluation: teacherEvaluations,
@@ -192,6 +205,14 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
             : null,
     proposal: proposal && run ? { ...proposalFromRow(proposal), model: run.model, evaluatedAt: run.createdAt.toISOString() } : null,
     evaluation: evaluation ? { ...fieldsFromRow(evaluation), revision: evaluation.revision } : null,
+    decision:
+      submission && row.decision
+        ? {
+            event: row.decision.event,
+            at: new Date(row.decision.at).toISOString(),
+            by: `${row.decision.firstName} ${row.decision.lastName}`,
+          }
+        : null,
     seen: submission
       ? {
           submissionId: submission.id,
@@ -285,15 +306,151 @@ export type SavedEvaluation = EvaluationFields & { revision: number };
 
 export type SaveEvaluationResult =
   /** changed: false when the form held nothing new (nothing written, nothing logged). */
-  | { ok: true; changed: boolean; evaluation: SavedEvaluation }
+  | { ok: true; changed: boolean; evaluation: SavedEvaluation; sentBack: boolean }
   /** The student replaced the copy, or its proposal changed, since it was opened (R5). */
   | { ok: false; reason: "replaced" }
-  /** Not To review (validated, published: E8), or without an AI proposal (manual evaluation: E8). */
+  /** Neither To review, Validated nor Published, or without an AI proposal (manual evaluation: E8.2). */
   | { ok: false; reason: "not_open" }
   /** Saved meanwhile elsewhere (another tab): what is stored now, never overwritten silently (CA4). */
   | { ok: false; reason: "conflict"; saved: SavedEvaluation }
   /** NFR-DON-04 (E7.7): the teacher notice not read yet: nothing written. */
   | { ok: false; reason: "notice_required" };
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** The teacher's own submission row, locked: what every write on the copy checks first. */
+export type LockedCopy = {
+  assignmentId: string;
+  status: SubmissionStatus;
+  versionNumber: number;
+  proposalId: string | null;
+  noticeRead: boolean;
+};
+
+/**
+ * Locks the row of the teacher's own submission (FOR UPDATE), the lock a
+ * replacement takes too (SUB-05 R3): every write on the copy waits for the
+ * one before. Null when absent or another teacher's. In the caller's
+ * transaction, which has authorized the actor (`grant`).
+ */
+export async function lockCopy(tx: Tx, grant: Grant, submissionId: string): Promise<LockedCopy | null> {
+  const [row] = await tx
+    .select({
+      assignmentId: submissions.assignmentId,
+      status: submissions.status,
+      versionNumber: submissions.currentVersion,
+      proposalId: submissions.currentProposalId,
+      noticeRead: sql<boolean>`${acknowledgedNotice(grant.userId, "teacher_review")}`,
+    })
+    .from(submissions)
+    .where(and(eq(submissions.id, submissionId), ownedBy(grant, { teacher: submissions.teacherId })))
+    .for("update");
+  return row ?? null;
+}
+
+/** The guards every write on the copy shares, in order, once it is found: the notice, then the version and proposal seen. */
+export function lockedRefusal(row: LockedCopy, seen: Pick<SeenEvaluation, "versionNumber" | "proposalId">) {
+  if (!row.noticeRead) return { ok: false, reason: "notice_required" } as const;
+  if (row.versionNumber !== seen.versionNumber || row.proposalId !== seen.proposalId) return { ok: false, reason: "replaced" } as const;
+  return null;
+}
+
+export type EditOutcome =
+  | {
+      ok: true;
+      changed: boolean;
+      evaluation: SavedEvaluation;
+      /** The proposal's values, what a validation compares the evaluation with (REV-05 R2). */
+      proposal: EvaluationFields;
+      /** Transition 10 was applied: the copy was Validated or Published and is To review again (Q8). */
+      sentBack: boolean;
+    }
+  | { ok: false; reason: "not_open" | "incomplete" }
+  | { ok: false; reason: "conflict"; saved: SavedEvaluation };
+
+const EDITABLE: readonly SubmissionStatus[] = ["to_review", "validated", "published"];
+
+/**
+ * One save of the whole form on a locked copy (E7.4), shared by the save and
+ * the validation (E8): checks the status, then the revision, applies the
+ * changes, and writes them with their log entries (record.ts). Q8 [D,
+ * 2026-10-22]: a real change of a Validated or Published copy first sends it
+ * back To review (transition 10, logged sent_back_to_review): the database
+ * never lets an evaluation change outside To review (0019), and a published
+ * one leaves the student's view. A change of a Published copy also needs the
+ * right to write the published evaluation. `create` writes the evaluation
+ * even unchanged (a validation without changes); `complete` refuses levels
+ * or a grade missing before anything is written.
+ */
+export async function editLocked(
+  tx: Tx,
+  actor: Actor,
+  grant: Grant,
+  row: LockedCopy,
+  seen: SeenEvaluation,
+  changes: EvaluationChanges,
+  options: { create?: boolean; complete?: boolean } = {},
+): Promise<EditOutcome> {
+  if (!EDITABLE.includes(row.status) || !row.proposalId) return { ok: false, reason: "not_open" };
+
+  // Read once the lock is held, by a statement of its own: a save that
+  // waited for the lock sees what the other one committed (READ COMMITTED
+  // re-reads the locked row only, never the rows joined to it).
+  const [current] = await tx
+    .select({ proposal: aiProposals, rubricVersion: evaluationRuns.rubricVersion, evaluation: teacherEvaluations })
+    .from(aiProposals)
+    .innerJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
+    .leftJoin(
+      teacherEvaluations,
+      and(eq(teacherEvaluations.submissionId, aiProposals.submissionId), eq(teacherEvaluations.versionNumber, aiProposals.versionNumber)),
+    )
+    .where(eq(aiProposals.id, row.proposalId));
+  if (!current?.rubricVersion) return { ok: false, reason: "not_open" };
+
+  const { evaluation } = current;
+  const proposal = fieldsFromProposal(proposalFromRow(current.proposal));
+  const stored: SavedEvaluation = evaluation ? { ...fieldsFromRow(evaluation), revision: evaluation.revision } : { ...proposal, revision: 0 };
+  if (stored.revision !== seen.revision) return { ok: false, reason: "conflict", saved: stored };
+
+  const { revision: fromRevision, ...before } = stored;
+  const after = applyChanges(before, changes);
+  if (options.complete && !isComplete(after)) return { ok: false, reason: "incomplete" };
+  const changed = diffEvaluation(before, after).length > 0;
+
+  const sentBack = changed && row.status !== "to_review";
+  if (sentBack) {
+    if (row.status === "published") authorize(actor, "publishedEvaluation", "write");
+    const moved = await applyTransition(tx, seen.submissionId, 10, "to_review", {
+      where: eq(submissions.currentVersion, row.versionNumber),
+    });
+    if (!moved) throw new Error("editLocked: the copy left its state under the row lock");
+    await appendJournal(tx, [
+      {
+        assignmentId: row.assignmentId,
+        submissionId: seen.submissionId,
+        actorId: grant.userId,
+        event: "sent_back_to_review",
+        newValue: { from: row.status },
+        versionNumber: row.versionNumber,
+      },
+    ]);
+  }
+
+  const written = await writeEvaluation(tx, {
+    assignmentId: row.assignmentId,
+    submissionId: seen.submissionId,
+    versionNumber: row.versionNumber,
+    actorId: grant.userId,
+    fromRevision,
+    start: { origin: "proposal", proposalId: current.proposal.id, rubricVersion: current.rubricVersion },
+    before,
+    after,
+    create: options.create,
+  });
+  return written
+    ? { ok: true, changed, evaluation: { ...after, revision: written.revision }, proposal, sentBack }
+    : { ok: true, changed: false, evaluation: stored, proposal, sentBack: false };
+}
 
 /**
  * REV-03, REV-04: saves the whole form of the teacher's own copy. Under the
@@ -301,7 +458,8 @@ export type SaveEvaluationResult =
  * version and the proposal seen, then the status, then the revision. The
  * first save from the proposal creates the evaluation and sets
  * teacher_started_at, which closes replacement; each changed field gets its
- * log entry in the same transaction (record.ts). The proposal is never
+ * log entry in the same transaction (record.ts). A Validated or Published
+ * copy changed goes back To review (Q8, editLocked). The proposal is never
  * written. Null when absent or another teacher's. `changes` comes validated
  * (src/server/review/evaluation.ts); a level out of 0 to 4 still throws here
  * and in the database.
@@ -313,56 +471,12 @@ export async function saveEvaluation(
 ): Promise<SaveEvaluationResult | null> {
   const grant = authorize(actor, "unpublishedEvaluation", "write");
   return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({
-        assignmentId: submissions.assignmentId,
-        status: submissions.status,
-        versionNumber: submissions.currentVersion,
-        proposalId: submissions.currentProposalId,
-        noticeRead: sql<boolean>`${acknowledgedNotice(grant.userId, "teacher_review")}`,
-      })
-      .from(submissions)
-      .where(and(eq(submissions.id, seen.submissionId), ownedBy(grant, { teacher: submissions.teacherId })))
-      .for("update");
+    const row = await lockCopy(tx, grant, seen.submissionId);
     if (!row) return null;
-    if (!row.noticeRead) return { ok: false, reason: "notice_required" };
-    if (row.versionNumber !== seen.versionNumber || row.proposalId !== seen.proposalId) return { ok: false, reason: "replaced" };
-    if (row.status !== "to_review" || !row.proposalId) return { ok: false, reason: "not_open" };
-
-    // Read once the lock is held, by a statement of its own: a save that
-    // waited for the lock sees what the other one committed (READ COMMITTED
-    // re-reads the locked row only, never the rows joined to it).
-    const [current] = await tx
-      .select({ proposal: aiProposals, rubricVersion: evaluationRuns.rubricVersion, evaluation: teacherEvaluations })
-      .from(aiProposals)
-      .innerJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
-      .leftJoin(
-        teacherEvaluations,
-        and(eq(teacherEvaluations.submissionId, aiProposals.submissionId), eq(teacherEvaluations.versionNumber, aiProposals.versionNumber)),
-      )
-      .where(eq(aiProposals.id, row.proposalId));
-    if (!current?.rubricVersion) return { ok: false, reason: "not_open" };
-
-    const { proposal, evaluation } = current;
-    const stored: SavedEvaluation = evaluation
-      ? { ...fieldsFromRow(evaluation), revision: evaluation.revision }
-      : { ...fieldsFromProposal(proposalFromRow(proposal)), revision: 0 };
-    if (stored.revision !== seen.revision) return { ok: false, reason: "conflict", saved: stored };
-
-    const { revision: fromRevision, ...before } = stored;
-    const after = applyChanges(before, changes);
-    const written = await writeEvaluation(tx, {
-      assignmentId: row.assignmentId,
-      submissionId: seen.submissionId,
-      versionNumber: row.versionNumber,
-      actorId: grant.userId,
-      fromRevision,
-      start: { origin: "proposal", proposalId: proposal.id, rubricVersion: current.rubricVersion },
-      before,
-      after,
-    });
-    return written
-      ? { ok: true, changed: true, evaluation: { ...after, revision: written.revision } }
-      : { ok: true, changed: false, evaluation: stored };
+    const refused = lockedRefusal(row, seen);
+    if (refused) return refused;
+    const edit = await editLocked(tx, actor, grant, row, seen, changes);
+    if (!edit.ok) return edit.reason === "conflict" ? edit : { ok: false, reason: "not_open" };
+    return { ok: true, changed: edit.changed, evaluation: edit.evaluation, sentBack: edit.sentBack };
   });
 }

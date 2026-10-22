@@ -107,13 +107,14 @@ export const STUDENT_NOTICE = {
  * any change of the text needs a new version, read again.
  */
 export const TEACHER_NOTICE = {
-  version: 1,
+  // v2 [P, E8.1, 2026-10-22]: validations, publications, withdrawals and manual evaluations; how long the log is kept.
+  version: 2,
   title: "Before you review copies: what the review log records",
   sections: [
     {
       heading: "What is recorded",
       body: [
-        "When you open an assignment's submissions and a student's copy, every change you make to an evaluation (old and new value), your retries and relaunches, and later your validations and publications. Each entry has its author and date.",
+        "When you open an assignment's submissions and a student's copy, every change you make to an evaluation (old and new value), your retries and relaunches, your validations (without or after changes), your publications and their withdrawals, and the copies you evaluate by hand, without an AI proposal. Each entry has its author and date.",
         "The AI proposal is kept unchanged beside your evaluation.",
       ],
     },
@@ -129,6 +130,7 @@ export const TEACHER_NOTICE = {
       body: [
         "You, on your own copies, under History. Students never see it. The project team reads it, without names, to measure the review time and the closeness to the AI.",
         "No one can change or delete an entry, you included.",
+        "How long the log is kept is not decided yet. This notice will say it, and ask you to read it again.",
       ],
     },
     {

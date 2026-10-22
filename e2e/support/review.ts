@@ -31,7 +31,7 @@ export async function seedTeacher(
   const { id: teacherId } = await one<{ id: string }>(`SELECT id FROM users WHERE email = $1`, [teacherEmail]);
   // E7.7: the teacher notice read, unless the test shows it.
   if (noticeRead) {
-    await client.query(`INSERT INTO notice_acknowledgements (user_id, notice, version) VALUES ($1, 'teacher_review', 1)`, [teacherId]); // TEACHER_NOTICE.version (src/lib/texts.ts)
+    await client.query(`INSERT INTO notice_acknowledgements (user_id, notice, version) VALUES ($1, 'teacher_review', 2)`, [teacherId]); // TEACHER_NOTICE.version (src/lib/texts.ts)
   }
   const classes = (await client.query<{ id: string; name: string }>(`SELECT id, name FROM classes WHERE teacher_id = $1`, [teacherId])).rows;
   const classId = (name: string) => classes.find((c) => c.name === name)!.id;

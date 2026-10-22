@@ -94,7 +94,8 @@ const journalOf = (submissionId: string) =>
     })
     .from(reviewJournalEntries)
     .where(and(eq(reviewJournalEntries.submissionId, submissionId), eq(reviewJournalEntries.event, "evaluation_changed")))
-    .orderBy(asc(reviewJournalEntries.createdAt), asc(reviewJournalEntries.field));
+    // One save, one revision; its fields by name (0020 dates each entry apart).
+    .orderBy(asc(reviewJournalEntries.evaluationRevision), asc(reviewJournalEntries.field));
 const proposalRow = async (submissionId: string) =>
   (await db.select().from(aiProposals).where(eq(aiProposals.submissionId, submissionId)))[0];
 const startedAt = async (submissionId: string) =>

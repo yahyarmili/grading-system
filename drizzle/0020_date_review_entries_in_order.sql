@@ -1,0 +1,1 @@
+ALTER TABLE "review_journal_entries" ALTER COLUMN "created_at" SET DEFAULT clock_timestamp();

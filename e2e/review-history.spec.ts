@@ -40,7 +40,7 @@ test("DON-04: the teacher notice first, read once; then the submissions", async 
   await expect(page.getByRole("table", { name: "Submissions" })).toBeVisible();
   await expect(page.getByRole("table", { name: "Submissions" })).toContainText("Bauer");
   expect(await sql(`SELECT notice, version FROM notice_acknowledgements n JOIN users u ON u.id = n.user_id WHERE u.role = 'teacher' AND u.first_name = 'Sarah' AND n.user_id IN (SELECT teacher_id FROM assignments WHERE id = $1)`, [assignmentId])).toEqual([
-    { notice: "teacher_review", version: 1 },
+    { notice: "teacher_review", version: 2 },
   ]);
 
   // Once: the notice is not shown again.

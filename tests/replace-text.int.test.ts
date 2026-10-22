@@ -17,6 +17,7 @@ import {
   submitStudentText,
   type ReplaceTextState,
 } from "@/server/submissions/submissions";
+import { giveCompleteEvaluation } from "./helpers/review";
 import { noTrigger } from "./helpers/triggers";
 
 // SUB-05: replace the submission while the teacher has neither changed nor
@@ -184,6 +185,8 @@ describe("CA3: refused once the teacher changed or validated", () => {
 
   it("refuses a validated submission", async () => {
     const { student, assignmentId, submissionId } = await submitted();
+    // 0019: Validated needs the teacher's complete evaluation.
+    await giveCompleteEvaluation(submissionId);
     await db
       .update(submissions)
       .set({ status: "validated", teacherStartedAt: sql`now()` })

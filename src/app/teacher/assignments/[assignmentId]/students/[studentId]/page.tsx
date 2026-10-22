@@ -232,6 +232,13 @@ function Identity({ copy, identity }: { copy: TeacherCopy; identity: StudentIden
           <StatusTag status={copy.status} />
         )}
         {copy.late && <LateTag />}
+        {/* REV-05 CA1, PUB-01: who decided, and when (from the review log). */}
+        {copy.decision && (
+          <span className="text-fg-muted">
+            {copy.decision.event === "published" ? "Published" : "Validated"} by {copy.decision.by},{" "}
+            <time dateTime={copy.decision.at}>{formatDateTime(copy.decision.at)}</time>
+          </span>
+        )}
       </div>
       <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-fg-muted">
         <div className="inline-flex items-center gap-1.5">

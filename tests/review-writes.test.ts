@@ -65,3 +65,35 @@ describe("the teacher's evaluation and the review log have one writer", () => {
     expect(restriction?.allowed).toContain(WRITER);
   });
 });
+
+// E8 plan §1 (0019): the evaluation's triggers read the submission row under a
+// share lock; the code holds its FOR UPDATE first, so they wait for nothing.
+// So every call of writeEvaluation stands in the function that locks the copy
+// (editLocked, after lockCopy), and nowhere else.
+const LOCKED_WRITER = "src/server/data/review/copy.ts";
+
+function unlockedWrites(files: SourceFile[]): string[] {
+  return files.flatMap((file) => {
+    if (file.path === WRITER || !/\bwriteEvaluation\(/.test(file.text)) return [];
+    const locked = file.path === LOCKED_WRITER && /\.for\("update"\)/.test(file.text);
+    return locked ? [] : [`${file.path}: writes an evaluation outside the locked copy`];
+  });
+}
+
+describe("an evaluation is written on a locked copy only", () => {
+  it("writeEvaluation is called by copy.ts alone, which locks the row", { timeout: 30_000 }, () => {
+    expect(unlockedWrites(appSources())).toEqual([]);
+  });
+
+  it("fails on a call elsewhere, or in copy.ts without the lock", () => {
+    expect(
+      unlockedWrites([
+        { path: "src/server/data/review/probe.ts", text: "await writeEvaluation(tx, write)" },
+        { path: LOCKED_WRITER, text: "await writeEvaluation(tx, write)" },
+      ]),
+    ).toEqual([
+      "src/server/data/review/probe.ts: writes an evaluation outside the locked copy",
+      `${LOCKED_WRITER}: writes an evaluation outside the locked copy`,
+    ]);
+  });
+});

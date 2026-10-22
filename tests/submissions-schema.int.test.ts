@@ -5,6 +5,7 @@ import { InvalidTransitionError, type StoredSubmissionStatus } from "@/lib/submi
 import { applyTransition, insertReceived } from "@/server/data/submissions/transitions";
 import { db } from "@/server/db/client";
 import { assignments, submissions, submissionVersions, users } from "@/server/db/schema";
+import { giveCompleteEvaluation } from "./helpers/review";
 
 // E4.1: the submission and its versions (SUB-02 R3, SUB-05 R1), and the one
 // writer of their status (§5.5). The flows that use them come in E4.2 and E4.5.
@@ -184,12 +185,15 @@ describe("applyTransition: the one status writer (§5.5)", () => {
     const id = await submitted(await fixture());
     await setStatus(id, "to_review");
     expect(await db.transaction((tx) => applyTransition(tx, id, 9, "published"))).toBeNull();
+    // 0019: Validated needs the teacher's complete evaluation.
+    await giveCompleteEvaluation(id);
     await setStatus(id, "validated");
     expect(await db.transaction((tx) => applyTransition(tx, id, 9, "published"))).toMatchObject({ status: "published" });
   });
 
   it("lets the first of two racing writers win", async () => {
     const id = await submitted(await fixture());
+    await giveCompleteEvaluation(id);
     await setStatus(id, "validated");
     const results = await Promise.all([
       db.transaction((tx) => applyTransition(tx, id, 9, "published")),
@@ -204,6 +208,8 @@ describe("applyTransition: the one status writer (§5.5)", () => {
     expect(await violated(db.transaction((tx) => applyTransition(tx, id, 8, "validated")))).toBe(
       "submissions_validated_started",
     );
+    // The first act: the teacher's evaluation (0018: it sets teacher_started_at; 0019: Validated needs it).
+    await giveCompleteEvaluation(id);
     const validated = await db.transaction((tx) =>
       applyTransition(tx, id, 8, "validated", { set: { teacherStartedAt: sql`coalesce(${submissions.teacherStartedAt}, now())` } }),
     );

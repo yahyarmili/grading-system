@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Ban, Check, ClipboardCheck, FileText, Hourglass, Image as ImageIcon, TriangleAlert, UserMinus, type LucideIcon } from "lucide-react";
+import { Ban, Check, CircleCheck, ClipboardCheck, FileText, Hourglass, Image as ImageIcon, TriangleAlert, UserMinus, type LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import { DataTable, type Column, type Sort } from "@/components/data-table";
 import { LateTag, StatusTag } from "@/components/status-tag";
@@ -87,6 +87,8 @@ const quickFilters = [
   { filter: "to_review", label: "To review", icon: ClipboardCheck, iconClassName: "text-warning-fg" },
   { filter: "failed", label: "Failed", icon: TriangleAlert, iconClassName: "text-danger-fg" },
   { filter: "not_assessable", label: "Not assessable", icon: Ban, iconClassName: "text-warning-fg" },
+  // E8.1: validated, not published yet.
+  { filter: "validated", label: "Validated", icon: CircleCheck, iconClassName: "text-success-fg" },
 ] as const satisfies readonly { filter: keyof ReviewCounts; label: string; icon: LucideIcon; iconClassName: string }[];
 
 export function SubmissionsList({

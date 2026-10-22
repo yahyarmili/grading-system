@@ -37,6 +37,7 @@ import {
   SUBMISSION_MESSAGES,
   submitStudentText,
 } from "@/server/submissions/submissions";
+import { giveCompleteEvaluation } from "./helpers/review";
 import { noTrigger } from "./helpers/triggers";
 
 // E4.6: the replays of the step on real submissions (fonctionnalites.md §8.3):
@@ -337,6 +338,8 @@ describe("the Submission row (§5.4): the student writes their own, never reads 
       // not assessable with its cause and no other state with one, evaluating with a claim
       // token and no other state with one (check constraints).
       const started = status === "validated" || status === "published";
+      // 0019: Validated, then Published, need the teacher's complete evaluation (given once: the states come in order).
+      if (status === "validated") await giveCompleteEvaluation(row.id);
       await db
         .update(submissions)
         .set({

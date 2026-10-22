@@ -106,6 +106,24 @@ export function diffEvaluation(before: EvaluationFields, after: EvaluationFields
   return changes;
 }
 
+/** REV-05 R2 [P]: a validation needs the five levels and a grade. */
+export function isComplete(fields: Pick<EvaluationFields, "levels" | "finalGrade">): boolean {
+  return criterionIds.every((id) => fields.levels[id] !== null) && fields.finalGrade !== null;
+}
+
+/**
+ * What a validation is logged as (REV-05 R2, E8 plan §1): "unchanged" when
+ * the result equals the proposal it started from, "changed" otherwise, by
+ * content (a change undone counts as none); "manual" without a proposal
+ * (REV-06). The "to re-read" marks are not part of the result: ignored.
+ */
+export type ValidationNature = "unchanged" | "changed" | "manual";
+
+export function validationNature(proposal: EvaluationFields | null, evaluation: EvaluationFields): ValidationNature {
+  if (!proposal) return "manual";
+  return diffEvaluation(proposal, evaluation).some((change) => !change.field.startsWith("reread.")) ? "changed" : "unchanged";
+}
+
 /** The proposal's values a new evaluation starts from (REV-03 R1): the justifications become the remarks. */
 export function fieldsFromProposal(proposal: {
   criteria: Record<CriterionId, { level: Level; justification: string }>;

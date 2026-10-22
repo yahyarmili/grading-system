@@ -234,7 +234,7 @@ describe("every data function goes through authorize()", () => {
     expect(problems).toEqual([]);
     expect([...resources].sort()).toEqual([
       "aiProposal", "assignment", "assignmentRecipients", "class", "classInvite", "classMembership", "classRoster",
-      "noticeAcknowledgement", "ownSubmissionStatus", "reviewLog", "rubric", "studentAccount", "submission", "teacherInvitation", "unpublishedEvaluation",
+      "noticeAcknowledgement", "ownSubmissionStatus", "publishedEvaluation", "reviewLog", "rubric", "studentAccount", "submission", "teacherInvitation", "unpublishedEvaluation",
     ]);
   });
 
@@ -247,7 +247,7 @@ describe("every data function goes through authorize()", () => {
         `export async function writeProbe(actor: Actor) { authorize(actor, "probe", "write"); }`,
         `export async function eraseProbe(actor: Actor, other: Actor) { authorize(other, "rubric", "read"); }`,
         // A resource no real data function reads yet: only the probe can bring it in.
-        `export async function readPublished(actor: Actor) { authorize(actor, "publishedEvaluation", "read"); }`,
+        `export async function readTranscription(actor: Actor) { authorize(actor, "transcription", "read"); }`,
       ].join("\n"),
     };
     const { problems, resources } = checkDataExports([...dataSources(), probe]);
@@ -257,8 +257,8 @@ describe("every data function goes through authorize()", () => {
       'src/server/data/probes.ts#writeProbe: resource "probe" has no row in the access matrix',
       "src/server/data/probes.ts#eraseProbe: authorize() must receive the actor parameter and literal resource and action",
     ]);
-    expect(resources.has("publishedEvaluation")).toBe(true);
-    expect(checkDataExports(dataSources()).resources.has("publishedEvaluation")).toBe(false);
+    expect(resources.has("transcription")).toBe(true);
+    expect(checkDataExports(dataSources()).resources.has("transcription")).toBe(false);
   });
 });
 

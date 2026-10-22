@@ -49,6 +49,8 @@ export const IMPORT_RESTRICTIONS = [
       // Readers: the copy (getCopy, saveEvaluation's re-read, recordCopyOpened) and its history.
       "src/server/data/review/copy.ts",
       "src/server/data/review/journal.ts",
+      // E8.1: validation, publication and withdrawal read the revision under the row lock.
+      "src/server/data/review/publication.ts",
       // Better Auth's adapter receives the whole schema (import * as schema); a
       // namespace import of any schema file falls under the group's paths.
       "src/server/data/auth/better-auth.ts",

@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { GRADE_STEP } from "@/config/provisional";
-import { applyChanges, diffEvaluation, fieldsFromProposal, finalGradeOf, fixedGradeProblem, gradeGap, readTypedGrade, reconcileSaved, REVIEW_FIELD_MESSAGES, type EvaluationChanges } from "@/lib/review";
+import {
+  applyChanges,
+  diffEvaluation,
+  fieldsFromProposal,
+  finalGradeOf,
+  fixedGradeProblem,
+  gradeGap,
+  isComplete,
+  readTypedGrade,
+  reconcileSaved,
+  REVIEW_FIELD_MESSAGES,
+  validationNature,
+  type EvaluationChanges,
+} from "@/lib/review";
 import type { CriterionId, Level } from "@/lib/rubric";
 
 // REV-03 R2, R3 (E7.1): the grade is the sum of the levels while not fixed;
@@ -140,5 +153,34 @@ describe("the evaluation a fresh rendering brings to an open form (REV-03 CA4)",
     expect(reconcileSaved(2, 2, true)).toBe("keep");
     expect(reconcileSaved(1, 2, false)).toBe("adopt");
     expect(reconcileSaved(0, 3, true)).toBe("conflict");
+  });
+});
+
+describe("what a validation needs and is logged as (REV-05 R2, E8.1)", () => {
+  it("needs the five levels and a grade", () => {
+    const evaluation = applyChanges(proposal, form());
+    expect(isComplete(evaluation)).toBe(true);
+    expect(isComplete({ ...evaluation, levels: { ...evaluation.levels, grammar: null } })).toBe(false);
+    expect(isComplete({ ...evaluation, finalGrade: null })).toBe(false);
+  });
+
+  it("'unchanged' when the result equals the proposal, a change undone included; 'to re-read' marks aside", () => {
+    expect(validationNature(proposal, applyChanges(proposal, form()))).toBe("unchanged");
+    const changed = applyChanges(proposal, form({ levels: levels(4, 2, 2, 2, 1) }));
+    const undone = applyChanges(changed, form());
+    expect(validationNature(proposal, undone)).toBe("unchanged");
+    expect(validationNature(proposal, { ...proposal, reread: { ...proposal.reread, task: true } })).toBe("unchanged");
+  });
+
+  it("'changed' as soon as a level, a remark, the comment, a step or the grade differs", () => {
+    expect(validationNature(proposal, applyChanges(proposal, form({ levels: levels(4, 2, 2, 2, 1) })))).toBe("changed");
+    expect(validationNature(proposal, applyChanges(proposal, form({ remarks: { ...proposal.remarks, grammar: "Fewer errors." } })))).toBe("changed");
+    expect(validationNature(proposal, applyChanges(proposal, form({ generalComment: "Clear and lively." })))).toBe("changed");
+    expect(validationNature(proposal, applyChanges(proposal, form({ nextSteps: [] })))).toBe("changed");
+    expect(validationNature(proposal, applyChanges(proposal, form({ grade: { fixed: true, value: 10 } })))).toBe("changed");
+  });
+
+  it("'manual' without a proposal (REV-06)", () => {
+    expect(validationNature(null, applyChanges(proposal, form()))).toBe("manual");
   });
 });

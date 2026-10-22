@@ -11,8 +11,9 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Bot, Check, Eye, PenLine, RotateCcw } from "lucide-react";
+import { Bot, Check, CircleCheck, Eye, PenLine, RotateCcw, Send } from "lucide-react";
 import { Alert } from "@/components/alert";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Spinner } from "@/components/loading";
 import { Tag } from "@/components/tag";
 import { GRADE_SCALE } from "@/config/decisions";
@@ -23,9 +24,11 @@ import { calculateGrade, formatGrade } from "@/lib/grade";
 import { applyChanges, fieldsFromProposal, readTypedGrade, reconcileSaved, type EvaluationFields } from "@/lib/review";
 import { criterionIds, levelLabel, rubric, type CriterionId, type Level } from "@/lib/rubric";
 import type { CurrentProposal } from "@/server/data/evaluation/proposals";
-import type { SavedEvaluation, SeenEvaluation } from "@/server/data/review/copy";
-import type { EvaluationField, SaveEvaluationState } from "@/server/review/evaluation";
-import { saveEvaluationAction } from "./actions";
+import type { CopySeen, SavedEvaluation, SeenEvaluation } from "@/server/data/review/copy";
+import type { EvaluationField } from "@/server/review/evaluation";
+import type { DecisionState } from "@/server/review/publication";
+import { saveEvaluationAction, validateAndPublishAction, validateEvaluationAction } from "./actions";
+import { DecisionButton } from "./decision-button";
 import { useNotice } from "../../notice";
 import { NO_FORM, useCopyState } from "./copy-state";
 import { LeaveGuard } from "./leave-guard";
@@ -62,24 +65,39 @@ type SaveInput = {
   grade: { fixed: false } | { fixed: true; value: string };
   rereadDone: CriterionId[];
   over?: boolean;
+  /** E8.1: save only, or save then validate (REV-05), or then publish too (D6's shortcut). */
+  intent?: Intent;
 };
 
+type Intent = "save" | "validate" | "validate_publish";
+
+const submitActions = { save: saveEvaluationAction, validate: validateEvaluationAction, validate_publish: validateAndPublishAction };
+
 /**
- * Saves the form. Asked to save over, a conflict is answered by saving again
- * from the revision stored: the teacher chose it knowing the copy changed
- * elsewhere, as "Save mine over it" after a conflict (E7.5); the server
- * guards that second save as any other.
+ * Sends the form for its intent. Asked to save over, a conflict is answered
+ * by saving again from the revision stored: the teacher chose it knowing the
+ * copy changed elsewhere, as "Save mine over it" after a conflict (E7.5);
+ * the server guards that second save as any other.
  */
-async function saveForm(previous: SaveEvaluationState, { over = false, ...input }: SaveInput): Promise<SaveEvaluationState> {
-  const state = await saveEvaluationAction(previous, input);
+async function saveForm(previous: DecisionState, { over = false, intent = "save", ...input }: SaveInput): Promise<DecisionState> {
+  const state = await submitActions[intent](previous, input);
   if (!over || state.status !== "conflict") return state;
-  return saveEvaluationAction(previous, { ...input, seen: { ...input.seen, revision: state.saved.revision } });
+  return submitActions[intent](previous, { ...input, seen: { ...input.seen, revision: state.saved.revision } });
 }
 
 /** A conflict shown with its two choices: what is stored now, and why. */
 type Conflict = { saved: SavedEvaluation; message: string };
 
 const CHANGED_ELSEWHERE = "This evaluation was changed in another tab or window.";
+
+const PENDING_LABELS: Record<Intent, string> = {
+  save: "Saving…",
+  validate: "Validating…",
+  validate_publish: "Validating and publishing…",
+};
+
+/** Q8 [D, 2026-10-22], said when a change of a Validated or Published copy is saved. */
+const SENT_BACK = "Your change was saved. The copy is To review again: validate it, then publish it, for the student to see the result.";
 
 /** Two columns from a wide card (container query), stacked otherwise. */
 function SideBySide({ ai, teacher }: { ai: ReactNode; teacher: ReactNode }) {
@@ -119,7 +137,8 @@ export function EvaluationForm({
   proposal: CurrentProposal & { model: string | null; evaluatedAt: string };
   /** The teacher's evaluation, once they changed something; otherwise it starts from the proposal (REV-03 R1). */
   evaluation: SavedEvaluation | null;
-  seen: SeenEvaluation;
+  /** With the copy's state: To review, Validated or Published (E8.1). */
+  seen: CopySeen;
   language: AssignmentLanguage;
 }) {
   const router = useRouter();
@@ -127,7 +146,12 @@ export function EvaluationForm({
   const { report, stale, setStale } = useCopyState();
   const [saved, setSaved] = useState<SavedEvaluation>(() => evaluation ?? { ...fieldsFromProposal(proposal), revision: 0 });
   const [draft, setDraft] = useState<Draft>(() => draftOf(saved));
-  const [state, save, pending] = useActionState(saveForm, { status: "idle" } as SaveEvaluationState);
+  const [state, save, pending] = useActionState(saveForm, { status: "idle" } as DecisionState);
+  /** The act being sent, for the bar's status line. */
+  const [intent, setIntent] = useState<Intent>("save");
+  /** Q8: a change of a Validated or Published copy is confirmed before it is saved. */
+  const [confirmingSave, setConfirmingSave] = useState(false);
+  const decided = seen.status === "validated" || seen.status === "published";
   /** The draft the pending save sent: typing resumed meanwhile is kept when it answers. */
   const [sent, setSent] = useState<Draft | null>(null);
   const [conflict, setConflict] = useState<Conflict | null>(null);
@@ -142,7 +166,7 @@ export function EvaluationForm({
   const [handled, setHandled] = useState(state);
   if (state !== handled) {
     setHandled(state);
-    if (state.status === "saved") {
+    if (state.status === "saved" || state.status === "decided" || state.status === "publish_failed") {
       setSaved(state.evaluation);
       if (sent === null || sameDraft(draft, sent)) setDraft(draftOf(state.evaluation));
       setConflict(null);
@@ -177,8 +201,18 @@ export function EvaluationForm({
     if (acted.current === state) return;
     acted.current = state;
     // Saved: the page is rendered again, its History and what it saw with it (C6).
-    if (state.status === "saved") {
+    if (state.status === "saved" || state.status === "decided") {
       setStale(false);
+      router.refresh();
+    }
+    // Q8: the change sent a Validated or Published copy back To review: said above the copy.
+    if (state.status === "saved" && state.sentBack) {
+      showNotice({ title: "To review again", message: SENT_BACK });
+    }
+    // PUB-01 R3: the shortcut's second act failed; the copy stays Validated.
+    if (state.status === "publish_failed") {
+      setStale(false);
+      showNotice({ title: "Validated, but not published", message: state.message });
       router.refresh();
     }
     // Replaced or closed meanwhile: the page shows the copy as it is now, the message above it (R5).
@@ -259,8 +293,11 @@ export function EvaluationForm({
 
   const change = (next: Partial<Draft>) => setDraft((d) => ({ ...d, ...next }));
 
-  /** Sends the whole form, from the revision `base` the teacher last saw; `over`: over whatever is stored since. */
-  function send(base: SavedEvaluation, over = false) {
+  /**
+   * Sends the whole form for `intent`, from the revision `base` the teacher
+   * last saw; `over`: over whatever is stored since.
+   */
+  function send(base: SavedEvaluation, over = false, act: Intent = "save") {
     if (draft.gradeFixed && typed && "error" in typed) {
       setGradeError(typed.error);
       document.getElementById("grade")?.focus();
@@ -268,9 +305,12 @@ export function EvaluationForm({
     }
     setGradeError(null);
     setSent(draft);
+    setIntent(act);
+    const { submissionId, versionNumber, proposalId } = seen;
     startTransition(() =>
       save({
-        seen: { ...seen, revision: base.revision },
+        intent: act,
+        seen: { submissionId, versionNumber, proposalId, revision: base.revision } satisfies SeenEvaluation,
         levels: draft.levels,
         remarks: draft.remarks,
         generalComment: draft.generalComment,
@@ -284,7 +324,10 @@ export function EvaluationForm({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    send(saved);
+    if (!dirty) return;
+    // Q8: saving a change of a Validated or Published copy sends it back To review: asked first.
+    if (decided) setConfirmingSave(true);
+    else send(saved);
   }
 
   const shownGradeError = gradeError ?? fieldError("grade");
@@ -296,6 +339,18 @@ export function EvaluationForm({
         evaluation starts from it. Change anything, no justification needed: each change is logged.
       </p>
       <LeaveGuard active={dirty} />
+      {/* REV-05 R1, Q8: what the student sees, and what a change does. */}
+      {seen.status === "validated" && (
+        <Alert tone="info" title="Validated, not published">
+          The student sees nothing yet. Publish it when ready. Saving a change sends the copy back to review.
+        </Alert>
+      )}
+      {seen.status === "published" && (
+        <Alert tone="info" title="Published">
+          The student can see this result. Saving a change sends the copy back to review: the student no longer sees it
+          until you validate and publish it again.
+        </Alert>
+      )}
 
       {/* C1: changes given back after the page was rendered fresh are said, never restored in silence. */}
       {restored === "restored" && (
@@ -639,7 +694,7 @@ export function EvaluationForm({
             {pending ? (
               <span className="inline-flex items-center gap-1.5">
                 <Spinner />
-                Saving…
+                {PENDING_LABELS[intent]}
               </span>
             ) : dirty ? (
               "Unsaved changes"
@@ -648,13 +703,77 @@ export function EvaluationForm({
                 <Check aria-hidden="true" className="size-4" />
                 {state.changed ? "Saved" : "Nothing to save"}
               </span>
+            ) : state.status === "decided" ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Check aria-hidden="true" className="size-4" />
+                {state.message}
+              </span>
             ) : null}
           </p>
-          <button type="submit" className="btn btn-primary" disabled={pending || !dirty}>
+          <button type="submit" className="btn btn-secondary" disabled={pending || !dirty}>
             Save changes
           </button>
+          {seen.status === "to_review" && (
+            <>
+              {/* REV-05: the form on screen is saved, then validated, in one act; nothing visible to the student (R1). */}
+              <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => send(saved, false, "validate")}>
+                <CircleCheck aria-hidden="true" className="size-4" />
+                Validate
+              </button>
+              {/* D6: two acts, logged apart (PUB-01 R1). */}
+              <ConfirmDialog
+                trigger={
+                  <button type="button" className="btn btn-primary" disabled={pending}>
+                    <Send aria-hidden="true" className="size-4" />
+                    Validate and publish
+                  </button>
+                }
+                title="Validate and publish this evaluation?"
+                description="Your evaluation is validated, then published: the student will see the grade, the levels, your remarks, the general comment and the next steps. You can withdraw the publication later."
+                confirmLabel="Validate and publish"
+                onConfirm={() => send(saved, false, "validate_publish")}
+              />
+            </>
+          )}
+          {seen.status === "validated" && (
+            <>
+              <DecisionButton
+                kind="publish"
+                primary
+                seen={{ submissionId: seen.submissionId, versionNumber: seen.versionNumber, proposalId: seen.proposalId, revision: saved.revision }}
+                disabled={pending || dirty}
+                describedBy={dirty ? "decision-hint" : undefined}
+              />
+              {dirty && (
+                <p id="decision-hint" className="basis-full text-right text-xs text-fg-muted">
+                  Save or discard your changes before publishing.
+                </p>
+              )}
+            </>
+          )}
+          {seen.status === "published" && (
+            <DecisionButton
+              kind="withdraw"
+              seen={{ submissionId: seen.submissionId, versionNumber: seen.versionNumber, proposalId: seen.proposalId, revision: saved.revision }}
+              disabled={pending}
+            />
+          )}
         </div>
       </div>
+      {decided && (
+        <ConfirmDialog
+          open={confirmingSave}
+          onOpenChange={setConfirmingSave}
+          title="Save and send back to review?"
+          description={
+            seen.status === "published"
+              ? "Saving returns this copy to To review. The student will no longer see the result until you validate and publish it again."
+              : "Saving returns this copy to To review: validate it again before publishing."
+          }
+          confirmLabel="Save"
+          onConfirm={() => send(saved)}
+        />
+      )}
     </form>
   );
 }

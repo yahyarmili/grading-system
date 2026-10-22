@@ -147,7 +147,12 @@ export const reviewJournalEntries = pgTable(
     /** The evaluation revision this entry records: set for evaluation_created and evaluation_changed, and for them only. */
     evaluationRevision: integer(),
     versionNumber: smallint(),
-    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /**
+     * The database clock at the entry itself (E8.1), not at its
+     * transaction's start: the acts of one transaction (the evaluation
+     * created, then validated; sent back, then changed) keep their order.
+     */
+    createdAt: timestamp({ withTimezone: true }).notNull().default(sql`clock_timestamp()`),
   },
   (t) => [
     index("review_journal_entries_submission_idx").on(t.submissionId, t.createdAt.desc()),
