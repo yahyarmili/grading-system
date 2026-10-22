@@ -51,12 +51,13 @@ test("E3 journey: an assignment for C1 and C3, seen once by the student of both;
   await student.screenshot({ path: "test-results/e3-2-student-sees-once-phone.png", fullPage: true });
 
   // The teacher edits the subject; the student, who already visited the list,
-  // comes back to it through the tab bar and reads the new subject.
+  // comes back to it through the menu and reads the new subject.
   await student.goto("/student/classes");
   await teacher.getByRole("link", { name: "Edit" }).filter({ visible: true }).click();
   await teacher.getByLabel(/^Subject/).fill("Describe your village.");
   await teacher.getByRole("button", { name: "Save changes" }).click();
   await expect(teacher.getByRole("status").filter({ hasText: "Changes saved" })).toBeVisible();
+  await student.getByRole("button", { name: "Open menu" }).click();
   await student.getByRole("link", { name: "My assignments" }).filter({ visible: true }).click();
   await expect(assignmentCards(student).first()).toContainText("Describe your village.");
   await expect(student.getByText("Describe your town.")).toHaveCount(0);

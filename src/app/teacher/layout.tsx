@@ -1,5 +1,9 @@
-import { TeacherShell } from "@/components/shell/teacher-shell";
+import { SidebarShell } from "@/components/shell/sidebar-shell";
 
 export default function Layout({ children }: LayoutProps<"/teacher">) {
-  return <TeacherShell>{children}</TeacherShell>;
+  return (
+    <SidebarShell role="teacher" roleLabel="Teacher">
+      {children}
+    </SidebarShell>
+  );
 }

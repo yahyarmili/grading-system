@@ -69,16 +69,17 @@ test("CA2: the student reads the same rubric on a phone, and nothing on it write
   const page = await (await browser.newContext(phone)).newPage();
   await signIn(page, await createStudent("Lina", "Amrani"));
   await expect(page).toHaveURL(/\/student\//);
+  // Below lg, the menu is a drawer opened from the header, as for the teacher.
+  await page.getByRole("button", { name: "Open menu" }).click();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Rubric" }).click();
   await expect(page).toHaveURL(/\/student\/rubric$/);
   await expectRubric(page);
   await expectNothingWrites(page);
   await page.waitForLoadState("networkidle");
   await page.screenshot({ path: "test-results/evl01-2-student-phone.png", fullPage: true });
-  // What the phone shows at first, under the fixed tab bar.
+  // What the phone shows at first.
   await page.screenshot({ path: "test-results/evl01-3-student-phone-top.png" });
-  // On a tablet and a computer, the student's narrow column keeps one level per
-  // row, and the header its links on one line.
+  // On a tablet and a computer, the same layout as the teacher's: drawer, then sidebar.
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.screenshot({ path: "test-results/evl01-4-student-tablet.png" });
   await page.setViewportSize({ width: 1280, height: 800 });
