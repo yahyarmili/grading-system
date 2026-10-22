@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GRADE_STEP } from "@/config/provisional";
-import { applyChanges, diffEvaluation, fieldsFromProposal, finalGradeOf, fixedGradeProblem, gradeGap, readTypedGrade, REVIEW_FIELD_MESSAGES, type EvaluationChanges } from "@/lib/review";
+import { applyChanges, diffEvaluation, fieldsFromProposal, finalGradeOf, fixedGradeProblem, gradeGap, readTypedGrade, reconcileSaved, REVIEW_FIELD_MESSAGES, type EvaluationChanges } from "@/lib/review";
 import type { CriterionId, Level } from "@/lib/rubric";
 
 // REV-03 R2, R3 (E7.1): the grade is the sum of the levels while not fixed;
@@ -131,5 +131,14 @@ describe("a grade as typed in the form (REV-03 R2)", () => {
     expect(readTypedGrade("twelve")).toEqual({ error: REVIEW_FIELD_MESSAGES.gradeRange });
     expect(readTypedGrade("20.5")).toEqual({ error: REVIEW_FIELD_MESSAGES.gradeRange });
     expect(readTypedGrade("12.3")).toEqual({ error: REVIEW_FIELD_MESSAGES.gradeStep });
+  });
+});
+
+describe("the evaluation a fresh rendering brings to an open form (REV-03 CA4)", () => {
+  it("ignores an older or equal revision, takes a newer one into a clean form, and asks before replacing typed changes", () => {
+    expect(reconcileSaved(2, 1, false)).toBe("keep");
+    expect(reconcileSaved(2, 2, true)).toBe("keep");
+    expect(reconcileSaved(1, 2, false)).toBe("adopt");
+    expect(reconcileSaved(0, 3, true)).toBe("conflict");
   });
 });

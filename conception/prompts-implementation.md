@@ -978,7 +978,13 @@ Préalables :
 - **Q8** tranchée [D, 2026-10-22] : modifier une copie validée ou publiée la repasse à « To review » ; l'élève ne voit plus rien jusqu'à la republication.
 - Notice élève v4 déjà en place. L'élève ne voit jamais un refus de l'IA, ni sa cause, ni un état technique.
 - **Relecture de la remise** [D, 2026-10-22, Q4] : l'élève relit son texte collé après l'envoi. Le code d'E4 l'interdit encore (textes `NO_READ_BACK_NOTICE` et `SUBMITTED_NO_READ_BACK_NOTICE`, ligne `ownSubmissionStatus`, tests « aucune réponse ne contient son texte ») : E8 le change.
-- `startManualEvaluation` (E6.3) passe aujourd'hui la copie à « To review » sans évaluation : E8 la rend cohérente avec le formulaire.
+- `startManualEvaluation` (E6.3) passe aujourd'hui la copie à « To review » sans évaluation (journalisée `manual_started` depuis E7.9) : E8 la rend cohérente avec le formulaire.
+- Contraintes posées par `0018` (E7.9, 2026-10-22), à respecter ou à changer par une migration explicite :
+  - `review_journal_entries.evaluation_revision` est portée par `evaluation_created` et `evaluation_changed` seulement : la révision validée ou publiée (invariant 7) va dans `new_value` ou dans `submissions`, pas dans cette colonne ;
+  - tout UPDATE de `teacher_evaluations` exige la révision + 1 et une entrée `evaluation_changed` (avec `field`) de même révision et de même version : la validation et la publication restent dans `submissions.status`, pas en colonne de `teacher_evaluations` ;
+  - une évaluation manuelle naît en révision 1, après `teacher_started_at` posé, sur la version active, avec son `evaluation_created` (en plus de `manual_started`) ;
+  - une remise qui a une évaluation ne change plus de version et ne perd pas `teacher_started_at` (`freeze_reviewed_submission`) ;
+  - tout nouveau lecteur de `teacherEvaluations` ou `reviewJournalEntries` (vue publiée de l'élève comprise) s'ajoute à `allowed` dans `eslint.config.mjs`.
 
 #### E8.0 — Planifier · Plan
 ```

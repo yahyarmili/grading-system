@@ -7,7 +7,8 @@ import nextTs from "eslint-config-next/typescript";
  * the import patterns it forbids and the files allowed to use them. In a flat
  * config the last block that sets a rule replaces it whole, so every block
  * below is derived from this table: a block that lifts one restriction keeps
- * all the others. Distinct allowed globs never overlap (tests/eslint-restrictions.test.ts).
+ * all the others. A glob inside another (a file of src/server/data/**) keeps
+ * what the outer one lifts (tests/eslint-restrictions.test.ts).
  */
 export const IMPORT_RESTRICTIONS = [
   {
@@ -34,24 +35,65 @@ export const IMPORT_RESTRICTIONS = [
     message: "Only the evaluation service (src/server/evaluation/) starts or defines workflows, with identifiers only.",
     allowed: ["src/server/evaluation/**", "next.config.ts"],
   },
+  {
+    // REV-03, REV-04 (E7): the teacher's evaluation and the review log have one
+    // writer, record.ts, which writes an evaluation only with the log entries of
+    // its changes. Only it and their readers import these tables; a namespace
+    // import of the schema (schema.teacherEvaluations) is refused with them.
+    // tests/review-writes.test.ts checks the readers' text for writes.
+    group: ["@/server/db/schema", "@/server/db/schema/reviews", "**/db/schema", "**/db/schema/reviews"],
+    importNames: ["teacherEvaluations", "reviewJournalEntries"],
+    message: "Only src/server/data/review/record.ts writes the teacher's evaluation and the review log; their readers are listed in eslint.config.mjs.",
+    allowed: [
+      "src/server/data/review/record.ts",
+      // Readers: the copy (getCopy, saveEvaluation's re-read, recordCopyOpened) and its history.
+      "src/server/data/review/copy.ts",
+      "src/server/data/review/journal.ts",
+      // Better Auth's adapter receives the whole schema (import * as schema); a
+      // namespace import of any schema file falls under the group's paths.
+      "src/server/data/auth/better-auth.ts",
+      "src/server/db/**",
+      "tests/**",
+    ],
+  },
 ];
 
 const restrictedImports = (restrictions) => [
   "error",
-  { patterns: restrictions.map(({ group, message }) => ({ group, message })) },
+  {
+    patterns: restrictions.map(({ group, importNames, message }) => ({ group, ...(importNames && { importNames }), message })),
+  },
 ];
 
 /**
- * One block for every file, then one per allowed glob (once, even when
- * several entries allow it), with every restriction that glob is not allowed.
+ * Whether `outer` matches every file `inner` matches: the same glob, or a
+ * directory glob ("dir/**") above it. Allowed globs are directory globs or
+ * file paths (tests/eslint-restrictions.test.ts), so two globs matching one
+ * file are always nested.
  */
-export const importRestrictionBlocks = (restrictions = IMPORT_RESTRICTIONS) => [
-  { files: ["**/*.{ts,tsx}"], rules: { "no-restricted-imports": restrictedImports(restrictions) } },
-  ...[...new Set(restrictions.flatMap(({ allowed }) => allowed))].map((glob) => ({
-    files: [glob],
-    rules: { "no-restricted-imports": restrictedImports(restrictions.filter((r) => !r.allowed.includes(glob))) },
-  })),
-];
+export const covers = (outer, inner) => outer === inner || (outer.endsWith("/**") && inner.startsWith(outer.slice(0, -2)));
+
+/**
+ * One block for every file, then one per allowed glob (once, even when
+ * several entries allow it), with every restriction neither that glob nor a
+ * glob covering it is allowed. A narrower glob comes after the globs covering
+ * it: the last block a file gets lifts all it is allowed.
+ */
+export const importRestrictionBlocks = (restrictions = IMPORT_RESTRICTIONS) => {
+  const globs = [...new Set(restrictions.flatMap(({ allowed }) => allowed))];
+  return [
+    { files: ["**/*.{ts,tsx}"], rules: { "no-restricted-imports": restrictedImports(restrictions) } },
+    ...globs
+      .map((glob) => ({ glob, outer: globs.filter((other) => covers(other, glob)) }))
+      .sort((a, b) => a.outer.length - b.outer.length)
+      .map(({ glob, outer }) => ({
+        files: [glob],
+        rules: {
+          "no-restricted-imports": restrictedImports(restrictions.filter((r) => !r.allowed.some((a) => outer.includes(a)))),
+        },
+      })),
+  ];
+};
 
 const eslintConfig = defineConfig([
   ...nextVitals,

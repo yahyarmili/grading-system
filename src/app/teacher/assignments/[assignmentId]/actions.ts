@@ -5,17 +5,17 @@ import type { EvaluationRef } from "@/lib/evaluation";
 import { getActor } from "@/server/auth/session";
 import { startEvaluation } from "@/server/evaluation/trigger";
 import { sweepEvaluations } from "@/server/evaluation/sweep";
-import { openReviewList, type ListOpenResult } from "@/server/review/list";
+import { openReviewList, type ListOpenResult, type SweepContext } from "@/server/review/list";
 import { relaunchCopy, retryCopy, type RequestState } from "@/server/review/relaunch";
 
 // REV-01: called by the list once shown (ReviewListOpened), never while
 // rendering, so a prefetch neither logs nor sweeps (E7 plan §1.6).
 
+/** E7 plan §1.7: the sweep runs once the opening answered (after()), so no other action waits for it (C8c). */
+const sweepAfter: SweepContext = { sweep: () => sweepEvaluations(startEvaluation), later: (task) => after(task) };
+
 export async function recordListOpenedAction(assignmentId: string, stamp: string): Promise<ListOpenResult> {
-  return openReviewList(await getActor(), { assignmentId, stamp }, {
-    sweep: () => sweepEvaluations(startEvaluation),
-    later: (task) => after(task),
-  });
+  return openReviewList(await getActor(), { assignmentId, stamp }, sweepAfter);
 }
 
 /** The evaluation starts once the teacher has their answer (PRC-02, E7.6). */

@@ -151,3 +151,29 @@ export const journalCount = async (assignmentId: string, event: string) =>
       )
     )[0].n,
   );
+
+/** A teacher signed in on `page`, and one copy To review from a proposal (levels 3, 2, 2, 2, 1), no evaluation yet. */
+export async function seedReviewCopy(page: Page, text = "My town is small but it is beatiful.\n\nThere is a market every friday.") {
+  const seeder = await seedTeacher(page, ["A"]);
+  try {
+    const assignmentId = await seeder.assignment(["A"]);
+    const studentId = await seeder.student("Lena", "Bauer", ["A"]);
+    const submissionId = await seeder.submit(assignmentId, studentId, "received", { text });
+    await seeder.evaluate(assignmentId, submissionId, [3, 2, 2, 2, 1], { quote: "beatiful" });
+    return { url: `/teacher/assignments/${assignmentId}/students/${studentId}`, assignmentId, submissionId };
+  } finally {
+    await seeder.close();
+  }
+}
+
+/**
+ * Leaves the copy by its back link while changes are typed: the page asks
+ * (C1), the teacher leaves anyway; the list is shown.
+ */
+export async function leaveCopyAnyway(page: Page, title = "My town") {
+  await page.getByRole("link", { name: `${title}: submissions` }).click();
+  const dialog = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Leave without saving" }).click();
+  await expect(page.getByRole("table", { name: "Submissions" })).toBeVisible();
+}

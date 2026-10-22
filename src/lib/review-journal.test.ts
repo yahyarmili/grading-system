@@ -47,6 +47,14 @@ describe("historyOf", () => {
     ]);
     expect(items[1].changes[0]).toMatchObject({ before: "Empty", after: "A" });
   });
+
+  it("names the start of a manual evaluation, an act of its own (startManualEvaluation logs it)", () => {
+    const items = historyOf([entry({ event: "manual_started" }), entry({ event: "copy_opened" })]);
+    expect(items.map((i) => [i.label, i.author, i.changes.length])).toEqual([
+      ["Started a manual evaluation", "Sarah Bennett", 0],
+      ["Opened the copy", "Sarah Bennett", 0],
+    ]);
+  });
 });
 
 describe("values in words", () => {

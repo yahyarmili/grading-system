@@ -1,24 +1,35 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { and, eq, sql } from "drizzle-orm";
 import { pgTable, text, uuid } from "drizzle-orm/pg-core";
+import ts from "typescript";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
+import { UNGUARDED_DATA_EXPORTS } from "@/server/access/inventory";
 import { ACCESS_MATRIX, ACTIONS, COLUMNS, RESOURCES, type Action, type Column, type Resource } from "@/server/access/matrix";
 import { authorize } from "@/server/access/policy";
 import { ownedBy } from "@/server/data/access";
 import {
   createAssignment,
+  deleteAssignment,
   getStudentAssignment,
   getTeacherAssignment,
   listStudentAssignments,
+  listTeacherAssignments,
   updateAssignment,
 } from "@/server/data/assignments/assignments";
-import { createTeacherInvitation, listTeacherInvitations } from "@/server/data/auth/invitations";
-import { createClass, getClass } from "@/server/data/classes/classes";
-import { getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
+import {
+  cancelTeacherInvitation,
+  createTeacherInvitation,
+  listTeacherInvitations,
+  reissueTeacherInvitation,
+} from "@/server/data/auth/invitations";
+import { createClass, getClass, listClasses } from "@/server/data/classes/classes";
+import { disableClassInvite, getClassInvite, renewClassInvite } from "@/server/data/classes/invites";
 import { joinClass } from "@/server/data/classes/memberships";
-import { listClassStudents, removeStudent } from "@/server/data/classes/roster";
+import { listClassStudents, readmitStudent, removeStudent } from "@/server/data/classes/roster";
 import { getCopy, getStudentIdentity, recordCopyOpened, saveEvaluation } from "@/server/data/review/copy";
 import { listCopyJournal } from "@/server/data/review/journal";
 import type { EvaluationChanges } from "@/lib/review";
@@ -37,11 +48,11 @@ import { getPublishedRubrics } from "@/server/data/rubric/rubric";
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import {
-  assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, submissions, users,
+  assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, submissions, teacherEvaluations, users,
 } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { STUDENT_NOTICE, TEACHER_NOTICE } from "@/lib/texts";
-import { checkDataExports, dataSources } from "./helpers/access-inventory";
+import { checkDataExports, dataSources, type SourceFile } from "./helpers/access-inventory";
 
 // AUTH-04: every cell of the matrix (fonctionnalites.md §5.4) is replayed.
 // Until the real resources exist (E2 onwards), a fictitious resource, test
@@ -178,22 +189,38 @@ type RealResource = { setup?: () => Promise<Fixture> } & Partial<Record<Action, 
 
 const REAL: Partial<Record<Resource, RealResource>> = {
   teacherInvitation: {
+    setup: openInvitation,
     read: { run: (actor) => listTeacherInvitations(actor) },
-    write: {
-      run: (actor) => createTeacherInvitation(actor, { firstName: "Tara", lastName: "Quinn", email: "tara@example.test" }),
-      creates: true,
-    },
+    write: [
+      {
+        run: (actor) => createTeacherInvitation(actor, { firstName: "Tara", lastName: "Quinn", email: "tara@example.test" }),
+        creates: true,
+      },
+      // AUTH-03 CA3: a new link for the open invitation, then its cancellation.
+      { run: (actor, { invitationId }) => reissueTeacherInvitation(actor, invitationId) },
+      { run: (actor, { invitationId }) => cancelTeacherInvitation(actor, invitationId) },
+    ],
   },
   class: {
     setup: ownedClass,
-    read: { run: (actor, { classId }) => getClass(actor, classId) },
+    read: [
+      { run: (actor, { classId }) => getClass(actor, classId) },
+      // CLS-04 CA1, CA3: the class in the actor's list (the teacher's own, the student's active ones).
+      {
+        run: async (actor, { classId }) =>
+          ((await listClasses(actor)).classes as { id: string }[]).find((c) => c.id === classId) ?? null,
+      },
+    ],
     // Creating a class makes the actor's own; there is no "other" one to reach.
     write: { run: (actor) => createClass(actor, { name: "Grade 10 — A" }), creates: true },
   },
   classInvite: {
     setup: ownedClass,
     read: { run: (actor, { classId }) => getClassInvite(actor, classId) },
-    write: { run: (actor, { classId }) => renewClassInvite(actor, classId) },
+    write: [
+      { run: (actor, { classId }) => renewClassInvite(actor, classId) },
+      { run: (actor, { classId }) => disableClassInvite(actor, classId) },
+    ],
   },
   classMembership: {
     // Joining makes the actor's own membership; an unknown code is refused, nothing joined.
@@ -202,7 +229,11 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   classRoster: {
     setup: ownedClass,
     read: { run: (actor, { classId }) => listClassStudents(actor, classId) },
-    write: { run: (actor, { classId }) => removeStudent(actor, classId, people.concernedStudent.userId) },
+    // Removing the concerned student, then readmitting them (CLS-04 R1, R2).
+    write: [
+      { run: (actor, { classId }) => removeStudent(actor, classId, people.concernedStudent.userId) },
+      { run: (actor, { classId }) => readmitStudent(actor, classId, people.concernedStudent.userId) },
+    ],
   },
   // Reading: the teacher's page, or the student's list of received assignments (SUB-01).
   // Editing the owner's assignment (ASG-03): another teacher's edit finds nothing.
@@ -214,14 +245,22 @@ const REAL: Partial<Record<Resource, RealResource>> = {
           ? getStudentAssignment(actor, assignmentId)
           : getTeacherAssignment(actor, assignmentId),
     },
-    write: { run: (actor, { assignmentId }) => updateAssignment(actor, assignmentId, { title: "Renamed", level: "B2" }) },
+    write: [
+      { run: (actor, { assignmentId }) => updateAssignment(actor, assignmentId, { title: "Renamed", level: "B2" }) },
+      // ASG-03 R2: deleted, without a submission; another teacher's delete finds nothing.
+      { run: (actor, { assignmentId }) => deleteAssignment(actor, assignmentId) },
+    ],
   },
   // Sending an assignment to the owner's class: the other teacher's request
   // is refused like a missing class, nothing created (ASG-01 R3).
   assignmentRecipients: {
     setup: ownedAssignment,
-    // The teacher's page carries the recipient classes: the student is refused there.
-    read: { run: (actor, { assignmentId }) => getTeacherAssignment(actor, assignmentId) },
+    // The teacher's page and list carry the recipient classes: the student is refused there.
+    read: [
+      { run: (actor, { assignmentId }) => getTeacherAssignment(actor, assignmentId) },
+      // ASG-02 CA1: the assignment in the teacher's list.
+      { run: async (actor, { assignmentId }) => (await listTeacherAssignments(actor)).find((a) => a.id === assignmentId) ?? null },
+    ],
     write: { run: sendAssignment },
   },
   // The student's state of a received assignment, in the list and on its page; a teacher is refused (SUB-01 R3).
@@ -290,8 +329,9 @@ const REAL: Partial<Record<Resource, RealResource>> = {
     setup: async () => {
       const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
       const { assignmentId: secondId } = await ownedAssignment(fixture.classId);
+      const { assignmentId: thirdId } = await ownedAssignment(fixture.classId);
       const ids: string[] = [];
-      for (const assignmentId of [fixture.assignmentId, secondId]) {
+      for (const assignmentId of [fixture.assignmentId, secondId, thirdId]) {
         const submitted = await submitText(people.concernedStudent, {
           assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
         });
@@ -300,7 +340,14 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       }
       await forceState(ids[0], "evaluation_failed");
       await forceState(ids[1], "not_assessable", "ai_unavailable");
-      return { ...fixture, failedId: ids[0], unavailableId: ids[1] };
+      // A copy to review, with the simulator's proposal: the one saveEvaluation writes.
+      if ((await evaluateSubmission(ids[2])).status !== "to_review") throw new Error("Not evaluated");
+      const [{ proposalId }] = await db
+        .select({ proposalId: submissions.currentProposalId })
+        .from(submissions)
+        .where(eq(submissions.id, ids[2]));
+      if (!proposalId) throw new Error("No proposal");
+      return { ...fixture, failedId: ids[0], unavailableId: ids[1], toReviewId: ids[2], proposalId };
     },
     // REV-02 (E7.3): the copy carries the evaluation in progress.
     read: { run: (actor, { assignmentId }) => getCopy(actor, assignmentId, people.concernedStudent.userId) },
@@ -311,8 +358,23 @@ const REAL: Partial<Record<Resource, RealResource>> = {
           relaunchEvaluation(actor, { submissionId: unavailableId, versionNumber: 1 }, AI_BACK, NO_START),
       },
       { run: (actor, { failedId }) => startManualEvaluation(actor, { submissionId: failedId, versionNumber: 1 }) },
-      // REV-03 (E7.4): saving the form; the owner's copy is found (not open: no proposal), another's absent.
-      { run: (actor, { failedId }) => saveEvaluation(actor, { submissionId: failedId, versionNumber: 1, proposalId: null, revision: 0 }, SAVED_FORM) },
+      // REV-03 (E7.4): saving the form of the copy to review, as the page saw it: the owner's
+      // evaluation is written (revision 1, through record.ts); another teacher's copy is absent,
+      // and nothing is written for them.
+      {
+        run: async (actor, { toReviewId, proposalId }) => {
+          const result = await saveEvaluation(actor, { submissionId: toReviewId, versionNumber: 1, proposalId, revision: 0 }, SAVED_FORM);
+          const written = await db
+            .select({ revision: teacherEvaluations.revision })
+            .from(teacherEvaluations)
+            .where(eq(teacherEvaluations.submissionId, toReviewId));
+          if (result && !(result.ok && result.changed && result.evaluation.revision === 1 && written[0]?.revision === 1)) {
+            throw new Error(`Not saved: ${JSON.stringify(result)}`);
+          }
+          if (!result && written.length > 0) throw new Error("Written for an actor who found nothing");
+          return result;
+        },
+      },
     ],
   },
   // REV-04 R3 (E7.6, E7.7): the copy reads from the log whether the teacher's last
@@ -373,8 +435,16 @@ const NO_START: EvaluationStartContext = { onStart: () => {} };
 const SAVED_FORM: EvaluationChanges = {
   levels: { task: 2, organization: 2, vocabulary: 2, grammar: 2, mechanics: 2 },
   remarks: { task: "", organization: "", vocabulary: "", grammar: "", mechanics: "" },
-  generalComment: "", nextSteps: [], grade: { fixed: false }, rereadDone: [],
+  // Never the simulator's comment: the save changes something, so it writes.
+  generalComment: "Saved by the access matrix replay.", nextSteps: [], grade: { fixed: false }, rereadDone: [],
 };
+
+/** An open invitation of the administrator (AUTH-03), for its reissue and cancellation. */
+async function openInvitation(): Promise<Fixture> {
+  const created = await createTeacherInvitation(people.admin, { firstName: "Uma", lastName: "Reed", email: "uma@example.test" });
+  if (!created.ok) throw new Error(`Not invited: ${created.reason}`);
+  return { invitationId: created.invitation.invitationId };
+}
 
 /** Puts a submission in a state the evaluation reaches, directly. */
 const forceState = (id: string, status: "evaluation_failed" | "not_assessable", cause?: "ai_unavailable") =>
@@ -460,10 +530,141 @@ function expected(resource: Resource, column: Column, action: Action, operation:
   return "denied";
 }
 
+const parse = (file: SourceFile) => ts.createSourceFile(file.path, file.text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+
+const exported = (node: ts.Node) =>
+  ts.canHaveModifiers(node) && !!ts.getModifiers(node)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+
+/**
+ * The data functions that call authorize(): every export of src/server/data/
+ * taking an Actor first, except those UNGUARDED_DATA_EXPORTS lists with their
+ * reason (tests/access-inventory.test.ts checks that the others do call it).
+ */
+function guardedDataExports(files: SourceFile[]): string[] {
+  const keys: string[] = [];
+  for (const file of files) {
+    const source = parse(file);
+    for (const statement of source.statements) {
+      const functions: [string, ts.SignatureDeclarationBase][] = [];
+      if (ts.isFunctionDeclaration(statement) && exported(statement) && statement.name) {
+        functions.push([statement.name.text, statement]);
+      } else if (ts.isVariableStatement(statement) && exported(statement)) {
+        for (const d of statement.declarationList.declarations) {
+          if (d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer))) {
+            functions.push([d.name.getText(source), d.initializer]);
+          }
+        }
+      }
+      for (const [name, fn] of functions) {
+        const key = `${file.path}#${name}`;
+        if (fn.parameters[0]?.type?.getText(source) === "Actor" && !UNGUARDED_DATA_EXPORTS[key]) keys.push(key);
+      }
+    }
+  }
+  return keys;
+}
+
+/**
+ * The functions REAL's operations call (setups left out: building a fixture
+ * replays nothing), with those of the module's helpers they use,
+ * transitively, and the imports of the module: local name by imported name,
+ * per specifier. Read from the syntax tree, never from the text: a call
+ * cited in a comment, or in a string, is no call.
+ */
+function realOperations(file: SourceFile): { called: Set<string>; imports: Map<string, Map<string, string>> } {
+  const source = parse(file);
+  const helpers = new Map<string, ts.Node>();
+  const imports = new Map<string, Map<string, string>>();
+  let real: ts.ObjectLiteralExpression | undefined;
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        const names = imports.get(statement.moduleSpecifier.text) ?? new Map<string, string>();
+        for (const element of bindings.elements) names.set((element.propertyName ?? element.name).text, element.name.text);
+        imports.set(statement.moduleSpecifier.text, names);
+      }
+    } else if (ts.isFunctionDeclaration(statement) && statement.name) {
+      helpers.set(statement.name.text, statement);
+    } else if (ts.isVariableStatement(statement)) {
+      for (const d of statement.declarationList.declarations) {
+        const name = d.name.getText(source);
+        if (name === "REAL" && d.initializer && ts.isObjectLiteralExpression(d.initializer)) real = d.initializer;
+        else helpers.set(name, d);
+      }
+    }
+  }
+  if (!real) throw new Error("REAL not found");
+  // Identifiers and direct calls (`name(…)`) of the scanned nodes: comments are trivia, outside the tree.
+  const referenced = new Set<string>();
+  const called = new Set<string>();
+  const scan = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) referenced.add(node.text);
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) called.add(node.expression.text);
+    ts.forEachChild(node, scan);
+  };
+  for (const resource of real.properties) {
+    if (!ts.isPropertyAssignment(resource) || !ts.isObjectLiteralExpression(resource.initializer)) continue;
+    for (const property of resource.initializer.properties) {
+      if (ts.isPropertyAssignment(property) && (ACTIONS as readonly string[]).includes(property.name.getText(source))) {
+        scan(property.initializer);
+      }
+    }
+  }
+  const used = new Set<string>();
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, node] of helpers) {
+      if (!used.has(name) && referenced.has(name)) {
+        used.add(name);
+        scan(node);
+        grew = true;
+      }
+    }
+  }
+  return { called, imports };
+}
+
+/** Guarded data functions no operation of REAL calls, imported from their module. */
+function missingFromReal(files: SourceFile[], self: SourceFile): string[] {
+  const { called, imports } = realOperations(self);
+  return guardedDataExports(files).filter((key) => {
+    const [path, name] = key.split("#");
+    const local = imports.get(`@/${path.replace(/^src\//, "").replace(/\.tsx?$/, "")}`)?.get(name);
+    return !local || !called.has(local);
+  });
+}
+
+const SELF: SourceFile = {
+  path: "tests/access-matrix.int.test.ts",
+  text: readFileSync(fileURLToPath(import.meta.url), "utf8"),
+};
+
 describe("real data functions follow their row", () => {
   it("covers every resource the data layer authorizes", () => {
     const { resources } = checkDataExports(dataSources());
     expect([...resources].filter((r) => !(r in REAL))).toEqual([]);
+  });
+
+  it("replays every data function that authorizes, UNGUARDED_DATA_EXPORTS aside", () => {
+    const sources = dataSources();
+    expect(guardedDataExports(sources)).toContain("src/server/data/review/copy.ts#saveEvaluation");
+    expect(missingFromReal(sources, SELF)).toEqual([]);
+  });
+
+  it("would see a data function left out of REAL, or called only to build a fixture", () => {
+    const probe = {
+      path: "src/server/data/probes.ts",
+      text: `export async function readProbe(actor: Actor, id: string) { authorize(actor, "submission", "read"); return id; }`,
+    };
+    expect(missingFromReal([...dataSources(), probe], SELF)).toEqual(["src/server/data/probes.ts#readProbe"]);
+    // submitText is also called by setups; left out of the operations, it is reported.
+    const withoutSubmit = { ...SELF, text: SELF.text.replace(/submitText\(actor,/g, "submitTextProbe(actor,") };
+    expect(missingFromReal(dataSources(), withoutSubmit)).toEqual(["src/server/data/submissions/submissions.ts#submitText"]);
+    // Cited in a comment inside REAL, never called: still reported (a text search counted it).
+    const citedOnly = { ...SELF, text: SELF.text.replace(/submitText\(actor,/g, "/* submitText(actor, */ submitTextProbe(actor,") };
+    expect(citedOnly.text).toContain("/* submitText(actor, */");
+    expect(missingFromReal(dataSources(), citedOnly)).toEqual(["src/server/data/submissions/submissions.ts#submitText"]);
   });
 
   beforeEach(async () => {

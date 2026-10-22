@@ -150,3 +150,15 @@ export function readTypedGrade(typed: string | number): { value: number } | { er
   if (problem) return { error: problem === "range" ? REVIEW_FIELD_MESSAGES.gradeRange : REVIEW_FIELD_MESSAGES.gradeStep };
   return { value };
 }
+
+/**
+ * What an open form does with the evaluation a fresh rendering of the page
+ * brings (a refresh after a save, another tab's save): revisions only grow
+ * (0017), so an older or equal one is a late answer, ignored; a newer one
+ * replaces a clean form, and never a form with changes typed (REV-03 CA4):
+ * the teacher chooses, as in a conflict.
+ */
+export function reconcileSaved(savedRevision: number, incomingRevision: number, dirty: boolean): "keep" | "adopt" | "conflict" {
+  if (incomingRevision <= savedRevision) return "keep";
+  return dirty ? "conflict" : "adopt";
+}

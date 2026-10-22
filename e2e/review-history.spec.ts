@@ -71,7 +71,7 @@ test("REV-04 R3: the copy's History, newest first, with author, date, old and ne
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.locator("form > div.sticky").getByRole("status")).toHaveText("Saved");
 
-  await page.reload();
+  // C6: the save renders the page again, its History with it: no reload.
   const items = history.getByRole("listitem");
   await expect(items.first()).toContainText("Started their evaluation from the AI proposal");
   await expect(items.first()).toContainText("Sarah Bennett");

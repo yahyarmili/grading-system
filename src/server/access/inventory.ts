@@ -42,8 +42,29 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
  * keyed "<file>#<export>". Either the matrix cell they use, or the public
  * flow they serve outside the matrix (§5.1: visitor sign-up, sign-in, recovery).
  * `system`: called by the platform with a secret, never by a user (E6: the cron).
+ * Besides its cell, an entry point may declare `also`, the other cells the
+ * data functions it calls authorize, and `systemCalls`, the functions of
+ * UNGUARDED_DATA_EXPORTS it reaches without the actor (each with its reason
+ * there), so that what it does beyond its cell is read here too.
  */
-export type EntryPoint = { resource: Resource; action: Action } | { public: string } | { system: string };
+export type Cell = { resource: Resource; action: Action };
+export type EntryPoint =
+  | (Cell & { also?: readonly Cell[]; systemCalls?: readonly string[] })
+  | { public: string }
+  | { system: string };
+
+/**
+ * E7 plan §1.7 ([D, 2026-10-20]: the Vercel cron does not run on the
+ * preview): opening the list or a copy runs the evaluation sweep of the cron
+ * (src/server/evaluation/sweep.ts), system processing without the actor; the
+ * submissions it starts again go to Workflows (WORKFLOW_FLOW below).
+ * tests/access-inventory.test.ts: an action calls sweepEvaluations exactly
+ * when it declares these.
+ */
+export const SWEEP_SYSTEM_CALLS = [
+  "src/server/data/evaluation/system.ts#releaseStuckEvaluations",
+  "src/server/data/evaluation/system.ts#takeStaleReceived",
+] as const;
 
 /**
  * The route Workflows' queue delivers to (E6.6). @vercel/queue's handler
@@ -83,10 +104,20 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/teacher/assignments/actions.ts#createAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/actions.ts#editAssignmentAction": { resource: "assignment", action: "write" },
   "src/app/teacher/assignments/actions.ts#deleteAssignmentAction": { resource: "assignment", action: "write" },
-  "src/app/teacher/assignments/[assignmentId]/actions.ts#recordListOpenedAction": { resource: "submission", action: "read" },
+  // REV-01: "list opened" (REV-04) on the owner's assignment, its stamp read by the same check; then the sweep, after the response (after()).
+  "src/app/teacher/assignments/[assignmentId]/actions.ts#recordListOpenedAction": {
+    resource: "submission",
+    action: "read",
+    systemCalls: SWEEP_SYSTEM_CALLS,
+  },
   "src/app/teacher/assignments/[assignmentId]/actions.ts#retryEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
   "src/app/teacher/assignments/[assignmentId]/actions.ts#relaunchEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
-  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#recordCopyOpenedAction": { resource: "submission", action: "read" },
+  // REV-02: "copy opened" (REV-04) on the owner's copy; then the sweep, after the response (after()), on the owner's copy only.
+  "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#recordCopyOpenedAction": {
+    resource: "submission",
+    action: "read",
+    systemCalls: SWEEP_SYSTEM_CALLS,
+  },
   "src/app/teacher/assignments/[assignmentId]/students/[studentId]/actions.ts#saveEvaluationAction": { resource: "unpublishedEvaluation", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#replaceTextAction": { resource: "submission", action: "write" },

@@ -5,6 +5,7 @@ import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
 import { recordSecurityEvent } from "@/server/data/auth/security-events";
 import { recordCopyOpened } from "@/server/data/review/copy";
+import { sweepAfterResponse, type SweepContext } from "./list";
 
 // REV-02 (E7.3), without Next request APIs so integration tests can call it:
 // what opening a copy does once the page is shown.
@@ -20,15 +21,24 @@ const seenSchema = z.object({
   status: z.enum(submissionStatuses),
 });
 
-/** Logs "copy opened" on the teacher's own copy, and compares it with what the page saw. */
-export async function openCopy(actor: Actor, raw: unknown): Promise<CopyOpenResult> {
+/**
+ * Logs "copy opened" on the teacher's own copy, and compares it with what
+ * the page saw. Then, as the list does (E7 plan §1.7, [D, 2026-10-20]: the
+ * opening of the copies sweeps too), the evaluation sweep after the
+ * response: a copy opened by its address, stuck in received, is started
+ * again and its page, refreshed while it waits (RefreshWhileEvaluating),
+ * shows it move. `context`: the Server Action's; without it (tests of the
+ * comparison alone), no sweep. Another teacher's or a missing copy: nothing done.
+ */
+export async function openCopy(actor: Actor, raw: unknown, context?: SweepContext): Promise<CopyOpenResult> {
   const parsed = seenSchema.safeParse(raw);
   if (!parsed.success) return { refresh: false };
   const seen = parsed.data;
+  let result: CopyOpenResult;
   try {
     const now = await recordCopyOpened(actor, seen.submissionId);
     if (!now) return { refresh: false };
-    return {
+    result = {
       refresh:
         now.versionNumber !== seen.versionNumber ||
         now.proposalId !== seen.proposalId ||
@@ -40,4 +50,7 @@ export async function openCopy(actor: Actor, raw: unknown): Promise<CopyOpenResu
     await recordSecurityEvent("access_denied", { actorUserId: actor.kind === "user" ? actor.userId : null });
     return { refresh: false };
   }
+  // The answer computed and the journal written first: a sweep that cannot be scheduled is logged, never the opening's failure.
+  if (context) sweepAfterResponse(context);
+  return result;
 }

@@ -214,6 +214,8 @@ describe("the database keeps the log and the evaluation honest (0017)", { timeou
     const copy = await copyToReview();
     const message = await refusal(
       db.transaction(async (tx) => {
+        // Started first, as record.ts does (0018): only the missing entry is refused.
+        await tx.update(submissions).set({ teacherStartedAt: sql`now()` }).where(eq(submissions.id, copy.submissionId));
         await tx.insert(teacherEvaluations).values({
           submissionId: copy.submissionId, versionNumber: 1, origin: "proposal", proposalId: copy.start.proposalId,
           rubricVersion: copy.start.rubricVersion, createdBy: copy.teacher.userId,
@@ -223,6 +225,9 @@ describe("the database keeps the log and the evaluation honest (0017)", { timeou
     );
     expect(message).toMatch(/without its review log entry/);
     expect(await evaluationOf(copy.submissionId)).toBeUndefined();
+    // The whole transaction is gone: teacher_started_at with it.
+    const [row] = await db.select({ started: submissions.teacherStartedAt }).from(submissions).where(eq(submissions.id, copy.submissionId));
+    expect(row.started).toBeNull();
 
     // Later revisions too: an update without its entry is refused at commit.
     await save(copy, copy.fields, 0, form(copy.fields, { generalComment: "Mine." }));

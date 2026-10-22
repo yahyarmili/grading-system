@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { AI_MAX_ATTEMPTS } from "@/config/provisional";
 import type { AssignmentLanguage } from "@/lib/assignment";
@@ -24,7 +24,7 @@ import { stillEvaluating } from "@/server/data/evaluation/system";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { replaceText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
-import { aiProposals, classMemberships, evaluationRuns, submissions, users } from "@/server/db/schema";
+import { aiProposals, classMemberships, evaluationRuns, reviewJournalEntries, submissions, users } from "@/server/db/schema";
 import type { AiGuard } from "@/server/evaluation/budget";
 import { evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/evaluate";
 import { relaunchConditions } from "@/server/evaluation/relaunch";
@@ -421,6 +421,14 @@ describe("manual evaluation (REV-06, transitions 6 and 7 to to_review)", () => {
     await step(refs[1]);
     expect(await startManualEvaluation(teacher, refs[0])).toEqual({ ok: true });
     expect(await row(refs[0].submissionId)).toMatchObject({ status: "to_review", current: null, started: expect.any(Date) });
+    // REV-04: the teacher's act is logged in its transaction, by its author, without a revision (no entry before the fix).
+    const manualStarted = (submissionId: string) =>
+      db
+        .select({ actorId: reviewJournalEntries.actorId, versionNumber: reviewJournalEntries.versionNumber, revision: reviewJournalEntries.evaluationRevision })
+        .from(reviewJournalEntries)
+        .where(and(eq(reviewJournalEntries.submissionId, submissionId), eq(reviewJournalEntries.event, "manual_started")));
+    const logged = [{ actorId: teacher.userId, versionNumber: 1, revision: null }];
+    expect(await manualStarted(refs[0].submissionId)).toEqual(logged);
     expect(await replaceText(students[0], { assignmentId, requestId: randomUUID(), text: TEXT.en })).toEqual({
       ok: false, reason: "teacher_started",
     });
@@ -431,6 +439,9 @@ describe("manual evaluation (REV-06, transitions 6 and 7 to to_review)", () => {
     expect(await startManualEvaluation(teacher, { ...refs[0], versionNumber: 2 })).toEqual({ ok: false, reason: "changed" });
     expect(await startManualEvaluation(await createUser("teacher"), refs[0])).toBeNull();
     await expect(startManualEvaluation(students[0], refs[0])).rejects.toBeInstanceOf(AccessDeniedError);
+    // The refused calls log nothing: still the one entry, none for the copy to review.
+    expect(await manualStarted(refs[0].submissionId)).toEqual(logged);
+    expect(await manualStarted(refs[1].submissionId)).toEqual([]);
   });
 });
 

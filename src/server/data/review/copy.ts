@@ -33,6 +33,16 @@ import { appendJournal, writeEvaluation } from "./record";
 
 const owned = (grant: Grant) => ownedBy(grant, { teacher: assignments.teacherId });
 
+/**
+ * The teacher's evaluation of the submission's active version. The database
+ * holds it so (0018: born on the started, active version, which then never
+ * changes); the join says it as well.
+ */
+const activeEvaluation = and(
+  eq(teacherEvaluations.submissionId, submissions.id),
+  eq(teacherEvaluations.versionNumber, submissions.currentVersion),
+);
+
 /** What the page saw: the guard of the writes (E7.4) and of the freshness check when shown. */
 export type CopySeen = {
   submissionId: string;
@@ -153,7 +163,7 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
     )
     .leftJoin(aiProposals, eq(aiProposals.id, submissions.currentProposalId))
     .leftJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
-    .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, submissions.id))
+    .leftJoin(teacherEvaluations, activeEvaluation)
     .where(and(eq(assignments.id, assignmentId), owned(grant)));
   if (!row || (!row.member && !row.submission)) return null;
   // NFR-DON-04 (E7.7): nothing of the copy before the teacher notice is read.
@@ -240,7 +250,7 @@ export async function recordCopyOpened(actor: Actor, submissionId: string): Prom
         revision: teacherEvaluations.revision,
       })
       .from(submissions)
-      .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, submissions.id))
+      .leftJoin(teacherEvaluations, activeEvaluation)
       .where(
         and(
           eq(submissions.id, submissionId),
@@ -326,7 +336,10 @@ export async function saveEvaluation(
       .select({ proposal: aiProposals, rubricVersion: evaluationRuns.rubricVersion, evaluation: teacherEvaluations })
       .from(aiProposals)
       .innerJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
-      .leftJoin(teacherEvaluations, eq(teacherEvaluations.submissionId, aiProposals.submissionId))
+      .leftJoin(
+        teacherEvaluations,
+        and(eq(teacherEvaluations.submissionId, aiProposals.submissionId), eq(teacherEvaluations.versionNumber, aiProposals.versionNumber)),
+      )
       .where(eq(aiProposals.id, row.proposalId));
     if (!current?.rubricVersion) return { ok: false, reason: "not_open" };
 

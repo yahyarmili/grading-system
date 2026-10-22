@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { criterionIds } from "@/lib/rubric";
+import { REVIEW_TEXT_MAX_LENGTH as MAX } from "@/config/provisional";
+import { criterionIds, publishedRubric } from "@/lib/rubric";
 import { parseProposalOutput } from "@/server/ai/output";
 import { normalizeForQuote, quoteFound } from "@/server/ai/quotes";
+import { buildEvaluationRequest } from "@/server/ai/request";
+import { SimulatorEvaluator } from "@/server/ai/simulator";
 import { formatOutcomeLine } from "@/server/evaluation/evaluate";
 
 // EVL-03 CA2: an answer outside the output contract is refused with its code,
@@ -62,6 +66,67 @@ describe("parseProposalOutput (EVL-03 CA2)", () => {
     ["an array instead of the object", (a: Answer) => ((a as { criteria: unknown }).criteria = [])],
   ])("refuses %s as schema", (_label, change) => {
     expect(parse(altered(change as (a: Answer & Record<string, unknown>) => void))).toEqual({ ok: false, code: "schema" });
+  });
+
+  // C5 (E7): an accepted proposal starts the teacher's form and must save
+  // unchanged. The form joins the next steps by "\n" and the server splits
+  // them by line; each text must fit the teacher's box (REVIEW_TEXT_MAX_LENGTH,
+  // string length, as src/server/review/evaluation.ts counts it).
+  it.each([
+    ["a next step with a line break", (a: Answer) => (a.next_steps = ["Practise:\n- past tense"])],
+    ["a next step with a Windows line break", (a: Answer) => (a.next_steps = ["Practise:\r\n- past tense"])],
+    ["a next step with a carriage return", (a: Answer) => (a.next_steps = ["Practise:\r- past tense"])],
+    ["a second next step with a line break", (a: Answer) => a.next_steps.push("Read it again.\nAloud.")],
+    ["a justification over the teacher's box", (a: Answer) => (a.criteria.task.justification = "x".repeat(MAX + 1))],
+    ["a general comment over the teacher's box", (a: Answer) => (a.general_comment = "x".repeat(MAX + 1))],
+    ["a next step over the teacher's box", (a: Answer) => (a.next_steps = ["x".repeat(MAX + 1)])],
+    // The form shows "a\nb": MAX - 1 + 1 + 2 characters.
+    ["next steps that fit one by one, not joined", (a: Answer) => (a.next_steps = ["x".repeat(MAX - 1), "xx"])],
+  ])("refuses %s as schema", (_label, change) => {
+    expect(parse(altered(change as (a: Answer & Record<string, unknown>) => void))).toEqual({ ok: false, code: "schema" });
+  });
+
+  it("accepts texts of exactly the teacher's box once trimmed, and the steps the form saves back unchanged", () => {
+    const full = "x".repeat(MAX);
+    const steps = ["x".repeat(MAX - 3), "xx"]; // Joined: MAX characters.
+    const result = parse(
+      altered((a) => {
+        a.criteria.task.justification = `  ${full}  `;
+        a.general_comment = full;
+        a.next_steps = steps;
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.criteria.task.justification).toBe(full);
+    expect(result.value.generalComment).toBe(full);
+    // What the form sends untouched (evaluation-form.tsx) and the server reads back (review/evaluation.ts).
+    const formBox = result.value.nextSteps.join("\n");
+    expect(formBox.length).toBeLessThanOrEqual(MAX);
+    expect(formBox.split("\n").map((line) => line.trim()).filter(Boolean)).toEqual(result.value.nextSteps);
+  });
+
+  it("accepts every answer of the simulator, on each text of the trial sets (scripts/fixtures/ai)", async () => {
+    const rubric = publishedRubric("en")!;
+    const entries = ["dev", "adversarial", "sensitive"].flatMap(
+      (set) => JSON.parse(readFileSync(`scripts/fixtures/ai/${set}.json`, "utf8")) as { text: string; subject?: string; instructions?: string | null }[],
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    const simulator = new SimulatorEvaluator();
+    for (const entry of entries) {
+      const request = buildEvaluationRequest(
+        { text: entry.text, subject: entry.subject ?? "My town", instructions: entry.instructions ?? null, language: "en" },
+        rubric,
+      );
+      const response = await simulator.evaluate(request, { signal: new AbortController().signal, subjectId: null });
+      expect(parseProposalOutput(response.content, entry.text).ok).toBe(true);
+    }
+    const french = "Ma ville est petite mais très belle.";
+    const response = await simulator.evaluate(
+      buildEvaluationRequest({ text: french, subject: "Ma ville", instructions: null, language: "fr" }, rubric),
+      { signal: new AbortController().signal, subjectId: null },
+    );
+    expect(parseProposalOutput(response.content, french).ok).toBe(true);
   });
 
   it("refuses an invented quote", () => {

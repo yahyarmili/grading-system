@@ -1,7 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { startTransition, useActionState, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Bot, Check, Eye, PenLine, RotateCcw } from "lucide-react";
 import { Alert } from "@/components/alert";
 import { Spinner } from "@/components/loading";
@@ -11,33 +20,22 @@ import type { AssignmentLanguage } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
 import { proposalAlertLabels } from "@/lib/evaluation";
 import { calculateGrade, formatGrade } from "@/lib/grade";
-import { applyChanges, fieldsFromProposal, readTypedGrade, type EvaluationFields } from "@/lib/review";
+import { applyChanges, fieldsFromProposal, readTypedGrade, reconcileSaved, type EvaluationFields } from "@/lib/review";
 import { criterionIds, levelLabel, rubric, type CriterionId, type Level } from "@/lib/rubric";
 import type { CurrentProposal } from "@/server/data/evaluation/proposals";
 import type { SavedEvaluation, SeenEvaluation } from "@/server/data/review/copy";
 import type { EvaluationField, SaveEvaluationState } from "@/server/review/evaluation";
 import { saveEvaluationAction } from "./actions";
 import { useNotice } from "../../notice";
+import { NO_FORM, useCopyState } from "./copy-state";
+import { LeaveGuard } from "./leave-guard";
 import { LevelPicker } from "./level-picker";
+import { clearDraft, parseDraft, sessionDrafts, storedDraft, writeDraft, type Draft } from "./unsaved-draft";
 
 // REV-03, REV-04: the AI proposal, read-only and never shown to the student,
 // beside the teacher's evaluation, which starts from it and is saved whole
 // (E7 plan §1.4). Changing anything needs no justification (D5); each save
 // is logged by the server, field by field.
-
-/** What the form holds while the teacher types. */
-type Draft = {
-  levels: Record<CriterionId, Level>;
-  remarks: Record<CriterionId, string>;
-  generalComment: string;
-  /** One step per line. */
-  nextSteps: string;
-  gradeFixed: boolean;
-  /** The typed grade, while fixed. */
-  gradeText: string;
-  /** "To re-read" cleared without changing the remark. */
-  rereadDone: CriterionId[];
-};
 
 const draftOf = (saved: EvaluationFields): Draft => ({
   levels: { ...(saved.levels as Record<CriterionId, Level>) },
@@ -50,6 +48,38 @@ const draftOf = (saved: EvaluationFields): Draft => ({
 });
 
 const sameDraft = (a: Draft, b: Draft) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The tab's storage tells nothing when it changes: read on each rendering (useSyncExternalStore). */
+const noSubscription = () => () => {};
+
+/** The whole form as sent; `over`: save over another tab's save, the teacher having chosen it. */
+type SaveInput = {
+  seen: SeenEvaluation;
+  levels: Record<CriterionId, Level>;
+  remarks: Record<CriterionId, string>;
+  generalComment: string;
+  nextSteps: string;
+  grade: { fixed: false } | { fixed: true; value: string };
+  rereadDone: CriterionId[];
+  over?: boolean;
+};
+
+/**
+ * Saves the form. Asked to save over, a conflict is answered by saving again
+ * from the revision stored: the teacher chose it knowing the copy changed
+ * elsewhere, as "Save mine over it" after a conflict (E7.5); the server
+ * guards that second save as any other.
+ */
+async function saveForm(previous: SaveEvaluationState, { over = false, ...input }: SaveInput): Promise<SaveEvaluationState> {
+  const state = await saveEvaluationAction(previous, input);
+  if (!over || state.status !== "conflict") return state;
+  return saveEvaluationAction(previous, { ...input, seen: { ...input.seen, revision: state.saved.revision } });
+}
+
+/** A conflict shown with its two choices: what is stored now, and why. */
+type Conflict = { saved: SavedEvaluation; message: string };
+
+const CHANGED_ELSEWHERE = "This evaluation was changed in another tab or window.";
 
 /** Two columns from a wide card (container query), stacked otherwise. */
 function SideBySide({ ai, teacher }: { ai: ReactNode; teacher: ReactNode }) {
@@ -94,25 +124,64 @@ export function EvaluationForm({
 }) {
   const router = useRouter();
   const showNotice = useNotice();
+  const { report, stale, setStale } = useCopyState();
   const [saved, setSaved] = useState<SavedEvaluation>(() => evaluation ?? { ...fieldsFromProposal(proposal), revision: 0 });
   const [draft, setDraft] = useState<Draft>(() => draftOf(saved));
-  const [state, save, pending] = useActionState(saveEvaluationAction, { status: "idle" } as SaveEvaluationState);
+  const [state, save, pending] = useActionState(saveForm, { status: "idle" } as SaveEvaluationState);
+  /** The draft the pending save sent: typing resumed meanwhile is kept when it answers. */
+  const [sent, setSent] = useState<Draft | null>(null);
+  const [conflict, setConflict] = useState<Conflict | null>(null);
   const [gradeError, setGradeError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const conflictRef = useRef<HTMLDivElement>(null);
 
-  // A new answer of the server: what it saved becomes the form's starting point.
+  const dirty = !sameDraft(draft, draftOf(saved));
+
+  // A new answer of the server: what it saved becomes the form's starting
+  // point; what was typed while it saved stays in the form.
   const [handled, setHandled] = useState(state);
   if (state !== handled) {
     setHandled(state);
     if (state.status === "saved") {
       setSaved(state.evaluation);
-      setDraft(draftOf(state.evaluation));
+      if (sent === null || sameDraft(draft, sent)) setDraft(draftOf(state.evaluation));
+      setConflict(null);
+    }
+    if (state.status === "conflict") setConflict({ saved: state.saved, message: state.message });
+  }
+
+  // A fresh rendering of the page (the refresh after a save, an opening, a
+  // reload by the router) brings the stored evaluation: newer, it replaces a
+  // clean form; over changes typed, the teacher chooses (REV-03 CA4). The
+  // form is never mounted again for a new revision (page.tsx).
+  const [rendered, setRendered] = useState(evaluation);
+  if (evaluation !== rendered) {
+    setRendered(evaluation);
+    if (evaluation) {
+      const next = reconcileSaved(saved.revision, evaluation.revision, dirty);
+      if (next === "adopt") {
+        setSaved(evaluation);
+        setDraft(draftOf(evaluation));
+      }
+      if (next === "conflict") setConflict({ saved: evaluation, message: CHANGED_ELSEWHERE });
     }
   }
 
-  // Replaced or closed meanwhile: the page shows the copy as it is now, the message above it (R5).
+  // What follows an answer of the server, once per answer: the router hides
+  // the page and shows it again (<Activity>) by cleaning up and running its
+  // effects again, with the same answer; acting again would refresh for
+  // nothing, bring back a message dismissed, move the focus or the scroll.
+  // An answer that came while the page was hidden is acted on when shown.
+  const acted = useRef(state);
   useEffect(() => {
+    if (acted.current === state) return;
+    acted.current = state;
+    // Saved: the page is rendered again, its History and what it saw with it (C6).
+    if (state.status === "saved") {
+      setStale(false);
+      router.refresh();
+    }
+    // Replaced or closed meanwhile: the page shows the copy as it is now, the message above it (R5).
     if (state.status === "replaced" || state.status === "not_open") {
       showNotice({ title: "Not saved", message: state.message });
       router.refresh();
@@ -122,16 +191,54 @@ export function EvaluationForm({
     }
     // Saved from anywhere on a long page: the conflict and its two choices come into view.
     if (state.status === "conflict") conflictRef.current?.scrollIntoView({ block: "center" });
-  }, [state, router, showNotice]);
+  }, [state, router, showNotice, setStale]);
 
-  const dirty = !sameDraft(draft, draftOf(saved));
-  // A change typed and not saved is not lost by closing the tab.
+  // What an opening of the copy needs to know (CopyOpened); nothing once the form is gone or hidden.
   useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+    report({ dirty, revision: saved.revision });
+    return () => report(NO_FORM);
+  }, [report, dirty, saved.revision]);
+
+  // C1: changes not saved are kept in the tab (unsaved-draft.ts) and given
+  // back, said, to a form rendered fresh (a page evicted by the router, a
+  // reload): read once the page is hydrated (the server knows nothing of
+  // it: null until then), when the form is mounted, not when shown again;
+  // written while the form differs from what is saved, erased otherwise
+  // (saved or discarded). Typed over a revision saved since: restored too,
+  // with the choice of a conflict.
+  const [restored, setRestored] = useState<"restored" | "outdated" | null>(null);
+  if (restored !== null && !dirty) setRestored(null);
+  const { submissionId, versionNumber, proposalId } = seen;
+  const stored = useSyncExternalStore(
+    noSubscription,
+    () => storedDraft(sessionDrafts(), submissionId),
+    () => null,
+  );
+  const [storageRead, setStorageRead] = useState(false);
+  if (!storageRead && stored !== null) {
+    setStorageRead(true);
+    const kept = parseDraft(stored, { submissionId, versionNumber, proposalId, revision: saved.revision });
+    if (kept.kind !== "none" && !sameDraft(kept.draft, draftOf(saved))) {
+      setDraft(kept.draft);
+      setRestored(kept.kind === "restore" ? "restored" : "outdated");
+    }
+  }
+  useEffect(() => {
+    if (!storageRead) return;
+    const storage = sessionDrafts();
+    if (dirty) writeDraft(storage, { submissionId, versionNumber, proposalId, revision: saved.revision }, draft);
+    else clearDraft(storage, submissionId);
+  }, [storageRead, submissionId, versionNumber, proposalId, saved.revision, draft, dirty]);
+
+  // An opening found the copy changed: with nothing typed, the page is simply rendered again.
+  useEffect(() => {
+    if (stale && !dirty) {
+      setStale(false);
+      router.refresh();
+    }
+  }, [stale, dirty, setStale, router]);
+
+  const shownConflict = conflict !== null && conflict.saved.revision !== saved.revision ? conflict : null;
 
   const calculated = calculateGrade(criterionIds.map((id) => draft.levels[id]));
   const typed = draft.gradeFixed ? readTypedGrade(draft.gradeText) : null;
@@ -152,14 +259,15 @@ export function EvaluationForm({
 
   const change = (next: Partial<Draft>) => setDraft((d) => ({ ...d, ...next }));
 
-  /** Sends the whole form, from the revision `base` the teacher last saw. */
-  function send(base: SavedEvaluation) {
+  /** Sends the whole form, from the revision `base` the teacher last saw; `over`: over whatever is stored since. */
+  function send(base: SavedEvaluation, over = false) {
     if (draft.gradeFixed && typed && "error" in typed) {
       setGradeError(typed.error);
       document.getElementById("grade")?.focus();
       return;
     }
     setGradeError(null);
+    setSent(draft);
     startTransition(() =>
       save({
         seen: { ...seen, revision: base.revision },
@@ -169,6 +277,7 @@ export function EvaluationForm({
         nextSteps: draft.nextSteps,
         grade: draft.gradeFixed ? { fixed: true, value: draft.gradeText } : { fixed: false },
         rereadDone: draft.rereadDone,
+        over,
       }),
     );
   }
@@ -186,6 +295,47 @@ export function EvaluationForm({
         Five criteria, {rubric[0].weight} % each. The AI proposal is read-only and never shown to the student; your
         evaluation starts from it. Change anything, no justification needed: each change is logged.
       </p>
+      <LeaveGuard active={dirty} />
+
+      {/* C1: changes given back after the page was rendered fresh are said, never restored in silence. */}
+      {restored === "restored" && (
+        <Alert
+          tone="info"
+          title="Unsaved changes restored"
+          live
+          action={
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDraft(draftOf(saved))}>
+              Discard changes
+            </button>
+          }
+        >
+          You left this page without saving. Your changes are back in the form: save them, or discard them.
+        </Alert>
+      )}
+      {/* An opening found the copy changed while changes were typed, or changes typed over a revision saved since
+          were given back: nothing is replaced until the teacher chooses. */}
+      {(stale || restored === "outdated") && dirty && !shownConflict && !pending && (
+        <Alert
+          tone="warning"
+          title="Changed in another tab or window"
+          live
+          action={
+            <span className="flex flex-wrap gap-2">
+              {/* Discards the form; the page is then rendered again, as stored. */}
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDraft(draftOf(saved))}>
+                Load saved version
+              </button>
+              {/* Keeps the form and saves it over what is stored, knowingly: logged like any save. */}
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => send(saved, true)}>
+                Save mine over it
+              </button>
+            </span>
+          }
+        >
+          This copy changed since this page was shown. Your changes are still in the form: load the saved version, or save
+          yours over it.
+        </Alert>
+      )}
 
       {proposal.alerts.length > 0 && (
         <Alert tone="warning" title={proposal.alerts.length === 1 ? "AI alert" : "AI alerts"}>
@@ -433,7 +583,7 @@ export function EvaluationForm({
           {state.message}
         </Alert>
       )}
-      {state.status === "conflict" && state.saved.revision !== saved.revision && (
+      {shownConflict && (
         <div ref={conflictRef}>
           <Alert
             tone="warning"
@@ -447,8 +597,9 @@ export function EvaluationForm({
                   className="btn btn-secondary btn-sm"
                   disabled={pending}
                   onClick={() => {
-                    setSaved(state.saved);
-                    setDraft(draftOf(state.saved));
+                    setSaved(shownConflict.saved);
+                    setDraft(draftOf(shownConflict.saved));
+                    setConflict(null);
                   }}
                 >
                   Load saved version
@@ -459,8 +610,9 @@ export function EvaluationForm({
                   className="btn btn-secondary btn-sm"
                   disabled={pending}
                   onClick={() => {
-                    setSaved(state.saved);
-                    send(state.saved);
+                    setSaved(shownConflict.saved);
+                    setConflict(null);
+                    send(shownConflict.saved);
                   }}
                 >
                   Save mine over it
@@ -468,7 +620,7 @@ export function EvaluationForm({
               </span>
             }
           >
-            {state.message} Your changes are still in the form: load the saved version, or save yours over it.
+            {shownConflict.message} Your changes are still in the form: load the saved version, or save yours over it.
           </Alert>
         </div>
       )}

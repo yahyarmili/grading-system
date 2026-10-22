@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
-import { SWEEP_ON_OPEN_MAX_MS } from "@/config/provisional";
 import { applyChanges, fieldsFromProposal } from "@/lib/review";
 import { RUBRIC_VERSIONS, type CriterionId, type Level } from "@/lib/rubric";
 import { STUDENT_NOTICE } from "@/lib/texts";
@@ -20,12 +19,12 @@ import { db } from "@/server/db/client";
 import { aiProposals, assignments, classMemberships, evaluationRuns, reviewJournalEntries, submissions, users } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import type { SweepResult } from "@/server/evaluation/sweep";
-import { openReviewList, type ListOpenContext } from "@/server/review/list";
+import { openReviewList, type SweepContext } from "@/server/review/list";
 import { listAssignmentCopies, readTeacherNotice } from "./helpers/review";
 
 // REV-01 (E7.2): one line per student of an assignment, removed students
 // with a submission included (CLS-04 CA3), "Late" visible (SUB-04 CA3);
-// another teacher's list is absent; opening it sweeps, then logs.
+// another teacher's list is absent; opening it logs, then sweeps after the response.
 
 const TEXT = "My town is small but it is beatiful. There is a market every friday and the peoples are friendly.";
 
@@ -194,17 +193,28 @@ describe("opening the list (E7 plan §1.7)", { timeout: 120_000 }, () => {
     return { teacher, other, student, assignmentId, stamp };
   }
 
-  it("sweeps first, then logs 'list opened' with the teacher; refreshes only when the list changed", async () => {
+  /** What after() would run once the response is sent: recorded, run by the test. */
+  function recordLater() {
+    const tasks: (() => Promise<unknown>)[] = [];
+    const later = vi.fn<SweepContext["later"]>((task) => void tasks.push(task));
+    return { tasks, later };
+  }
+
+  it("logs 'list opened' with the teacher and answers; sweeps after the response; refreshes only when the list changed", async () => {
     const { teacher, student, assignmentId, stamp } = await fixture();
-    const later = vi.fn();
+    const { tasks, later } = recordLater();
     const sweep = vi.fn(async () => {
-      expect(await listOpened(assignmentId)).toEqual([]);
+      // C8c: the response was sent, "list opened" with it.
+      expect(await listOpened(assignmentId)).toEqual([{ actorId: idOf(teacher), submissionId: null }]);
       return NOTHING;
     });
     expect(await openReviewList(teacher, { assignmentId, stamp }, { sweep, later })).toEqual({ refresh: false });
-    expect(sweep).toHaveBeenCalledOnce();
-    expect(later).not.toHaveBeenCalled();
     expect(await listOpened(assignmentId)).toEqual([{ actorId: idOf(teacher), submissionId: null }]);
+    // Nothing swept before the answer: one task for after().
+    expect(sweep).not.toHaveBeenCalled();
+    expect(later).toHaveBeenCalledOnce();
+    await tasks[0]();
+    expect(sweep).toHaveBeenCalledOnce();
 
     // A submission arrived since the page was rendered: the stamp differs.
     await submit(student, assignmentId);
@@ -212,20 +222,19 @@ describe("opening the list (E7 plan §1.7)", { timeout: 120_000 }, () => {
     expect(await listOpened(assignmentId)).toHaveLength(2);
   });
 
-  it("answers after SWEEP_ON_OPEN_MAX_MS and lets a long sweep end after the response; a failed sweep is not shown", async () => {
+  it("never waits for the sweep (C8c), however long; a failed sweep is logged by kind, never shown", async () => {
     const { teacher, assignmentId, stamp } = await fixture();
+    const { tasks, later } = recordLater();
     let finish: (result: SweepResult) => void = () => {};
-    const later = vi.fn<ListOpenContext["later"]>();
-    const started = Date.now();
-    const result = await openReviewList(teacher, { assignmentId, stamp }, {
-      sweep: () => new Promise((resolve) => (finish = resolve)),
-      later,
-    });
+    const sweep = vi.fn(() => new Promise<SweepResult>((resolve) => (finish = resolve)));
+    const result = await openReviewList(teacher, { assignmentId, stamp }, { sweep, later });
     expect(result).toEqual({ refresh: false });
-    expect(Date.now() - started).toBeGreaterThanOrEqual(SWEEP_ON_OPEN_MAX_MS - 50);
-    expect(later).toHaveBeenCalledOnce();
+    // The sweep starts after the response only, and its end is awaited there.
+    expect(sweep).not.toHaveBeenCalled();
+    const running = tasks[0]();
+    expect(sweep).toHaveBeenCalledOnce();
     finish(NOTHING);
-    await expect(later.mock.calls[0][0]).resolves.toEqual(NOTHING);
+    await expect(running).resolves.toEqual(NOTHING);
 
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const failed = await openReviewList(teacher, { assignmentId, stamp }, {
@@ -235,6 +244,7 @@ describe("opening the list (E7 plan §1.7)", { timeout: 120_000 }, () => {
       later,
     });
     expect(failed).toEqual({ refresh: false });
+    await expect(tasks[1]()).resolves.toBeUndefined();
     expect(error).toHaveBeenCalledWith("[evaluation] sweep failed: TypeError");
     error.mockRestore();
     expect(await listOpened(assignmentId)).toHaveLength(2);
@@ -249,6 +259,7 @@ describe("opening the list (E7 plan §1.7)", { timeout: 120_000 }, () => {
     }
     expect(await openReviewList(other, { assignmentId: "not-an-id", stamp }, { sweep, later })).toEqual({ refresh: false });
     expect(sweep).not.toHaveBeenCalled();
+    expect(later).not.toHaveBeenCalled();
     expect(await listOpened(assignmentId)).toEqual([]);
   });
 });

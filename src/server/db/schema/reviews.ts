@@ -23,7 +23,9 @@ import { aiProposals, submissions, submissionVersions } from "./submissions";
 // apart from the immutable AI proposal, and the review log. Both written by
 // src/server/data/review/record.ts alone, in one transaction
 // (tests/review-writes.test.ts); the log never changes, and no evaluation
-// revision commits without its log entry (triggers, 0017).
+// revision commits without its log entry (triggers, 0017, 0018). An
+// evaluation exists only on a started submission, on its active version,
+// which then never changes (0018).
 
 export const teacherEvaluationOrigin = pgEnum("teacher_evaluation_origin", teacherEvaluationOrigins);
 export const reviewEvent = pgEnum("review_event", reviewEvents);
@@ -142,7 +144,7 @@ export const reviewJournalEntries = pgTable(
     field: text(),
     oldValue: jsonb(),
     newValue: jsonb(),
-    /** The evaluation revision this entry records. */
+    /** The evaluation revision this entry records: set for evaluation_created and evaluation_changed, and for them only. */
     evaluationRevision: integer(),
     versionNumber: smallint(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -152,9 +154,11 @@ export const reviewJournalEntries = pgTable(
     index("review_journal_entries_assignment_idx").on(t.assignmentId, t.createdAt),
     check("review_journal_entries_submission_iff_copy", sql`(${t.event} = 'list_opened') = (${t.submissionId} is null)`),
     check("review_journal_entries_field_iff_change", sql`(${t.event} = 'evaluation_changed') = (${t.field} is not null)`),
+    // A revision marks a write, and a write only (0018): the triggers find a
+    // revision's entries by it.
     check(
       "review_journal_entries_revision_of_writes",
-      sql`${t.event} not in ('evaluation_created', 'evaluation_changed') or ${t.evaluationRevision} is not null`,
+      sql`(${t.event} in ('evaluation_created', 'evaluation_changed')) = (${t.evaluationRevision} is not null)`,
     ),
   ],
 );

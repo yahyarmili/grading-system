@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AI_MAX_QUOTES_PER_CRITERION } from "@/config/provisional";
+import { AI_MAX_QUOTES_PER_CRITERION, REVIEW_TEXT_MAX_LENGTH } from "@/config/provisional";
 import type { EvaluationError } from "@/lib/evaluation";
 import { criterionIds, MAX_LEVEL, type CriterionId, type Level } from "@/lib/rubric";
 import { quoteFound } from "./quotes";
@@ -8,15 +8,33 @@ import { quoteFound } from "./quotes";
 // the server, whatever the provider claims to enforce. Anything that does not
 // conform is refused with a code, never repaired and never given a default
 // value (R3): a refused answer is never stored as a proposal.
+//
+// A proposal's texts start the teacher's form (E7.4), so an accepted proposal
+// must save unchanged: each text fits the teacher's box, counted as the
+// teacher's schema counts it (string length, of the stored trimmed value), and
+// a next step is one line, since the form joins the steps by "\n" and the
+// server splits them again by line.
 
-/** Not blank once trimmed; stored trimmed. */
-const remark = z.string().trim().min(1);
+/** Not blank once trimmed; stored trimmed. A quote: never in the form, found in the text instead. */
+const nonBlank = z.string().trim().min(1);
+
+/** A justification, the general comment or a next step: no longer than the teacher's box once trimmed. */
+const remark = nonBlank.max(REVIEW_TEXT_MAX_LENGTH);
+
+/** One line: "\r" too, which the browser turns into a line break as soon as the box is edited. */
+const nextStep = remark.refine((step) => !/[\r\n]/.test(step));
+
+/** The steps as the form shows them, one per line, fit one box. */
+const nextSteps = z
+  .array(nextStep)
+  .min(1)
+  .refine((steps) => steps.join("\n").length <= REVIEW_TEXT_MAX_LENGTH);
 
 const criterion = z.strictObject({
   // An integer from 0 to 4: "2" and 2.5 are refused, never rounded.
   level: z.number().int().min(0).max(MAX_LEVEL),
   justification: remark,
-  quotes: z.array(remark).min(1).max(AI_MAX_QUOTES_PER_CRITERION),
+  quotes: z.array(nonBlank).min(1).max(AI_MAX_QUOTES_PER_CRITERION),
 });
 
 const outputSchema = z.strictObject({
@@ -24,7 +42,7 @@ const outputSchema = z.strictObject({
     Object.fromEntries(criterionIds.map((id) => [id, criterion])) as Record<CriterionId, typeof criterion>,
   ),
   general_comment: remark,
-  next_steps: z.array(remark).min(1),
+  next_steps: nextSteps,
   flags: z.strictObject({
     other_language: z.boolean(),
     off_topic: z.boolean(),

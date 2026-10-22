@@ -7,13 +7,20 @@ import { signOutAction } from "@/app/(auth)/actions";
 /**
  * Sign-out ends with a full page load, not a client-side navigation: Next
  * keeps visited pages hidden in the document for the back button, and they
- * would still hold the signed-out user's data (AUTH-02 R4).
+ * would still hold the signed-out user's data (AUTH-02 R4). The tab's
+ * sessionStorage goes too: it may hold a teacher's evaluation not saved
+ * (unsaved-draft.ts), which the full load keeps.
  */
 export function SignOutButton() {
   return (
     <form
       action={async () => {
         await signOutAction();
+        try {
+          window.sessionStorage.clear();
+        } catch {
+          // Storage refused (private mode, blocked site data): nothing was kept there.
+        }
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the full load is the point
         window.location.assign("/sign-in");
       }}

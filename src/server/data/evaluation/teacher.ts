@@ -19,7 +19,8 @@ import { applyTransition, recordEvaluationRequest } from "../submissions/transit
 // (system.ts), for that request only. The manual evaluation (6 or 7, to
 // to_review) is written here. Never automatic: only these functions leave
 // evaluation_failed and not_assessable; the sweep takes the received copies only.
-// Each request is logged with it (E7.6, REV-04): retry_requested, relaunch_requested.
+// Each request is logged with it (E7.6, REV-04): retry_requested,
+// relaunch_requested, manual_started.
 
 /** Starts the evaluation of a version once the request answered: after() in the Server Action (E7), a recorder in the tests. */
 export type EvaluationStartContext = { onStart: (ref: EvaluationRef) => void };
@@ -121,8 +122,13 @@ const requestRef = (seen: SeenVersion, origin: "retry" | "relaunch", request: st
   request,
 });
 
-/** The log entry of a teacher's request, written in its transaction (E7.6). */
-const requestEntry = (grant: Grant, assignmentId: string, seen: SeenVersion, event: "retry_requested" | "relaunch_requested") => ({
+/** The log entry of a teacher's request, written in its transaction (E7.6), without a revision (0018). */
+const requestEntry = (
+  grant: Grant,
+  assignmentId: string,
+  seen: SeenVersion,
+  event: "retry_requested" | "relaunch_requested" | "manual_started",
+) => ({
   assignmentId,
   submissionId: seen.submissionId,
   actorId: grant.userId,
@@ -207,14 +213,15 @@ export async function relaunchEvaluation(
  * teacher's first act is recorded (teacher_started_at): the student can no
  * longer replace it (SUB-05), and it is never offered for a relaunch. The row
  * is locked first, so a replacement at the same time runs before or after,
- * never both. Null when the copy is absent or another teacher's; "not_open"
- * outside evaluation_failed and not_assessable.
+ * never both. The act is logged with it (manual_started, REV-04). Null
+ * when the copy is absent or another teacher's; "not_open" outside
+ * evaluation_failed and not_assessable.
  */
 export async function startManualEvaluation(actor: Actor, seen: SeenVersion): Promise<ManualEvaluationResult | null> {
   const grant = authorize(actor, "unpublishedEvaluation", "write");
   return db.transaction(async (tx) => {
     const [row] = await tx
-      .select({ status: submissions.status, versionNumber: submissions.currentVersion })
+      .select({ assignmentId: submissions.assignmentId, status: submissions.status, versionNumber: submissions.currentVersion })
       .from(submissions)
       .where(and(eq(submissions.id, seen.submissionId), owned(grant)))
       .for("update");
@@ -226,6 +233,8 @@ export async function startManualEvaluation(actor: Actor, seen: SeenVersion): Pr
       where: eq(submissions.currentVersion, seen.versionNumber),
       set: { teacherStartedAt: sql`coalesce(${submissions.teacherStartedAt}, now())` },
     });
-    return moved ? ({ ok: true } as const) : ({ ok: false, reason: "not_open" } as const);
+    if (!moved) return { ok: false, reason: "not_open" } as const;
+    await appendJournal(tx, [requestEntry(grant, row.assignmentId, seen, "manual_started")]);
+    return { ok: true } as const;
   });
 }

@@ -12,6 +12,7 @@ import { Tag } from "@/components/tag";
 import { EVALUATION_BUSY_MAX_WAITS, EVALUATION_BUSY_WAIT_MS } from "@/config/provisional";
 import { formatDateTime } from "@/lib/dates";
 import { evaluationFailureLabel, notAssessableCauseLabels } from "@/lib/evaluation";
+import { mayOfferRelaunch } from "@/lib/relaunch-offer";
 import { parseReviewListQuery, reviewListSearch } from "@/lib/review-list";
 import { getActor } from "@/server/auth/session";
 import { listRelaunchable } from "@/server/data/evaluation/teacher";
@@ -22,6 +23,7 @@ import { NoticeArea } from "../../notice";
 import { RefreshWhileEvaluating } from "../../refresh-while";
 import { RequestButton } from "../../request-button";
 import { CopyOpened } from "./copy-opened";
+import { CopyStateProvider } from "./copy-state";
 import { CopyPanel } from "./copy-panel";
 import { CopyHistory } from "./history";
 import { EvaluationForm } from "./evaluation-form";
@@ -64,13 +66,15 @@ export default async function Page({ params, searchParams }: Props) {
     copy.classes.map((c) => c.id),
   );
   const reviewable = copy.proposal !== null && ["to_review", "validated", "published"].includes(copy.status);
-  // PRC-02 R4: read only for a copy not assessable (two round trips otherwise spared).
+  // PRC-02 R4: read only for a copy that may be offered, by the list's rule (two round trips otherwise spared, C8b).
   const relaunchable =
-    copy.status === "not_assessable" && copy.seen !== null &&
+    copy.seen !== null &&
+    mayOfferRelaunch({ status: copy.status, requested: copy.request === "pending", cause: copy.cause }, copy.assignment.language) &&
     (await listRelaunchable(actor, assignmentId, await relaunchConditions())).some((c) => c.submissionId === copy.seen?.submissionId);
 
   return (
-    <>
+    // The form and the opening share what is typed and not saved (copy-state.tsx).
+    <CopyStateProvider>
       {copy.seen && <CopyOpened seen={copy.seen} />}
       <BackLink href={`/teacher/assignments/${assignmentId}${reviewListSearch(listState)}`}>
         {copy.assignment.title}: submissions
@@ -91,8 +95,9 @@ export default async function Page({ params, searchParams }: Props) {
             </div>
             {reviewable && copy.proposal && copy.seen ? (
               <EvaluationForm
-                // A copy changed under the page (replaced, saved elsewhere) starts a new form.
-                key={`${copy.seen.versionNumber}:${copy.seen.proposalId}:${copy.seen.revision}`}
+                // A copy replaced under the page starts a new form. A new revision does not:
+                // the form takes it, or asks when changes are typed (REV-03 CA4, evaluation-form.tsx).
+                key={`${copy.seen.versionNumber}:${copy.seen.proposalId}`}
                 proposal={copy.proposal}
                 evaluation={copy.evaluation}
                 seen={copy.seen}
@@ -111,7 +116,7 @@ export default async function Page({ params, searchParams }: Props) {
           </Suspense>
         </div>
       )}
-    </>
+    </CopyStateProvider>
   );
 }
 

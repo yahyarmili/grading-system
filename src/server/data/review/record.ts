@@ -10,8 +10,10 @@ import { markTeacherStarted } from "../submissions/transitions";
 // REV-03, REV-04; tests/review-writes.test.ts): an evaluation is written only
 // with the log entries of its changes, in the caller's transaction, which has
 // authorized the actor and locked the submission row. The database checks it
-// again at commit (0017: no revision without its entry), keeps the log
-// unchanged and never lets an evaluation be deleted.
+// again at commit (0017, 0018: no revision without its evaluation_created or
+// evaluation_changed entry), keeps the log unchanged and never lets an
+// evaluation be deleted; an evaluation is born on the started, active version,
+// which then never changes (0018).
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -26,6 +28,7 @@ export type JournalEntry = {
   field?: string;
   oldValue?: unknown;
   newValue?: unknown;
+  /** For evaluation_created and evaluation_changed only (writeEvaluation); the database refuses it elsewhere (0018). */
   evaluationRevision?: number;
   versionNumber?: number;
 };

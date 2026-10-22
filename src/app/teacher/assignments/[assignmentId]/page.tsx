@@ -8,15 +8,14 @@ import { EmptyState } from "@/components/empty-state";
 import { LoadingState } from "@/components/loading";
 import { BackLink, PageHeader } from "@/components/shell/shell-parts";
 import { REVIEW_LIST_PAGE_SIZE } from "@/config/provisional";
-import { languageLabels } from "@/lib/assignment";
+import { languageLabels, type AssignmentLanguage } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
 import { arrangeReviewList, parseReviewListQuery } from "@/lib/review-list";
 import { ASSIGNMENT_LOCKED_NOTICE, ASSIGNMENT_NOT_DELETED_NOTICE } from "@/lib/texts";
 import { getActor } from "@/server/auth/session";
 import { getTeacherAssignment } from "@/server/data/assignments/assignments";
-import { listRelaunchable } from "@/server/data/evaluation/teacher";
 import { listAssignmentCopies } from "@/server/data/review/list";
-import { relaunchConditions } from "@/server/evaluation/relaunch";
+import { relaunchableCopies } from "@/server/review/list";
 import { TeacherNotice } from "@/app/teacher/teacher-notice";
 import { AssignmentActions } from "./assignment-actions";
 import { NoticeArea } from "./notice";
@@ -73,7 +72,7 @@ export default async function Page({ params, searchParams }: Props) {
               </>
             }
           >
-            <Submissions assignmentId={assignment.id} searchParams={searchParams} />
+            <Submissions assignmentId={assignment.id} language={assignment.language} searchParams={searchParams} />
           </Suspense>
         </section>
 
@@ -100,7 +99,11 @@ export default async function Page({ params, searchParams }: Props) {
 }
 
 /** REV-01: the whole list read once, then filtered, sorted and cut here, on the server. */
-async function Submissions({ assignmentId, searchParams }: { assignmentId: string } & Pick<Props, "searchParams">) {
+async function Submissions({
+  assignmentId,
+  language,
+  searchParams,
+}: { assignmentId: string; language: AssignmentLanguage } & Pick<Props, "searchParams">) {
   const actor = await getActor();
   const copies = await listAssignmentCopies(actor, assignmentId);
   // Deleted meanwhile: the 404 was decided above, the section says it.
@@ -111,10 +114,8 @@ async function Submissions({ assignmentId, searchParams }: { assignmentId: strin
   const query = parseReviewListQuery(await searchParams, copies.classes.map((c) => c.id));
   const list = arrangeReviewList(copies.rows, query, REVIEW_LIST_PAGE_SIZE);
   const submitted = copies.rows.filter((r) => r.status !== "to_submit").length;
-  // PRC-02 R4, CA3: asked only when a copy is not assessable (two round trips otherwise spared).
-  const relaunchable = copies.rows.some((r) => r.status === "not_assessable" && !r.requested)
-    ? (await listRelaunchable(actor, assignmentId, await relaunchConditions())).map((c) => c.submissionId)
-    : [];
+  // PRC-02 R4, CA3: read only when a line may be offered (C8b), the refreshes while a copy is evaluated included.
+  const relaunchable = await relaunchableCopies(actor, assignmentId, language, copies.rows);
   // E7.6: a copy under way, or a request waiting, shows its outcome without a reload.
   const underWay = copies.rows.some((r) => r.requested || r.status === "received" || r.status === "evaluating");
 

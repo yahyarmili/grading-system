@@ -127,6 +127,13 @@
       "when": 1792586390906,
       "tag": "0017_protect_review_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792669411913,
+      "tag": "0018_guard_review_invariants",
+      "breakpoints": true
     }
   ]
 }
