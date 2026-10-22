@@ -50,6 +50,14 @@ test("REV-03: change a level, a remark and the grade, then save; each change is 
   await expect(bar).toContainText("Grade 14.5 / 20 · fixed by you");
   await page.screenshot({ path: "test-results/rev03-1-changed-desktop.png", fullPage: true });
 
+  // CA2: the grade fixed, then a level changed: the grade stays, the gap follows the calculated grade.
+  await page.getByRole("region", { name: /^2/ }).getByRole("radio", { name: /^3 –/ }).check({ force: true });
+  await expect(bar).toContainText("Grade 14.5 / 20 · fixed by you");
+  await expect(page.getByText("Final 14.5 / 20, calculated 12 / 20 (+2.5).")).toBeVisible();
+  // Put back: what follows checks the log of the changes above only.
+  await page.getByRole("region", { name: /^2/ }).getByRole("radio", { name: /^2 –/ }).check({ force: true });
+  await expect(page.getByText("Final 14.5 / 20, calculated 11 / 20 (+3.5).")).toBeVisible();
+
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(bar.getByRole("status")).toHaveText("Saved");
   await expect(page.getByRole("button", { name: "Save changes" })).toBeDisabled();

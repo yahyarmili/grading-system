@@ -106,10 +106,28 @@ async function Submissions({
 }: { assignmentId: string; language: AssignmentLanguage } & Pick<Props, "searchParams">) {
   const actor = await getActor();
   const copies = await listAssignmentCopies(actor, assignmentId);
+  // The section keeps its title (aria-labelledby) whatever it shows instead of the list.
+  const title = (
+    <h2 id="submissions-title" className="text-base font-semibold">
+      Submissions
+    </h2>
+  );
   // Deleted meanwhile: the 404 was decided above, the section says it.
-  if (!copies) return <p className="text-fg-muted">This assignment was not found. It may have been deleted.</p>;
+  if (!copies)
+    return (
+      <>
+        {title}
+        <p className="text-fg-muted">This assignment was not found. It may have been deleted.</p>
+      </>
+    );
   // NFR-DON-04 (E7.7): the server returns no copy before the teacher notice is read.
-  if (copies === "notice_required") return <TeacherNotice />;
+  if (copies === "notice_required")
+    return (
+      <>
+        {title}
+        <TeacherNotice />
+      </>
+    );
 
   const query = parseReviewListQuery(await searchParams, copies.classes.map((c) => c.id));
   const list = arrangeReviewList(copies.rows, query, REVIEW_LIST_PAGE_SIZE);

@@ -205,6 +205,8 @@ L = lecture, É = écriture, — = refus (test négatif exécutable). « Propri�
 
 [P, E6.3, consigné le 2026-10-20] Relance, relancement et évaluation manuelle (PRC-02) relèvent de « Évaluation non publiée » en écriture ; la liste des copies à relancer, de « Remise et images » en lecture. Le traitement automatique (transitions 2, 5, 6, 7) agit sans acteur ; il ne reprend une copie en échec que sur la demande que le professeur a enregistrée (E6.6).
 
+[P, E7, consigné le 2026-10-22] Lecture d'une notice (NFR-DON-04) : chacun lit et enregistre la sienne, l'élève avant sa première remise (E4), le professeur avant son premier accès aux copies (E7.7) ; personne d'autre. Tant que le professeur n'a pas lu la notice en vigueur, liste, copie, enregistrement, relances et journal lui sont refusés côté serveur. Le journal n'est écrit par aucun rôle directement, seulement comme trace de ses actes.
+
 ### 5.5 États de la remise (internes)
 
 États : **À remettre** ; **Remise reçue** ; **Transcription en cours** (image) ; **Transcription échouée** ; **Évaluation en cours** ; **Évaluation échouée** ; **Non évaluable / IA indisponible** (avec sa cause) ; **À valider** ; **Validée** ; **Publiée**. Indicateur transversal : **en retard** (D8). Pas d'état « brouillon » : la remise est atomique.

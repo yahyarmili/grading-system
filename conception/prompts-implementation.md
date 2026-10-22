@@ -969,6 +969,8 @@ Ne modifie rien. Renvoie d'abord la revue.
 ```
 Puis **T4** pour un constat douteux, **T3**, **T1**, et **T5** pour la notice du professeur et les valeurs provisoires.
 
+Revue faite le 2026-10-22 (`feature-reviewer`) : aucun critique, 1 majeur (saisie non enregistrée perdue sans avertissement entre onglets ou au retour), 9 mineurs ; tous corrigés à la demande (« corrige tout »), puis une revue finale en contexte neuf : rien de grave, ses mineurs corrigés aussi (commit `3b9a830`, historique du plan d'E7). T4 : aucun constat douteux restant (l'éviction des pages gardées par le routeur, supposée, confirmée par la doc de Next : 3 pages au plus). T3 : constats confirmés corrigés, chacun testé. T1 : conforme au plan et aux critères de REV-01 à REV-04, PRC-02 depuis l'écran et DON-04 ; complétés : E2E « note fixée puis niveau changé » (REV-03 CA2, `e2e/review-save.spec.ts`), titre de la section des remises gardé quand la notice ou un devoir supprimé la remplace ; écarts notés sans correction : `lang` absent sur la justification, le commentaire et les pistes de la proposition et dans « History » (latent tant qu'aucun devoir français n'a de proposition ; USA-03, à reprendre en E10 A) ; promesse « l'équipe le lit, sans noms » de la notice à tenir par les extractions d'E10. T5 : notice du professeur, valeurs [P] et mesures d'E7 consignées (`stack-technologique.md` §3, `fonctionnalites.md` §5.4, `besoins-non-fonctionnels.md` DON-04, TRT-03, EXP-02) ; à trancher avant E8 : notice v1 incomplète face au journal (`manual_started`, durée de conservation).
+
 ---
 
 ## E8 — Validation, publication, consultation : premier cycle complet en texte (REV-05, REV-06, PUB-01, PUB-02)
