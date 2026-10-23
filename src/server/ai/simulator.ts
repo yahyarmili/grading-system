@@ -97,6 +97,15 @@ const untilAborted = (signal: AbortSignal) =>
     else signal.addEventListener("abort", () => reject(abortError()), { once: true });
   });
 
+/** The texts and flags of the next answers, in place of the simulated ones: markers for the leak sweep (E8.4). */
+export type SimulatedTexts = {
+  /** The justification of each criterion, followed by its id. */
+  justification: string;
+  comment: string;
+  nextStep: string;
+  flags?: { other_language: boolean; off_topic: boolean; addressed_to_marker: boolean };
+};
+
 export class SimulatorEvaluator implements Evaluator {
   readonly provider = "simulator" as const;
   readonly model = "simulator";
@@ -105,6 +114,7 @@ export class SimulatorEvaluator implements Evaluator {
   private holds: Promise<void>[] = [];
   private requests: CapturedRequest[] = [];
   private levels: Record<CriterionId, Level> = this.uniform(DEFAULT_LEVEL);
+  private texts: SimulatedTexts | null = null;
 
   /** Each call is bounded like the adapter's: the caller's signal, or this many milliseconds. */
   constructor(private readonly callTimeoutMs: number = AI_CALL_TIMEOUT_MS) {}
@@ -164,17 +174,23 @@ export class SimulatorEvaluator implements Evaluator {
     this.levels = typeof levels === "number" ? this.uniform(levels) : { ...levels };
   }
 
+  /** The texts and flags of the next answers; null puts back the simulated ones. */
+  setTexts(texts: SimulatedTexts | null): void {
+    this.texts = texts;
+  }
+
   /** The last requests received, oldest first (at most 20). */
   captured(): readonly CapturedRequest[] {
     return this.requests;
   }
 
-  /** Forgets the requests, faults, holds and levels. */
+  /** Forgets the requests, faults, holds, levels and texts. */
   clear(): void {
     this.requests = [];
     this.faults = [];
     this.holds = [];
     this.levels = this.uniform(DEFAULT_LEVEL);
+    this.texts = null;
   }
 
   private uniform(level: Level): Record<CriterionId, Level> {
@@ -183,10 +199,16 @@ export class SimulatorEvaluator implements Evaluator {
 
   private answer(request: EvaluationRequest, fault: SimulatedFault | undefined) {
     const { text, language } = readUserMessage(request.user);
-    const remarks = REMARKS[language];
+    const { texts } = this;
+    const remarks = texts
+      ? { justification: texts.justification, comment: texts.comment, next: texts.nextStep }
+      : REMARKS[language];
     const quote = firstWords(text);
     const criteria: Record<string, { level: number; justification: string; quotes: string[] }> = Object.fromEntries(
-      criterionIds.map((id) => [id, { level: this.levels[id], justification: remarks.justification, quotes: [quote] }]),
+      criterionIds.map((id) => [
+        id,
+        { level: this.levels[id], justification: texts ? `${remarks.justification}-${id}` : remarks.justification, quotes: [quote] },
+      ]),
     );
     const [first] = criterionIds;
     if (fault?.kind === "invalid_output") {
@@ -200,7 +222,7 @@ export class SimulatorEvaluator implements Evaluator {
       criteria,
       general_comment: remarks.comment,
       next_steps: [remarks.next],
-      flags: { other_language: false, off_topic: false, addressed_to_marker: false },
+      flags: texts?.flags ?? { other_language: false, off_topic: false, addressed_to_marker: false },
     };
   }
 }
