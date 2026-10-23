@@ -55,7 +55,7 @@ Notation de productions écrites d'élèves (anglais, français). L'élève reme
 - Matrice en données (`src/server/access/matrix.ts`) ; `authorize(actor, ressource, action)` est le seul contrôle ; `ownedBy` filtre la propriété dans la requête.
 - Toute table, Server Action, route ou export de `src/server/data/` s'inscrit dans `src/server/access/inventory.ts` (`tests/access-inventory.test.ts`). Une nouvelle ressource a d'abord sa ligne de matrice ; ses fonctions entrent dans `REAL` (`tests/access-matrix.int.test.ts`), où les colonnes « autre » donnent « absent », sauf `creates`.
 - Ressource d'autrui : `null` comme absente ; rôle sans droit : `AccessDeniedError` ; la page répond 404 dans les deux cas.
-- **404 réel** : `notFound()` sous un `Suspense` garde le statut 200. Vérifier l'accès au niveau de la page avec `export const instant = false` (modèle : `src/app/teacher/classes/[classId]/page.tsx`).
+- **404 réel** : `notFound()` sous un `Suspense` garde le statut 200. Vérifier l'accès au niveau de la page avec `export const instant = false` (modèle : `src/app/teacher/classes/[classId]/page.tsx`). **Vrai sous `next dev` seulement** (constaté en ligne le 2026-10-23, E8.6) : en production, Vercel sert la coquille pré-rendue avec un statut 200 et la page « introuvable » ; `instant = false` ne coupe que la validation des navigations instantanées. Aucun contenu ne fuit ; parade à décider.
 
 **Remises** : `src/server/data/submissions/transitions.ts` est le seul écrivain de `submissions` (`insertReceived`, `applyTransition` ; `tests/submission-writes.test.ts`). Tout changement du texte de la notice élève relève `STUDENT_NOTICE.version` (empreinte : `tests/student-notice.test.ts`).
 
