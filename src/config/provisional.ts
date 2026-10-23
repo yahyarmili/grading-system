@@ -294,4 +294,13 @@ export const REVIEW_TEXT_MAX_LENGTH = 4000;
  * About 3 round trips to the database each time.
  */
 export const EVALUATION_REFRESH_MS = 4_000;
+
+/**
+ * [PROVISIONAL, [P] arbitrary, E8.3] The student's result shown again later
+ * than this after its last check (back or forward navigation, a page kept by
+ * the router) is hidden and checked with the server before it shows (E8 plan
+ * §5). Shorter than any navigation away and back; longer than React's
+ * double mount in development.
+ */
+export const FRESHNESS_GRACE_MS = 1_000;
 export const EVALUATION_REFRESH_MAX_MS = 10 * 60_000;

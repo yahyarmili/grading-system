@@ -22,8 +22,9 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   class_join_intents: { internal: "digests of class links opened before confirmation (CLS-03 R3), used once confirmed" },
   assignments: ["assignment"],
   assignment_classes: ["assignmentRecipients"],
-  // The student writes their own (submits, replaces) and reads only its status
-  // in the closed list; never a version (A3). The owner teacher reads (E7).
+  // The student writes their own (submits, replaces), reads its status in the
+  // closed list, and the text of its active version (SUB-01 R2, E8.3); never
+  // an earlier version or the internal state. The owner teacher reads (E7).
   submissions: ["submission", "ownSubmissionStatus"],
   submission_versions: ["submission"],
   notice_acknowledgements: ["noticeAcknowledgement"],
@@ -140,6 +141,8 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#replaceTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
+  // PUB-01 CA3 (E8.3): the result shown again is checked first; a boolean only.
+  "src/app/student/assignments/[assignmentId]/result/actions.ts#checkFreshnessAction": { resource: "publishedEvaluation", action: "read" },
   "src/app/api/cron/evaluation-sweep/route.ts#GET": {
     system: "E6, PRC-01 CA4: Vercel's cron, with CRON_SECRET; releases stuck evaluations and starts again the stale received ones, answers counts only",
   },

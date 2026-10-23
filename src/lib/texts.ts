@@ -41,11 +41,8 @@ export const SUBMISSION_TEXT_LIMIT_NOTICE = `At most ${SUBMISSION_TEXT_MAX_LENGT
 /** SUB-02 R2 [P]: mistakes are part of what is marked. */
 export const TEXT_KEPT_AS_WRITTEN_NOTICE = "Your text is sent exactly as you wrote it: nothing is corrected.";
 
-/** A3 [D]: the student does not read their text again after sending it. */
-export const NO_READ_BACK_NOTICE = "Once you submit, your text is not shown to you again.";
-
-/** A3 [D]: said again after sending. */
-export const SUBMITTED_NO_READ_BACK_NOTICE = "Your text is not shown to you again.";
+/** SUB-01 R2 [D, 2026-10-22] (revises A3): the student reads their submission back after sending it. */
+export const READ_BACK_NOTICE = "After you submit, you can read your text here, as you sent it.";
 
 /** Shown where a value depends on a decision not taken yet (QNF-1, QNF-4). */
 export const TO_BE_DEFINED = "To be defined.";
@@ -151,6 +148,24 @@ export const TEACHER_NOTICE = {
  */
 export const MANUAL_RUBRIC_SUBSTITUTE_NOTICE =
   "The rubric for this language is not validated yet: these are the criteria of the English rubric (en-1).";
+
+/**
+ * PUB-02, Q5 [D, 2026-10-15]: the AI is mentioned to the student, on a result
+ * prepared from its proposal. [P] wording, to be confirmed with the legal
+ * framework (QNF-1). Not said on a result marked by hand.
+ */
+export const RESULT_AI_MENTION =
+  "Your teacher prepared this feedback with the help of an AI tool, then reviewed and published it.";
+
+/** PUB-02 [P]: said on every result, the one line of a result marked by hand. */
+export const RESULT_MARKED_BY_TEACHER = "Marked and published by your teacher.";
+
+/** Q5 [D, 2026-10-15]: the grade differs from the sum of the levels; no reason given. */
+export const GRADE_ADJUSTED_NOTICE = "Grade adjusted by your teacher";
+
+/** Q6 [D, 2026-10-22] [P] wording: the student's side of MANUAL_RUBRIC_SUBSTITUTE_NOTICE. */
+export const RESULT_RUBRIC_SUBSTITUTE_NOTICE =
+  "The rubric for this language is not validated yet: your text was marked on the criteria of the English rubric (en-1).";
 
 /** SUB-05, Q3 [D, 2026-10-15]: replacements left, until the teacher's first change or validation. */
 export const replacementsLeftNotice = (left: number) =>

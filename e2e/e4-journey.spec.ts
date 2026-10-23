@@ -6,7 +6,7 @@ import { createStudent, signIn, sql } from "./support/helpers";
 // the deadline with a double click, one after it, a replacement with a double
 // click; the teacher's assignment locked by a real submission (ASG-03 CA2);
 // the removed student's assignment read only (SUB-01 CA3, CLS-04 CA3); no
-// text or internal state in the student's pages (A3, SUB-01 R3). The detailed
+// earlier text or internal state in the student's pages (SUB-01 R2, R3). The detailed
 // tests are in submit-text.spec.ts and the integration tests.
 
 // About fifty actions of 2 to 6 s each on Neon: past the default 120 s near its
@@ -112,7 +112,7 @@ test("E4 journey: on time, late, replaced, then read only; the assignment locked
   await omar.waitForLoadState("networkidle");
   await omar.screenshot({ path: "test-results/e4-5-removed-read-only-phone.png", fullPage: true });
 
-  // 5. No text and no internal state reach the student, whatever the state (A3, SUB-01 R3).
+  // 5. No earlier text and no internal state reach the student, whatever the state (SUB-01 R2, R3).
   // Since E6 her replacement is evaluated by itself: wait for it, then set each state by hand.
   await expect
     .poll(async () => (await sql<{ status: string }>(
@@ -133,7 +133,8 @@ test("E4 journey: on time, late, replaced, then read only; the assignment locked
       await lina.goto(path);
       await expect(lina.getByText("Submitted, being marked").first()).toBeVisible();
       const html = await lina.content();
-      for (const hidden of [status, "Evaluation failed", "Not assessable", "To review", "smal but", "has a big market"]) {
+      // Her active text is read back on the assignment (SUB-01 R2, E8.3); the first one, replaced, never.
+      for (const hidden of [status, "Evaluation failed", "Not assessable", "To review", "smal but"]) {
         expect(html, `${hidden} on ${path}`).not.toContain(hidden);
       }
     }

@@ -51,12 +51,34 @@ export const IMPORT_RESTRICTIONS = [
       "src/server/data/review/journal.ts",
       // E8.1: validation, publication and withdrawal read the revision under the row lock.
       "src/server/data/review/publication.ts",
+      // E8.3, PUB-02: the student's published result, its columns listed one by one.
+      "src/server/data/results/student.ts",
       // Better Auth's adapter receives the whole schema (import * as schema); a
       // namespace import of any schema file falls under the group's paths.
       "src/server/data/auth/better-auth.ts",
       "src/server/db/**",
       "tests/**",
     ],
+  },
+  {
+    // PUB-02 R2 (E8 plan §5): the review and the evaluation are read by the
+    // teacher's screens and the server only. A student page reaches its result
+    // through src/server/data/results/ (a closed projection), never these
+    // modules. The system functions keep their own entry above.
+    group: [
+      "@/server/review",
+      "@/server/review/*",
+      "**/server/review",
+      "**/server/review/*",
+      "@/server/data/review/*",
+      "**/data/review/*",
+      "@/server/data/evaluation/*",
+      "**/data/evaluation/*",
+      "!@/server/data/evaluation/system",
+      "!**/data/evaluation/system",
+    ],
+    message: "The review and the evaluation are read by the teacher's screens only; a student page reads src/server/data/results/.",
+    allowed: ["src/server/**", "src/app/teacher/**", "scripts/**", "tests/**"],
   },
 ];
 

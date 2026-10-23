@@ -21,7 +21,8 @@ const byLevel = [...levels].reverse() as Level[];
 
 const EXAMPLE: Level[] = [3, 2, 4, 3, 2];
 
-export function RubricView({ rubrics }: { rubrics: PublishedRubrics }) {
+/** `selected`: the version to show first (a result links to the one it was given on, E8.3). */
+export function RubricView({ rubrics, selected }: { rubrics: PublishedRubrics; selected?: string }) {
   const versions = assignmentLanguages.flatMap((language) => rubrics[language] ?? []);
   if (versions.length === 0) {
     return (
@@ -55,7 +56,7 @@ export function RubricView({ rubrics }: { rubrics: PublishedRubrics }) {
       {versions.length === 1 ? (
         <Version version={versions[0]} />
       ) : (
-        <Tabs defaultValue={versions[0].id}>
+        <Tabs defaultValue={versions.find((v) => v.id === selected)?.id ?? versions[0].id}>
           <TabsList aria-label="Language of the rubric">
             {versions.map((v) => (
               <TabsTrigger key={v.id} value={v.id} className="px-3 text-base">

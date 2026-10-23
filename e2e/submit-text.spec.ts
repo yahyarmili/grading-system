@@ -75,7 +75,10 @@ test("a student submits a pasted text once, kept as written, then sees it being 
   await expect(student.getByRole("heading", { name: "Text submitted" })).toBeVisible();
   await expect(student.getByText(/Submitted on .+ \(Casablanca time, GMT\+\d\)\./)).toBeVisible();
   await expect(student.getByText("Submitted, being marked")).toBeVisible();
-  await expect(student.getByText(TEXT)).toHaveCount(0);
+  // SUB-01 R2 [D, 2026-10-22]: the text read back at once, exactly as sent, line breaks and mistakes kept.
+  const readBack = student.getByRole("region", { name: "Your submission" }).locator("p[lang]");
+  await expect(readBack).toHaveAttribute("lang", "en");
+  await expect.poll(() => readBack.evaluate((p) => p.textContent)).toBe(TEXT);
   await student.screenshot({ path: "test-results/sub02-3-submitted-phone.png", fullPage: true });
 
   const rows = await sql<{ text: string }>(
@@ -85,10 +88,10 @@ test("a student submits a pasted text once, kept as written, then sees it being 
   );
   expect(rows).toEqual([{ text: TEXT }]);
 
-  // Reloaded, the page shows the confirmation, never the text (A3); the list says it too.
+  // Reloaded, the page shows the confirmation and the text read back, nothing of its processing; the list says it too.
   await student.reload();
   await expect(student.getByRole("heading", { name: "Text submitted" })).toBeVisible();
-  expect(await student.content()).not.toContain("my freind is cool");
+  await expect(student.getByRole("region", { name: "Your submission" })).toContainText("my freind is cool");
   await student.goto("/student/assignments");
   await expect(student.getByRole("heading", { name: /Submitted, being marked \(1\)/ })).toBeVisible();
   await student.setViewportSize({ width: 1280, height: 800 });
@@ -177,8 +180,12 @@ test("SUB-05: a student replaces their text twice, then can no longer", async ({
     [email],
   );
   expect(rows).toEqual([{ number: 1, text: "First text." }, { number: 2, text: "Second text." }, { number: 3, text: "Third text." }]);
-  // A3: never shown back.
-  expect(await student.content()).not.toContain("Third text.");
+  // SUB-01 R2: the student reads back the text they sent last, never an earlier one.
+  await student.reload();
+  await expect(student.getByRole("region", { name: "Your submission" })).toContainText("Third text.");
+  await expect(student.getByRole("region", { name: "Your submission" })).toContainText("The text you sent last, on ");
+  const html = await student.content();
+  for (const earlier of ["First text.", "Second text."]) expect(html).not.toContain(earlier);
 });
 
 async function createAssignment(page: Page, title: string, className = "Grade 10") {

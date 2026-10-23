@@ -45,6 +45,8 @@ import {
   type RelaunchConditions,
 } from "@/server/data/evaluation/teacher";
 import { getPublishedRubrics } from "@/server/data/rubric/rubric";
+import { getPublishedResult } from "@/server/data/results/student";
+import { getOwnSubmission } from "@/server/data/submissions/student";
 import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import {
@@ -187,6 +189,18 @@ type Operation = { run: (actor: Actor, fixture: Fixture) => Promise<unknown>; cr
 /** One operation per action, or several when the action has more than one entry point. */
 type RealResource = { setup?: () => Promise<Fixture> } & Partial<Record<Action, Operation | Operation[]>>;
 
+const isStudent = (actor: Actor) => actor.kind === "user" && actor.role === "student";
+
+/**
+ * A student's read of a submission is their own text (getOwnSubmission, E8.3);
+ * the teachers' screens (`teacherRead`) stay refused to them by their ownership
+ * filter (tests/student-result.int.test.ts).
+ */
+const orOwnText =
+  (teacherRead: Operation["run"]): Operation["run"] =>
+  (actor, fixture) =>
+    isStudent(actor) ? getOwnSubmission(actor, fixture.submittedId) : teacherRead(actor, fixture);
+
 const REAL: Partial<Record<Resource, RealResource>> = {
   teacherInvitation: {
     setup: openInvitation,
@@ -297,18 +311,20 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       await forceState(first.ref.submissionId, "not_assessable", "ai_unavailable");
       return { ...fixture, submittedId };
     },
+    // A student reads their own text back (SUB-01 R2, E8.3); each teacher's
+    // screen is replayed for the teachers and the administrator.
     read: [
-      { run: async (actor, { submittedId }) => (await listRelaunchable(actor, submittedId, AI_BACK)).length > 0 || null },
+      { run: orOwnText(async (actor, { submittedId }) => (await listRelaunchable(actor, submittedId, AI_BACK)).length > 0 || null) },
       // REV-01 (E7.2): the list of the assignment's submissions, and its opening logged.
-      { run: (actor, { submittedId }) => listAssignmentCopies(actor, submittedId) },
-      { run: (actor, { submittedId }) => recordListOpened(actor, submittedId) },
+      { run: orOwnText((actor, { submittedId }) => listAssignmentCopies(actor, submittedId)) },
+      { run: orOwnText((actor, { submittedId }) => recordListOpened(actor, submittedId)) },
       // REV-02 (E7.3): the copy of the concerned student, and its opening logged.
-      { run: (actor, { submittedId }) => getCopy(actor, submittedId, people.concernedStudent.userId) },
+      { run: orOwnText((actor, { submittedId }) => getCopy(actor, submittedId, people.concernedStudent.userId)) },
       {
-        run: async (actor, { submittedId }) => {
+        run: orOwnText(async (actor, { submittedId }) => {
           const [{ id }] = await db.select({ id: submissions.id }).from(submissions).where(eq(submissions.assignmentId, submittedId));
           return recordCopyOpened(actor, id);
-        },
+        }),
       },
     ],
     write: [
@@ -408,6 +424,8 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   },
   // PUB-01 R2 (E8.1): the owner withdraws the publication of a published copy;
   // another teacher finds nothing; the student, who reads it (E8.3), cannot.
+  // PUB-02 (E8.3): the concerned student reads their result, another finds
+  // nothing; the owner teacher reads it on the copy.
   publishedEvaluation: {
     setup: async () => {
       const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
@@ -423,6 +441,10 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       const published = await publishEvaluation(people.ownerTeacher, seen);
       if (!validated?.ok || !published?.ok) throw new Error("Not published");
       return { ...fixture, submissionId, proposalId: proposalId! };
+    },
+    read: {
+      run: (actor, { assignmentId }) =>
+        isStudent(actor) ? getPublishedResult(actor, assignmentId) : getCopy(actor, assignmentId, people.concernedStudent.userId),
     },
     write: {
       run: async (actor, { submissionId, proposalId }) => {

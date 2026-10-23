@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
 import {
-  NO_READ_BACK_NOTICE,
   NO_REPLACEMENT_LEFT_NOTICE,
   REPLACEMENT_CLOSED_NOTICE,
   REPLACEMENT_KEEPS_DATE_NOTICE,
@@ -21,7 +20,8 @@ import { NoNameInstruction, TextField } from "./text-field";
 
 // SUB-05: replace the submission with a new text while the teacher has
 // neither changed nor validated it, 2 times at most (Q3 [D]). The previous
-// text is kept for the teacher, never shown back to the student (A3).
+// text is kept for the teacher; the student reads back the active one
+// (SUB-01 R2, E8.3).
 
 export function ReplaceSection({
   assignmentId,
@@ -116,7 +116,6 @@ export function ReplaceSection({
             <li>{replacementsLeftNotice(replacementsLeft)}</li>
             <li>{REPLACEMENT_KEEPS_DATE_NOTICE}</li>
             <li>{TEXT_KEPT_AS_WRITTEN_NOTICE}</li>
-            <li>{NO_READ_BACK_NOTICE}</li>
           </ul>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="submit" disabled={pending} aria-disabled={pending} className="w-full sm:w-auto">

@@ -80,7 +80,26 @@ describe("each import is allowed where the table says, refused everywhere else",
     expect(await restricted(path, text)).toEqual([expect.stringContaining("Only src/server/data/review/record.ts writes")]);
   });
 
-  it("refuses the review tables outside the data layer, with the database", { timeout: 30_000 }, async () => {
+  // PUB-02 R2 (E8.3): a student page never reaches the review or the evaluation modules.
+  it.each([
+    ["src/app/student/x/page.tsx", `import { getCopy } from "@/server/data/review/copy";\nexport const read = getCopy;\n`],
+    ["src/app/student/x/actions.ts", `import { saveTeacherEvaluation } from "@/server/review/evaluation";\nexport const save = saveTeacherEvaluation;\n`],
+    ["src/app/student/x/page.tsx", `import { getCurrentProposal } from "@/server/data/evaluation/proposals";\nexport const read = getCurrentProposal;\n`],
+    ["src/app/student/x/page.tsx", `import { getCopy } from "../../../server/data/review/copy";\nexport const read = getCopy;\n`],
+    ["src/components/x.tsx", `import { listCopyJournal } from "@/server/data/review/journal";\nexport const read = listCopyJournal;\n`],
+  ])("refuses the review and evaluation modules in %s", { timeout: 30_000 }, async (path, text) => {
+    expect(await restricted(path, text)).toEqual([expect.stringContaining("read by the teacher's screens only")]);
+  });
+
+  it.each([
+    ["src/app/teacher/x/page.tsx", `import { getCopy } from "@/server/data/review/copy";\nexport const read = getCopy;\n`],
+    ["src/server/review/x.ts", `import { getCopy } from "@/server/data/review/copy";\nexport const read = getCopy;\n`],
+    ["src/app/student/x/page.tsx", `import { getPublishedResult } from "@/server/data/results/student";\nexport const read = getPublishedResult;\n`],
+  ])("lets the review modules, or the student's result, through in %s", { timeout: 30_000 }, async (path, text) => {
+    expect(await restricted(path, text)).toEqual([]);
+  });
+
+  it("refuses the review tables outside the data layer, with the database",{ timeout: 30_000 }, async () => {
     expect((await restricted("src/app/x.ts", REVIEW)).sort()).toEqual([
       expect.stringContaining("Go through the data access layer"),
       expect.stringContaining("Only src/server/data/review/record.ts writes"),
@@ -95,6 +114,7 @@ describe("each import is allowed where the table says, refused everywhere else",
     ["src/server/data/review/copy.ts", REVIEW],
     ["src/server/data/review/journal.ts", REVIEW_LOG_RELATIVE],
     ["src/server/data/review/publication.ts", REVIEW],
+    ["src/server/data/results/student.ts", REVIEW],
     ["src/server/data/x.ts", OTHER_TABLE],
     ["src/server/db/schema/index.ts", REVIEW_REEXPORT],
     ["tests/x.ts", REVIEW_NAMESPACE],

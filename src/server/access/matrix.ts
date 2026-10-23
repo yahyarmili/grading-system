@@ -83,10 +83,11 @@ export const ACCESS_MATRIX = {
     concernedStudent: NO, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,
   },
   ownSubmissionStatus: {
-    // [P] What the student reads of their own submission: its status in the
-    // closed list of SUB-01 R3 (toStudentStatus), never the submission itself
-    // (no read on "submission"). The teacher reads the internal status through "submission".
-    label: "Own submission: status in the closed list (SUB-01 R3), late flag, dates, replacements left; never the text",
+    // [P] What the student reads of their own submission's processing: its
+    // status in the closed list of SUB-01 R3 (toStudentStatus), never the
+    // internal one. Their text is read through "submission" (E8.3). The
+    // teacher reads the internal status through "submission".
+    label: "Own submission: status in the closed list (SUB-01 R3), late flag, dates, replacements left",
     concernedStudent: L, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
   },
   noticeAcknowledgement: {
@@ -98,10 +99,11 @@ export const ACCESS_MATRIX = {
   },
   submission: {
     label: "Submission and images",
-    // Student: replaces their own (SUB-05), never reads it back. Teacher [P]:
-    // reads the copies of their assignments, among them those offered for a
-    // relaunch (listRelaunchable, PRC-02 R4, E6.3).
-    concernedStudent: W, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
+    // Student: submits and replaces their own (SUB-02, SUB-05), and reads its
+    // text back from the moment it is sent ([D, 2026-10-22], SUB-01 R2, E8.3).
+    // Teacher [P]: reads the copies of their assignments, among them those
+    // offered for a relaunch (listRelaunchable, PRC-02 R4, E6.3).
+    concernedStudent: LW, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
   },
   transcription: {
     label: "Transcription",
@@ -124,6 +126,7 @@ export const ACCESS_MATRIX = {
   },
   publishedEvaluation: {
     label: "Published evaluation (grade, levels, remarks, comment, next steps)",
+    // Student: reads their own once published (PUB-02, E8.3, getPublishedResult).
     // Teacher: writes to withdraw the publication (transition 10, PUB-01 R2), and
     // when a change of a published copy sends it back to review (Q8, E8.1).
     concernedStudent: L, otherStudent: NO, ownerTeacher: LW, otherTeacher: NO, admin: NO, visitor: NO,

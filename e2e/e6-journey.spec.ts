@@ -71,7 +71,8 @@ test("E6 journey: a text, then its replacement, reach to_review by themselves; t
   await lina.page.reload();
   await expect(beingMarked(lina.page)).toBeVisible();
   const html = await lina.page.content();
-  for (const hidden of ["to_review", "To review", "beatiful", "river"]) expect(html).not.toContain(hidden);
+  // The replaced text is never read back (SUB-01 R2, E8.3); nothing of the processing either.
+  for (const hidden of ["to_review", "To review", "beatiful"]) expect(html).not.toContain(hidden);
 
   // 3. SUB-01 CA2: a failure shows the same status. The failed states are set
   // here (the failures of the simulator stay in the server's memory).

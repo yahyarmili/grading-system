@@ -25,7 +25,7 @@ describe("authorize", () => {
   });
 
   it("refuses by default: missing action, other role, visitor", () => {
-    expect(() => authorize(student, "submission", "read")).toThrow(AccessDeniedError);
+    expect(() => authorize(student, "unpublishedEvaluation", "read")).toThrow(AccessDeniedError);
     expect(() => authorize(student, "aiProposal", "read")).toThrow(AccessDeniedError);
     expect(() => authorize(teacher, "rubric", "write")).toThrow(AccessDeniedError);
     expect(() => authorize({ kind: "visitor" }, "rubric", "read")).toThrow(AccessDeniedError);

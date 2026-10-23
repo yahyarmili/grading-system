@@ -160,6 +160,14 @@ export function manualRubricFor(
   return { version: english, substitute: true };
 }
 
+/**
+ * PUB-02 (E8.3): the version an evaluation was given on, by its recorded id;
+ * null for an id no longer (or never) in the registry.
+ */
+export function rubricVersionById(id: string, registry: readonly RubricVersion[] = RUBRIC_VERSIONS): RubricVersion | null {
+  return registry.find((version) => version.id === id) ?? null;
+}
+
 /** The English rubric in force, for the screens that show a single one (the copy, E7.3). */
 export const rubric = EN_1.criteria;
 export const levelNames: Record<Level, string> = {

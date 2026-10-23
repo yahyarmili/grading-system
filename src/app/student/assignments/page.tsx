@@ -133,12 +133,22 @@ function AssignmentCard({ a }: { a: StudentAssignment }) {
           <p className="break-words whitespace-pre-wrap">{a.instructions}</p>
         </div>
       )}
-      {/* SUB-02: to submit, the text box; after, the dated confirmation. */}
-      <Button asChild variant={a.status === "to_submit" ? "default" : "outline"} className="w-full sm:w-auto sm:self-start">
-        <Link href={`/student/assignments/${a.id}`} aria-describedby={titleId}>
-          {a.status === "to_submit" ? "Write my text" : "Open the assignment"}
-        </Link>
-      </Button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {/* PUB-02: the result, once published only; never prefetched (E8 plan §5). */}
+        {a.status === "marked" && (
+          <Button asChild className="w-full sm:w-auto">
+            <Link href={`/student/assignments/${a.id}/result`} prefetch={false} aria-describedby={titleId}>
+              See your result
+            </Link>
+          </Button>
+        )}
+        {/* SUB-02: to submit, the text box; after, the dated confirmation and the text sent. */}
+        <Button asChild variant={a.status === "to_submit" ? "default" : "outline"} className="w-full sm:w-auto">
+          <Link href={`/student/assignments/${a.id}`} aria-describedby={titleId}>
+            {a.status === "to_submit" ? "Write my text" : "Open the assignment"}
+          </Link>
+        </Button>
+      </div>
     </li>
   );
 }

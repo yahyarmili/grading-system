@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
 import type { StudentStatus } from "@/lib/submission-status";
-import { NO_READ_BACK_NOTICE, SUBMITTED_NO_READ_BACK_NOTICE, TEXT_KEPT_AS_WRITTEN_NOTICE } from "@/lib/texts";
+import { READ_BACK_NOTICE, TEXT_KEPT_AS_WRITTEN_NOTICE } from "@/lib/texts";
 import type { SubmitTextState } from "@/server/submissions/submissions";
 import { submitTextAction } from "./actions";
 import { ReplaceSection } from "./replace-section";
@@ -18,8 +18,7 @@ import { StudentNotice } from "./student-notice";
 import { NoNameInstruction, TextField } from "./text-field";
 
 // SUB-02: the text box before the first submission, the dated confirmation
-// after it, then the replacement (SUB-05). The text is never shown again
-// once submitted (A3).
+// after it, the text as sent (SUB-01 R2, E8.3), then the replacement (SUB-05).
 
 export function SubmissionPanel({
   assignmentId,
@@ -35,6 +34,7 @@ export function SubmissionPanel({
   canReplace,
   canSubmit,
   noticeRead,
+  readBack,
 }: {
   assignmentId: string;
   language: AssignmentLanguage;
@@ -51,6 +51,8 @@ export function SubmissionPanel({
   canSubmit: boolean;
   /** NFR-DON-04: the notice in force was read; until then, it comes first. */
   noticeRead: boolean;
+  /** SUB-01 R2: the text as sent, rendered by the server once the page knows the submission. */
+  readBack?: React.ReactNode;
 }) {
   // Kept here: the text survives the notice shown again (a new version) and a refusal.
   const [text, setText] = useState("");
@@ -76,7 +78,9 @@ export function SubmissionPanel({
           late={state.status === "done" ? state.late : late}
           status={status === "to_submit" ? "being_marked" : status}
           announce={state.status === "done"}
+          assignmentId={assignmentId}
         />
+        {readBack}
         {/* Once the page knows the submission (after its refresh). */}
         {submittedAt && (
           <ReplaceSection
@@ -139,7 +143,7 @@ export function SubmissionPanel({
         />
         <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-fg-muted">
           <li>{TEXT_KEPT_AS_WRITTEN_NOTICE}</li>
-          <li>{NO_READ_BACK_NOTICE}</li>
+          <li>{READ_BACK_NOTICE}</li>
         </ul>
         <Button type="submit" disabled={pending} aria-disabled={pending} className="w-full sm:w-auto sm:self-start">
           {pending && <Spinner />}
@@ -158,8 +162,10 @@ function Submitted({
   late,
   status,
   announce,
+  assignmentId,
 }: {
   ref: React.Ref<HTMLDivElement>;
+  assignmentId: string;
   submittedAt: string;
   /** The active version, when a replacement made it differ from the first. */
   lastVersionAt: string | null;
@@ -191,10 +197,19 @@ function Submitted({
         <StudentStatusTag status={status} />
         {late && <LateTag />}
       </div>
-      <p className="text-sm text-fg-muted">{SUBMITTED_NO_READ_BACK_NOTICE}</p>
-      <Button variant="outline" asChild className="w-full sm:w-auto sm:self-start">
-        <Link href="/student/assignments">Back to My assignments</Link>
-      </Button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {/* PUB-02: the result, once published only; never prefetched (E8 plan §5). */}
+        {status === "marked" && (
+          <Button asChild className="w-full sm:w-auto">
+            <Link href={`/student/assignments/${assignmentId}/result`} prefetch={false}>
+              See your result
+            </Link>
+          </Button>
+        )}
+        <Button variant="outline" asChild className="w-full sm:w-auto">
+          <Link href="/student/assignments">Back to My assignments</Link>
+        </Button>
+      </div>
     </section>
   );
 }

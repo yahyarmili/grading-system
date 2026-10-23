@@ -21,6 +21,7 @@ import {
 import { createClass } from "@/server/data/classes/classes";
 import { readmitStudent, removeStudent } from "@/server/data/classes/roster";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
+import { getOwnSubmission } from "@/server/data/submissions/student";
 import { db } from "@/server/db/client";
 import {
   assignmentClasses,
@@ -269,7 +270,7 @@ describe("SUB-01 CA3: the removed student keeps the assignment, read only", () =
   });
 });
 
-describe("the Submission row (§5.4): the student writes their own, never reads it back", () => {
+describe("the Submission row (§5.4): the student writes their own and reads its text back, nothing of its processing", () => {
   it("a classmate who received the same assignment reaches only their own submission", async () => {
     const { lina, omar, assignmentId } = await setup();
     await submitted(lina, assignmentId, "Lina's text.");
@@ -284,6 +285,9 @@ describe("the Submission row (§5.4): the student writes their own, never reads 
     expect((await replace(omar, assignmentId, "Omar's new text.")).status).toBe("done");
     expect(await storedSubmission(lina)).toEqual(linas);
     expect((await storedSubmission(omar))?.versions.map((v) => v.text)).toEqual(["Omar's text.", "Omar's new text."]);
+    // Each reads back their own text only (SUB-01 R2, E8.3).
+    expect((await getOwnSubmission(lina, assignmentId))?.text).toBe("Lina's text.");
+    expect((await getOwnSubmission(omar, assignmentId))?.text).toBe("Omar's new text.");
   });
 
   it.each(["teacher", "admin"] as const)("another %s writes nothing, refused and logged; the owner teacher neither", async (role) => {
@@ -308,6 +312,7 @@ describe("the Submission row (§5.4): the student writes their own, never reads 
     await submitted(lina, assignmentId, "Lina's text.");
     const karim = await createUser("teacher");
     expect(await getTeacherAssignment(karim, assignmentId)).toBeNull();
+    await expect(getOwnSubmission(karim, assignmentId)).rejects.toThrow();
     await expect(getStudentAssignment(karim, assignmentId)).rejects.toThrow();
     await expect(listStudentAssignments(karim)).rejects.toThrow();
   });
@@ -319,7 +324,7 @@ describe("the Submission row (§5.4): the student writes their own, never reads 
     return [...texts, ...internal].filter((word) => new RegExp(`\\b${word}\\b`, "i").test(json));
   };
 
-  it("no answer to the student carries their text or an internal state, whatever the state", async () => {
+  it("the student reads back the text of their active version only (SUB-01 R2, E8.3); no other answer carries their text or an internal state, whatever the state", async () => {
     const { lina, assignmentId } = await setup();
     const texts = ["Lina wrote this first.", "Lina wrote this next."];
     const firstRequest = randomUUID();
@@ -354,6 +359,12 @@ describe("the Submission row (§5.4): the student writes their own, never reads 
       const replaced = await replace(lina, assignmentId, "One more.");
 
       expect(leaks([list, detail, replaced], texts), status).toEqual([]);
+      // SUB-01 R2 [D, 2026-10-22]: the text as sent, the active version's only, whatever the state.
+      const own = await getOwnSubmission(lina, assignmentId);
+      // Replaced just above while the teacher has not started: then the new text.
+      expect(own?.text, status).toBe(replaced.status === "done" ? "One more." : texts[1]);
+      expect(Object.keys(own!).sort()).toEqual(["lastVersionAt", "submittedAt", "text"]);
+      expect(leaks(own, []), status).toEqual([]);
       expect(detail?.status, status).toBe(toStudentStatus(status));
       expect(list[0].status, status).toBe(toStudentStatus(status));
       // The closed list of fields: no version, teacher mark or internal state.
