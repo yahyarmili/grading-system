@@ -429,32 +429,52 @@ const REAL: Partial<Record<Resource, RealResource>> = {
   publishedEvaluation: {
     setup: async () => {
       const fixture = { ...(await ownedAssignment()), ...(await noticeRead()) };
-      const submitted = await submitText(people.concernedStudent, {
-        assignmentId: fixture.assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
-      });
-      if (!submitted?.ok) throw new Error("Not submitted");
-      const submissionId = submitted.ref.submissionId;
-      if ((await evaluateSubmission(submissionId)).status !== "to_review") throw new Error("Not evaluated");
-      const [{ proposalId }] = await db.select({ proposalId: submissions.currentProposalId }).from(submissions).where(eq(submissions.id, submissionId));
-      const seen = { submissionId, versionNumber: 1, proposalId, revision: 1 };
-      const validated = await validateEvaluation(people.ownerTeacher, { ...seen, revision: 0 }, SAVED_FORM);
-      const published = await publishEvaluation(people.ownerTeacher, seen);
-      if (!validated?.ok || !published?.ok) throw new Error("Not published");
-      return { ...fixture, submissionId, proposalId: proposalId! };
+      const { assignmentId: secondId } = await ownedAssignment(fixture.classId);
+      const published: { submissionId: string; proposalId: string }[] = [];
+      for (const assignmentId of [fixture.assignmentId, secondId]) {
+        const submitted = await submitText(people.concernedStudent, {
+          assignmentId, contentVersion: 1, requestId: randomUUID(), text: "My town is small and quiet.",
+        });
+        if (!submitted?.ok) throw new Error("Not submitted");
+        const submissionId = submitted.ref.submissionId;
+        if ((await evaluateSubmission(submissionId)).status !== "to_review") throw new Error("Not evaluated");
+        const [{ proposalId }] = await db.select({ proposalId: submissions.currentProposalId }).from(submissions).where(eq(submissions.id, submissionId));
+        const seen = { submissionId, versionNumber: 1, proposalId, revision: 1 };
+        const validated = await validateEvaluation(people.ownerTeacher, { ...seen, revision: 0 }, SAVED_FORM);
+        const done = await publishEvaluation(people.ownerTeacher, seen);
+        if (!validated?.ok || !done?.ok) throw new Error("Not published");
+        published.push({ submissionId, proposalId: proposalId! });
+      }
+      const [first, second] = published;
+      return { ...fixture, ...first, secondId: second.submissionId, secondProposalId: second.proposalId };
     },
     read: {
       run: (actor, { assignmentId }) =>
         isStudent(actor) ? getPublishedResult(actor, assignmentId) : getCopy(actor, assignmentId, people.concernedStudent.userId),
     },
-    write: {
-      run: async (actor, { submissionId, proposalId }) => {
-        const result = await withdrawPublication(actor, { submissionId, versionNumber: 1, proposalId, revision: 1 });
-        if (result && !(result.ok && !result.already && (await statusOf(submissionId)) === "validated")) {
-          throw new Error(`Not withdrawn: ${JSON.stringify(result)}`);
-        }
-        return result;
+    write: [
+      {
+        run: async (actor, { submissionId, proposalId }) => {
+          const result = await withdrawPublication(actor, { submissionId, versionNumber: 1, proposalId, revision: 1 });
+          if (result && !(result.ok && !result.already && (await statusOf(submissionId)) === "validated")) {
+            throw new Error(`Not withdrawn: ${JSON.stringify(result)}`);
+          }
+          return result;
+        },
       },
-    },
+      // REV-03 R5, Q8 (E8.1): changing the second published copy sends it back To review, the
+      // publication gone; another teacher finds nothing, and it stays published for them.
+      {
+        run: async (actor, { secondId, secondProposalId }) => {
+          const seen = { submissionId: secondId, versionNumber: 1, proposalId: secondProposalId, revision: 1 };
+          const result = await saveEvaluation(actor, seen, { ...SAVED_FORM, generalComment: "Changed after publication." });
+          const status = await statusOf(secondId);
+          if (result && !(result.ok && result.changed && status === "to_review")) throw new Error(`Not sent back: ${JSON.stringify(result)}`);
+          if (!result && status !== "published") throw new Error(`Changed for an actor who found nothing: ${status}`);
+          return result;
+        },
+      },
+    ],
   },
   // REV-04 R3 (E7.6, E7.7): the copy reads from the log whether the teacher's last
   // request was dropped; the corrector only.
@@ -773,6 +793,7 @@ describe("real data functions follow their row", () => {
           );
         }
       }
-    });
+      // A setup that evaluates and publishes copies takes most of the default 15 s on Neon.
+    }, 60_000);
   }
 });
