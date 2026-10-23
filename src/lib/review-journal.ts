@@ -40,7 +40,7 @@ const EVENT_LABELS: Record<ReviewEvent, string> = {
   retry_requested: "Asked to retry the evaluation",
   relaunch_requested: "Asked to relaunch the evaluation",
   retry_abandoned: "Request dropped: no evaluation slot was freed in time",
-  manual_started: "Started a manual evaluation",
+  manual_started: "Entered manually, without AI proposal",
   validated: "Validated the evaluation",
   published: "Published the evaluation",
   unpublished: "Withdrew the publication",
@@ -55,6 +55,10 @@ const VALIDATED_LABELS: Record<string, string> = {
 };
 
 function eventLabel(entry: JournalEntryLike): string {
+  // REV-06: a manual evaluation's first save starts from nothing, not from the proposal.
+  if (entry.event === "evaluation_created" && (entry.newValue as { origin?: string } | null)?.origin === "manual") {
+    return "Entered the first values of their evaluation";
+  }
   if (entry.event === "validated") {
     const nature = (entry.newValue as { nature?: string } | null)?.nature;
     return (nature && VALIDATED_LABELS[nature]) || EVENT_LABELS.validated;
@@ -130,7 +134,7 @@ export function historyOf(entries: readonly JournalEntryLike[]): HistoryItem[] {
       items.push(item);
       if (save !== null) saves.set(save, item);
     }
-    if (entry.event === "evaluation_created") item.label = EVENT_LABELS.evaluation_created;
+    if (entry.event === "evaluation_created") item.label = eventLabel(entry);
     if (entry.event === "evaluation_changed" && entry.field) item.changes.push(changeOf(entry));
   }
   for (const item of items) item.changes.sort((a, b) => FIELD_ORDER.indexOf(a.field) - FIELD_ORDER.indexOf(b.field));

@@ -10,17 +10,19 @@ import { assignments, submissions } from "@/server/db/schema";
 import { ownedBy } from "../access";
 import { acknowledgedNotice } from "../notices/notices";
 import { appendJournal } from "../review/record";
-import { applyTransition, recordEvaluationRequest } from "../submissions/transitions";
+import { recordEvaluationRequest } from "../submissions/transitions";
 
 // PRC-02 (E6.3): what the owner teacher does with a copy the AI did not
 // evaluate; the buttons come in E7 and E8. The retry (transition 6) and the
 // relaunch (7) check the copy, store the request and hand both over: the
 // workflow's step claims it, under the places and the guard of the AI
 // (system.ts), for that request only. The manual evaluation (6 or 7, to
-// to_review) is written here. Never automatic: only these functions leave
-// evaluation_failed and not_assessable; the sweep takes the received copies only.
+// to_review) is no longer here (E8.2): it is the first write of the
+// teacher's evaluation (review/copy.ts#editLocked). Never automatic: only
+// these functions and that write leave evaluation_failed and not_assessable;
+// the sweep takes the received copies only.
 // Each request is logged with it (E7.6, REV-04): retry_requested,
-// relaunch_requested, manual_started.
+// relaunch_requested.
 
 /** Starts the evaluation of a version once the request answered: after() in the Server Action (E7), a recorder in the tests. */
 export type EvaluationStartContext = { onStart: (ref: EvaluationRef) => void };
@@ -41,7 +43,6 @@ export type RelaunchableCopy = { submissionId: string; versionNumber: number; ca
 
 export type RetryResult = { ok: true } | { ok: false; reason: "changed" | "not_failed" };
 export type RelaunchResult = { ok: true } | { ok: false; reason: "changed" | "not_relaunchable" };
-export type ManualEvaluationResult = { ok: true } | { ok: false; reason: "changed" | "not_open" };
 
 /**
  * The teacher's own copies, once their notice is read (NFR-DON-04, E7.7):
@@ -127,7 +128,7 @@ const requestEntry = (
   grant: Grant,
   assignmentId: string,
   seen: SeenVersion,
-  event: "retry_requested" | "relaunch_requested" | "manual_started",
+  event: "retry_requested" | "relaunch_requested",
 ) => ({
   assignmentId,
   submissionId: seen.submissionId,
@@ -205,36 +206,4 @@ export async function relaunchEvaluation(
   });
   if (result?.ok) ctx.onStart(requestRef(seen, "relaunch", request));
   return result;
-}
-
-/**
- * Transitions 6 and 7 to to_review (REV-06, PRC-02 R3): the teacher
- * evaluates the copy by hand, without a proposal; the form comes in E8. The
- * teacher's first act is recorded (teacher_started_at): the student can no
- * longer replace it (SUB-05), and it is never offered for a relaunch. The row
- * is locked first, so a replacement at the same time runs before or after,
- * never both. The act is logged with it (manual_started, REV-04). Null
- * when the copy is absent or another teacher's; "not_open" outside
- * evaluation_failed and not_assessable.
- */
-export async function startManualEvaluation(actor: Actor, seen: SeenVersion): Promise<ManualEvaluationResult | null> {
-  const grant = authorize(actor, "unpublishedEvaluation", "write");
-  return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({ assignmentId: submissions.assignmentId, status: submissions.status, versionNumber: submissions.currentVersion })
-      .from(submissions)
-      .where(and(eq(submissions.id, seen.submissionId), owned(grant)))
-      .for("update");
-    if (!row) return null;
-    if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" } as const;
-    const transition = row.status === "evaluation_failed" ? 6 : row.status === "not_assessable" ? 7 : null;
-    if (!transition) return { ok: false, reason: "not_open" } as const;
-    const moved = await applyTransition(tx, seen.submissionId, transition, "to_review", {
-      where: eq(submissions.currentVersion, seen.versionNumber),
-      set: { teacherStartedAt: sql`coalesce(${submissions.teacherStartedAt}, now())` },
-    });
-    if (!moved) return { ok: false, reason: "not_open" } as const;
-    await appendJournal(tx, [requestEntry(grant, row.assignmentId, seen, "manual_started")]);
-    return { ok: true } as const;
-  });
 }

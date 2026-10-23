@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { GRADE_STEP } from "@/config/provisional";
 import {
   applyChanges,
+  calculatedGrade,
   diffEvaluation,
+  emptyFields,
   fieldsFromProposal,
   finalGradeOf,
   fixedGradeProblem,
@@ -182,5 +184,35 @@ describe("what a validation needs and is logged as (REV-05 R2, E8.1)", () => {
 
   it("'manual' without a proposal (REV-06)", () => {
     expect(validationNature(null, applyChanges(proposal, form()))).toBe("manual");
+  });
+});
+
+describe("a manual evaluation in progress (REV-06, E8.2)", () => {
+  const manual = (levels: Partial<Record<CriterionId, Level | null>>): EvaluationChanges => ({
+    levels: { task: null, organization: null, vocabulary: null, grammar: null, mechanics: null, ...levels },
+    remarks: { ...emptyFields().remarks },
+    generalComment: "",
+    nextSteps: [],
+    grade: { fixed: false },
+    rereadDone: [],
+  });
+
+  it("starts from nothing: no level, no remark, no grade", () => {
+    expect(emptyFields()).toMatchObject({ finalGrade: null, gradeFixed: false, generalComment: "", nextSteps: [] });
+    expect(Object.values(emptyFields().levels)).toEqual([null, null, null, null, null]);
+  });
+
+  it("has no grade while a level is missing, unless the teacher fixes one", () => {
+    expect(calculatedGrade(manual({ task: 3 }).levels)).toBeNull();
+    expect(applyChanges(emptyFields(), manual({ task: 3 })).finalGrade).toBeNull();
+    expect(applyChanges(emptyFields(), { ...manual({ task: 3 }), grade: { fixed: true, value: 12 } }).finalGrade).toBe(12);
+    expect(applyChanges(emptyFields(), manual({ task: 3, organization: 3, vocabulary: 3, grammar: 3, mechanics: 3 })).finalGrade).toBe(15);
+  });
+
+  it("never marks a first level 'to re-read': no remark was written for another one", () => {
+    const first = applyChanges(emptyFields(), manual({ task: 3 }));
+    expect(first.reread.task).toBe(false);
+    // Once chosen, a change of level does mark it, as for any evaluation.
+    expect(applyChanges(first, manual({ task: 4 })).reread.task).toBe(true);
   });
 });

@@ -22,9 +22,13 @@ export type EvaluationFields = {
 /** The grade the teacher asks for: calculated from the levels, or fixed at a value (REV-03 R2). */
 export type GradeChoice = { fixed: false } | { fixed: true; value: number };
 
-/** One save of the form (REV-03): the whole form, plus the remarks marked re-read. */
+/**
+ * One save of the form (REV-03): the whole form, plus the remarks marked
+ * re-read. A level may be null in a manual evaluation in progress only
+ * (REV-06); the server refuses it for an evaluation from a proposal.
+ */
 export type EvaluationChanges = {
-  levels: Record<CriterionId, Level>;
+  levels: Record<CriterionId, Level | null>;
   remarks: Record<CriterionId, string>;
   generalComment: string;
   nextSteps: string[];
@@ -44,14 +48,35 @@ export function fixedGradeProblem(value: number): "range" | "step" | null {
  * REV-03 R2: while the grade is not fixed, the sum of the levels, recalculated
  * at each change; once fixed, the teacher's value, never recalculated. Throws
  * on a level outside 0 to 4 (calculateGrade) and on a fixed grade off the
- * range or the step.
+ * range or the step. Not fixed with a level missing (a manual evaluation
+ * in progress, REV-06): no grade yet, null.
  */
-export function finalGradeOf(levels: Record<CriterionId, Level>, grade: GradeChoice): number {
-  const calculated = calculateGrade(criterionIds.map((id) => levels[id]));
-  if (!grade.fixed) return calculated;
-  const problem = fixedGradeProblem(grade.value);
-  if (problem) throw new RangeError(`A fixed grade must be ${problem === "range" ? `from 0 to ${GRADE_SCALE}` : `a multiple of ${GRADE_STEP}`}.`);
-  return grade.value;
+export function finalGradeOf(levels: Record<CriterionId, Level | null>, grade: GradeChoice): number | null {
+  if (grade.fixed) {
+    const problem = fixedGradeProblem(grade.value);
+    if (problem) throw new RangeError(`A fixed grade must be ${problem === "range" ? `from 0 to ${GRADE_SCALE}` : `a multiple of ${GRADE_STEP}`}.`);
+    return grade.value;
+  }
+  return calculatedGrade(levels);
+}
+
+/** The sum of the levels, or null while one is missing (a manual evaluation in progress). */
+export function calculatedGrade(levels: Record<CriterionId, Level | null>): number | null {
+  const chosen = criterionIds.map((id) => levels[id]);
+  return chosen.some((level) => level === null) ? null : calculateGrade(chosen as Level[]);
+}
+
+/** Where a manual evaluation starts (REV-06): nothing chosen, nothing written. */
+export function emptyFields(): EvaluationFields {
+  const levels = {} as Record<CriterionId, Level | null>;
+  const remarks = {} as Record<CriterionId, string>;
+  const reread = {} as Record<CriterionId, boolean>;
+  for (const id of criterionIds) {
+    levels[id] = null;
+    remarks[id] = "";
+    reread[id] = false;
+  }
+  return { levels, remarks, reread, generalComment: "", nextSteps: [], finalGrade: null, gradeFixed: false };
 }
 
 /** The gap between a fixed grade and the calculated one, signalled to the teacher (invariant 6); 0 when not fixed. */
@@ -66,12 +91,14 @@ export function gradeGap(fields: Pick<EvaluationFields, "levels" | "finalGrade" 
  * The evaluation after one save. "To re-read" (REV-03 R3, D5): set when the
  * level of a criterion changes and its remark does not; kept until the
  * remark changes or the teacher marks it re-read; never blocks anything.
+ * A first level chosen (none before: a manual evaluation, REV-06) changes
+ * no remark's meaning: no mark.
  */
 export function applyChanges(before: EvaluationFields, changes: EvaluationChanges): EvaluationFields {
   const reread = {} as Record<CriterionId, boolean>;
   for (const id of criterionIds) {
     const remarkChanged = changes.remarks[id] !== before.remarks[id];
-    const levelChanged = changes.levels[id] !== before.levels[id];
+    const levelChanged = before.levels[id] !== null && changes.levels[id] !== before.levels[id];
     reread[id] = !remarkChanged && (levelChanged || (before.reread[id] && !changes.rereadDone.includes(id)));
   }
   return {
@@ -153,6 +180,8 @@ export function fieldsFromProposal(proposal: {
 /** The message of each refused field, the same on the form and from the server (REV-03). */
 export const REVIEW_FIELD_MESSAGES = {
   level: `Choose a level from ${LEVELS[0]} to ${LEVELS.at(-1)}.`,
+  // REV-05 R2, REV-06: a validation needs every level.
+  levelMissing: "Choose a level for this criterion.",
   tooLong: `Keep it under ${REVIEW_TEXT_MAX_LENGTH} characters.`,
   gradeMissing: "Enter a grade, or use the calculated grade.",
   gradeRange: `Enter a grade between 0 and ${GRADE_SCALE}.`,

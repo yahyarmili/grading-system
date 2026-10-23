@@ -20,9 +20,10 @@ import { GRADE_SCALE } from "@/config/decisions";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
 import { proposalAlertLabels } from "@/lib/evaluation";
-import { calculateGrade, formatGrade } from "@/lib/grade";
-import { applyChanges, fieldsFromProposal, readTypedGrade, reconcileSaved, type EvaluationFields } from "@/lib/review";
-import { criterionIds, levelLabel, rubric, type CriterionId, type Level } from "@/lib/rubric";
+import { formatGrade } from "@/lib/grade";
+import { applyChanges, calculatedGrade, emptyFields, fieldsFromProposal, readTypedGrade, reconcileSaved, type EvaluationFields } from "@/lib/review";
+import { levelLabel, rubric, type CriterionId, type Level } from "@/lib/rubric";
+import { MANUAL_RUBRIC_SUBSTITUTE_NOTICE } from "@/lib/texts";
 import type { CurrentProposal } from "@/server/data/evaluation/proposals";
 import type { CopySeen, SavedEvaluation, SeenEvaluation } from "@/server/data/review/copy";
 import type { EvaluationField } from "@/server/review/evaluation";
@@ -38,10 +39,11 @@ import { clearDraft, parseDraft, sessionDrafts, storedDraft, writeDraft, type Dr
 // REV-03, REV-04: the AI proposal, read-only and never shown to the student,
 // beside the teacher's evaluation, which starts from it and is saved whole
 // (E7 plan §1.4). Changing anything needs no justification (D5); each save
-// is logged by the server, field by field.
+// is logged by the server, field by field. REV-06 (E8.2): without a proposal,
+// the same form alone, entered by hand from nothing.
 
 const draftOf = (saved: EvaluationFields): Draft => ({
-  levels: { ...(saved.levels as Record<CriterionId, Level>) },
+  levels: { ...saved.levels },
   remarks: { ...saved.remarks },
   generalComment: saved.generalComment,
   nextSteps: saved.nextSteps.join("\n"),
@@ -58,7 +60,7 @@ const noSubscription = () => () => {};
 /** The whole form as sent; `over`: save over another tab's save, the teacher having chosen it. */
 type SaveInput = {
   seen: SeenEvaluation;
-  levels: Record<CriterionId, Level>;
+  levels: Record<CriterionId, Level | null>;
   remarks: Record<CriterionId, string>;
   generalComment: string;
   nextSteps: string;
@@ -99,8 +101,9 @@ const PENDING_LABELS: Record<Intent, string> = {
 /** Q8 [D, 2026-10-22], said when a change of a Validated or Published copy is saved. */
 const SENT_BACK = "Your change was saved. The copy is To review again: validate it, then publish it, for the student to see the result.";
 
-/** Two columns from a wide card (container query), stacked otherwise. */
+/** Two columns from a wide card (container query), stacked otherwise; the teacher's alone without a proposal (REV-06). */
 function SideBySide({ ai, teacher }: { ai: ReactNode; teacher: ReactNode }) {
+  if (ai === null || ai === undefined || ai === false) return <div className="flex flex-col gap-3">{teacher}</div>;
   return (
     <div className="grid gap-4 @xl:grid-cols-2 @xl:gap-6">
       <div className="flex flex-col gap-2 rounded-lg bg-surface-muted p-4">
@@ -133,18 +136,24 @@ export function EvaluationForm({
   evaluation,
   seen,
   language,
+  substituteRubric = false,
 }: {
-  proposal: CurrentProposal & { model: string | null; evaluatedAt: string };
+  /** Null for a manual evaluation (REV-06): the form alone, from nothing. */
+  proposal: (CurrentProposal & { model: string | null; evaluatedAt: string }) | null;
   /** The teacher's evaluation, once they changed something; otherwise it starts from the proposal (REV-03 R1). */
   evaluation: SavedEvaluation | null;
-  /** With the copy's state: To review, Validated or Published (E8.1). */
+  /** With the copy's state: To review, Validated or Published (E8.1); failed or not assessable, entered by hand (E8.2). */
   seen: CopySeen;
   language: AssignmentLanguage;
+  /** Q6: a manual evaluation of a language without a rubric of its own is entered on the English one, said so. */
+  substituteRubric?: boolean;
 }) {
   const router = useRouter();
   const showNotice = useNotice();
   const { report, stale, setStale } = useCopyState();
-  const [saved, setSaved] = useState<SavedEvaluation>(() => evaluation ?? { ...fieldsFromProposal(proposal), revision: 0 });
+  const [saved, setSaved] = useState<SavedEvaluation>(
+    () => evaluation ?? { ...(proposal ? fieldsFromProposal(proposal) : emptyFields()), revision: 0 },
+  );
   const [draft, setDraft] = useState<Draft>(() => draftOf(saved));
   const [state, save, pending] = useActionState(saveForm, { status: "idle" } as DecisionState);
   /** The act being sent, for the bar's status line. */
@@ -152,6 +161,10 @@ export function EvaluationForm({
   /** Q8: a change of a Validated or Published copy is confirmed before it is saved. */
   const [confirmingSave, setConfirmingSave] = useState(false);
   const decided = seen.status === "validated" || seen.status === "published";
+  /** To review, or failed or not assessable and entered by hand (REV-06): save, validate, or validate and publish. */
+  const open = !decided;
+  /** REV-06: a manual evaluation of a copy failed or not assessable, nothing saved yet. */
+  const manualStart = seen.status === "evaluation_failed" || seen.status === "not_assessable";
   /** The draft the pending save sent: typing resumed meanwhile is kept when it answers. */
   const [sent, setSent] = useState<Draft | null>(null);
   const [conflict, setConflict] = useState<Conflict | null>(null);
@@ -274,10 +287,12 @@ export function EvaluationForm({
 
   const shownConflict = conflict !== null && conflict.saved.revision !== saved.revision ? conflict : null;
 
-  const calculated = calculateGrade(criterionIds.map((id) => draft.levels[id]));
+  // Null while a level is missing (a manual evaluation in progress, REV-06).
+  const calculated = calculatedGrade(draft.levels);
   const typed = draft.gradeFixed ? readTypedGrade(draft.gradeText) : null;
   const fixedValue = typed && "value" in typed ? typed.value : null;
-  const gap = fixedValue === null ? 0 : fixedValue - calculated;
+  const gap = fixedValue === null || calculated === null ? 0 : fixedValue - calculated;
+  const shownGrade = (value: number | null) => (value === null ? "—" : formatGrade(value));
   // The marks as the server will compute them (REV-03 R3): the same pure function.
   const preview = applyChanges(saved, {
     levels: draft.levels,
@@ -332,12 +347,33 @@ export function EvaluationForm({
 
   const shownGradeError = gradeError ?? fieldError("grade");
 
+  /** Back to the copy's status page, the list's state kept: the form is discarded, nothing written. */
+  function leaveManual() {
+    setDraft(draftOf(saved));
+    const url = new URL(window.location.href);
+    url.searchParams.delete("manual");
+    router.replace(`${url.pathname}${url.search}`);
+  }
+
   return (
     <form ref={formRef} className="flex flex-col gap-4" onSubmit={submit} noValidate>
-      <p className="text-fg-muted">
-        Five criteria, {rubric[0].weight} % each. The AI proposal is read-only and never shown to the student; your
-        evaluation starts from it. Change anything, no justification needed: each change is logged.
-      </p>
+      {proposal ? (
+        <p className="text-fg-muted">
+          Five criteria, {rubric[0].weight} % each. The AI proposal is read-only and never shown to the student; your
+          evaluation starts from it. Change anything, no justification needed: each change is logged.
+        </p>
+      ) : (
+        // REV-06: no proposal beside the form; the first save starts the evaluation, logged as such.
+        <p className="text-fg-muted">
+          Manual evaluation, without an AI proposal. Five criteria, {rubric[0].weight} % each: choose a level for each,
+          and write your remarks. Each change is logged.
+        </p>
+      )}
+      {substituteRubric && (
+        <Alert tone="info" title="English rubric">
+          {MANUAL_RUBRIC_SUBSTITUTE_NOTICE}
+        </Alert>
+      )}
       <LeaveGuard active={dirty} />
       {/* REV-05 R1, Q8: what the student sees, and what a change does. */}
       {seen.status === "validated" && (
@@ -392,7 +428,7 @@ export function EvaluationForm({
         </Alert>
       )}
 
-      {proposal.alerts.length > 0 && (
+      {proposal && proposal.alerts.length > 0 && (
         <Alert tone="warning" title={proposal.alerts.length === 1 ? "AI alert" : "AI alerts"}>
           <ul className="flex list-disc flex-col gap-0.5 pl-5">
             {proposal.alerts.map((alert) => (
@@ -404,9 +440,9 @@ export function EvaluationForm({
       )}
 
       {rubric.map((criterion, i) => {
-        const ai = proposal.criteria[criterion.id];
+        const ai = proposal?.criteria[criterion.id] ?? null;
         const level = draft.levels[criterion.id];
-        const modified = level !== ai.level || draft.remarks[criterion.id] !== ai.justification;
+        const modified = ai !== null && (level !== ai.level || draft.remarks[criterion.id] !== ai.justification);
         const reread = preview.reread[criterion.id];
         const remarkId = `remark-${criterion.id}`;
         const remarkError = fieldError(`remark.${criterion.id}`);
@@ -423,6 +459,7 @@ export function EvaluationForm({
             <div className="card-body">
               <SideBySide
                 ai={
+                  ai && (
                   <>
                     <p className="font-semibold">Level {levelLabel(ai.level)}</p>
                     <p>{ai.justification}</p>
@@ -437,6 +474,7 @@ export function EvaluationForm({
                       </ul>
                     </div>
                   </>
+                  )
                 }
                 teacher={
                   <>
@@ -444,12 +482,18 @@ export function EvaluationForm({
                       name={`level-${criterion.id}`}
                       legend="Your level"
                       value={level}
-                      aiLevel={ai.level}
+                      aiLevel={ai?.level ?? null}
                       onChange={(next) => change({ levels: { ...draft.levels, [criterion.id]: next } })}
                     />
                     {levelError && <FieldError id={`level-${criterion.id}-error`} message={levelError} />}
                     <p className="text-xs text-fg-muted">
-                      <span className="font-semibold text-fg">{levelLabel(level)}:</span> {criterion.descriptors[level]}
+                      {level === null ? (
+                        "No level chosen yet."
+                      ) : (
+                        <>
+                          <span className="font-semibold text-fg">{levelLabel(level)}:</span> {criterion.descriptors[level]}
+                        </>
+                      )}
                     </p>
                     <div className="field">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -502,7 +546,7 @@ export function EvaluationForm({
         </header>
         <div className="card-body flex flex-col gap-6">
           <SideBySide
-            ai={<p>{proposal.generalComment}</p>}
+            ai={proposal && <p>{proposal.generalComment}</p>}
             teacher={
               <div className="field">
                 <label className="label" htmlFor="comment">
@@ -524,11 +568,13 @@ export function EvaluationForm({
           />
           <SideBySide
             ai={
+              proposal && (
               <ul className="flex list-disc flex-col gap-0.5 pl-5">
                 {proposal.nextSteps.map((step, s) => (
                   <li key={s}>{step}</li>
                 ))}
               </ul>
+              )
             }
             teacher={
               <div className="field">
@@ -564,10 +610,12 @@ export function EvaluationForm({
         <div className="card-body flex flex-col gap-4">
           <SideBySide
             ai={
+              proposal && (
               <p>
                 Proposed grade <span className="font-semibold tabular-nums">{formatGrade(proposal.proposedGrade)}</span>
                 <span className="block text-xs text-fg-muted">Calculated by the system from the AI levels.</span>
               </p>
+              )
             }
             teacher={
               <>
@@ -581,7 +629,7 @@ export function EvaluationForm({
                       inputMode="decimal"
                       autoComplete="off"
                       className="input w-28 tabular-nums"
-                      value={draft.gradeFixed ? draft.gradeText : String(calculated)}
+                      value={draft.gradeFixed ? draft.gradeText : calculated === null ? "" : String(calculated)}
                       // Typing a grade fixes it (REV-03 R2): no longer recalculated.
                       onChange={(e) => {
                         setGradeError(null);
@@ -606,15 +654,17 @@ export function EvaluationForm({
                   </div>
                   <p id="grade-status" className="field-hint">
                     {draft.gradeFixed
-                      ? `Fixed by you; no longer recalculated. Calculated grade: ${formatGrade(calculated)}.`
-                      : "Calculated from your levels; updates when a level changes. Type a grade to fix it."}
+                      ? `Fixed by you; no longer recalculated. Calculated grade: ${shownGrade(calculated)}.`
+                      : calculated === null
+                        ? "Calculated once a level is chosen for each criterion. Type a grade to fix it."
+                        : "Calculated from your levels; updates when a level changes. Type a grade to fix it."}
                   </p>
                   <FieldError id="grade-error" message={shownGradeError} />
                 </div>
                 {/* Invariant 6: the gap is said in words and signs, not only by the color. */}
                 {gap !== 0 && fixedValue !== null && (
                   <Alert tone="warning" title="Final grade differs from the calculated grade">
-                    Final {formatGrade(fixedValue)}, calculated {formatGrade(calculated)} ({gap > 0 ? "+" : "−"}
+                    Final {formatGrade(fixedValue)}, calculated {shownGrade(calculated)} ({gap > 0 ? "+" : "−"}
                     {Math.abs(gap)}).
                   </Alert>
                 )}
@@ -624,9 +674,11 @@ export function EvaluationForm({
         </div>
       </section>
 
+      {proposal && (
       <p className="text-xs text-fg-muted">
         Proposed by {proposal.model ?? "the AI"} on {formatDateTime(proposal.evaluatedAt)}.
       </p>
+      )}
 
       {state === handled && state.status === "invalid" && (
         <Alert tone="error" title="Nothing was saved" live>
@@ -685,7 +737,7 @@ export function EvaluationForm({
         <p>
           Grade{" "}
           <span className="font-semibold tabular-nums">
-            {draft.gradeFixed ? (fixedValue === null ? "—" : formatGrade(fixedValue)) : formatGrade(calculated)}
+            {draft.gradeFixed ? shownGrade(fixedValue) : shownGrade(calculated)}
           </span>{" "}
           <span className="text-fg-muted">· {draft.gradeFixed ? "fixed by you" : "calculated"}</span>
         </p>
@@ -710,10 +762,30 @@ export function EvaluationForm({
               </span>
             ) : null}
           </p>
+          {/* REV-06: a manual evaluation not saved yet is left without a trace (nothing written). */}
+          {manualStart &&
+            (dirty ? (
+              <ConfirmDialog
+                trigger={
+                  <button type="button" className="btn btn-ghost" disabled={pending}>
+                    Cancel
+                  </button>
+                }
+                title="Discard this manual evaluation?"
+                description="Nothing was saved: what you entered is lost, and the copy stays as it is."
+                confirmLabel="Discard"
+                destructive
+                onConfirm={leaveManual}
+              />
+            ) : (
+              <button type="button" className="btn btn-ghost" disabled={pending} onClick={leaveManual}>
+                Cancel
+              </button>
+            ))}
           <button type="submit" className="btn btn-secondary" disabled={pending || !dirty}>
             Save changes
           </button>
-          {seen.status === "to_review" && (
+          {open && (
             <>
               {/* REV-05: the form on screen is saved, then validated, in one act; nothing visible to the student (R1). */}
               <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => send(saved, false, "validate")}>

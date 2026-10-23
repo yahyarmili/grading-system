@@ -14,7 +14,7 @@ import { replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { aiProposals, classMemberships, reviewJournalEntries, submissions, teacherEvaluations, users } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
-import { saveTeacherEvaluation } from "@/server/review/evaluation";
+import { EVALUATION_MESSAGES, saveTeacherEvaluation } from "@/server/review/evaluation";
 import {
   PUBLICATION_MESSAGES,
   publishTeacherEvaluation,
@@ -149,15 +149,15 @@ describe("validating a copy (REV-05)", { timeout: 120_000 }, () => {
     expect((await eventsOf(copy.submissionId)).filter((e) => e === "validated")).toHaveLength(1);
   });
 
-  it("REV-05 CA2: a failed copy, without an evaluation, cannot be validated, by a direct request either; nothing written", async () => {
+  it("REV-05 CA2: a failed copy without an evaluation cannot be validated, by a direct request either; nothing written (E8.2: one entered by hand, complete, can)", async () => {
     const copy = await evaluatedCopy({ refused: true });
     const forged = {
       seen: copy.seen,
-      levels: { task: 2, organization: 2, vocabulary: 2, grammar: 2, mechanics: 2 },
+      levels: { task: null, organization: null, vocabulary: null, grammar: null, mechanics: null },
       remarks: { task: "", organization: "", vocabulary: "", grammar: "", mechanics: "" },
       generalComment: "", nextSteps: "", grade: { fixed: false }, rereadDone: [],
     };
-    expect(await validateTeacherEvaluation(copy.teacher, forged)).toEqual({ status: "not_open", message: PUBLICATION_MESSAGES.notOpen });
+    expect(await validateTeacherEvaluation(copy.teacher, forged)).toMatchObject({ status: "invalid", fieldErrors: { "level.task": EVALUATION_MESSAGES.levelMissing } });
     expect(await statusOf(copy.submissionId)).toMatchObject({ status: "evaluation_failed", startedAt: null });
     expect(await eventsOf(copy.submissionId)).toEqual([]);
   });

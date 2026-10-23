@@ -41,7 +41,6 @@ import {
   listRelaunchable,
   relaunchEvaluation,
   retryEvaluation,
-  startManualEvaluation,
   type EvaluationStartContext,
   type RelaunchConditions,
 } from "@/server/data/evaluation/teacher";
@@ -358,7 +357,17 @@ const REAL: Partial<Record<Resource, RealResource>> = {
         run: (actor, { unavailableId }) =>
           relaunchEvaluation(actor, { submissionId: unavailableId, versionNumber: 1 }, AI_BACK, NO_START),
       },
-      { run: (actor, { failedId }) => startManualEvaluation(actor, { submissionId: failedId, versionNumber: 1 }) },
+      // REV-06 (E8.2): the owner enters the failed copy by hand: its first save starts the copy (transition 6)
+      // and the evaluation, "manual", together; another teacher's copy is absent, nothing written for them.
+      {
+        run: async (actor, { failedId }) => {
+          const result = await saveEvaluation(actor, { submissionId: failedId, versionNumber: 1, proposalId: null, revision: 0 }, SAVED_FORM);
+          if (result && !(result.ok && result.changed && (await statusOf(failedId)) === "to_review")) {
+            throw new Error(`Not entered by hand: ${JSON.stringify(result)}`);
+          }
+          return result;
+        },
+      },
       // REV-03 (E7.4): saving the form of the copy to review, as the page saw it: the owner's
       // evaluation is written (revision 1, through record.ts); another teacher's copy is absent,
       // and nothing is written for them.

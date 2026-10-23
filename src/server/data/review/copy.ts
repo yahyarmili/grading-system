@@ -3,9 +3,10 @@ import { and, eq, sql } from "drizzle-orm";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { compareText } from "@/lib/collation";
 import type { EvaluationError, NotAssessableCause } from "@/lib/evaluation";
-import { applyChanges, diffEvaluation, fieldsFromProposal, isComplete, type EvaluationChanges, type EvaluationFields } from "@/lib/review";
+import { applyChanges, diffEvaluation, emptyFields, fieldsFromProposal, isComplete, type EvaluationChanges, type EvaluationFields } from "@/lib/review";
 import type { RowClass } from "@/lib/review-list";
-import type { CriterionId, Level } from "@/lib/rubric";
+import type { TeacherEvaluationOrigin } from "@/lib/review-lists";
+import { criterionIds, manualRubricFor, type CriterionId, type Level } from "@/lib/rubric";
 import type { SubmissionMode, SubmissionStatus } from "@/lib/submission-status";
 import type { Actor } from "@/server/access/actor";
 import { authorize, type Grant } from "@/server/access/policy";
@@ -75,7 +76,7 @@ export type TeacherCopy = {
   request: "pending" | "abandoned" | null;
   proposal: (CurrentProposal & { model: string | null; evaluatedAt: string }) | null;
   /** The teacher's evaluation, once they changed something (E7.4). */
-  evaluation: (EvaluationFields & { revision: number }) | null;
+  evaluation: (EvaluationFields & { revision: number; origin: TeacherEvaluationOrigin; rubricVersion: string }) | null;
   /** REV-05 CA1, PUB-01 (E8): who validated or published the copy in its state, and when; null in any other state. */
   decision: { event: "validated" | "published"; at: string; by: string } | null;
   /** Null when not submitted: nothing to log, nothing to write. */
@@ -204,7 +205,9 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
             ? "abandoned"
             : null,
     proposal: proposal && run ? { ...proposalFromRow(proposal), model: run.model, evaluatedAt: run.createdAt.toISOString() } : null,
-    evaluation: evaluation ? { ...fieldsFromRow(evaluation), revision: evaluation.revision } : null,
+    evaluation: evaluation
+      ? { ...fieldsFromRow(evaluation), revision: evaluation.revision, origin: evaluation.origin, rubricVersion: evaluation.rubricVersion }
+      : null,
     decision:
       submission && row.decision
         ? {
@@ -309,8 +312,10 @@ export type SaveEvaluationResult =
   | { ok: true; changed: boolean; evaluation: SavedEvaluation; sentBack: boolean }
   /** The student replaced the copy, or its proposal changed, since it was opened (R5). */
   | { ok: false; reason: "replaced" }
-  /** Neither To review, Validated nor Published, or without an AI proposal (manual evaluation: E8.2). */
+  /** Not open to the teacher's evaluation: received or being evaluated, transcription failed (E9). */
   | { ok: false; reason: "not_open" }
+  /** A level left empty in an evaluation from a proposal (only a manual one may have one, REV-06): nothing written. */
+  | { ok: false; reason: "incomplete" }
   /** Saved meanwhile elsewhere (another tab): what is stored now, never overwritten silently (CA4). */
   | { ok: false; reason: "conflict"; saved: SavedEvaluation }
   /** NFR-DON-04 (E7.7): the teacher notice not read yet: nothing written. */
@@ -360,27 +365,81 @@ export type EditOutcome =
       ok: true;
       changed: boolean;
       evaluation: SavedEvaluation;
-      /** The proposal's values, what a validation compares the evaluation with (REV-05 R2). */
-      proposal: EvaluationFields;
+      /** The proposal's values, what a validation compares the evaluation with (REV-05 R2); null for a manual evaluation (REV-06). */
+      proposal: EvaluationFields | null;
+      /** The copy's state once the edit is written: To review after a change, or as it was. */
+      status: SubmissionStatus;
       /** Transition 10 was applied: the copy was Validated or Published and is To review again (Q8). */
       sentBack: boolean;
     }
   | { ok: false; reason: "not_open" | "incomplete" }
   | { ok: false; reason: "conflict"; saved: SavedEvaluation };
 
-const EDITABLE: readonly SubmissionStatus[] = ["to_review", "validated", "published"];
+const DECIDED: readonly SubmissionStatus[] = ["validated", "published"];
+/** REV-06: the states a manual evaluation starts from (transitions 6 and 7). */
+const MANUAL_FROM = { evaluation_failed: 6, not_assessable: 7 } as const satisfies Partial<Record<SubmissionStatus, 6 | 7>>;
+
+/** What a locked copy's evaluation starts from, read under the lock by a statement of its own. */
+type Stored = {
+  /** The proposal in force and its run's rubric version; null without one (REV-06). */
+  proposal: { id: string; fields: EvaluationFields; rubricVersion: string } | null;
+  evaluation: (SavedEvaluation & { origin: "proposal" | "manual"; rubricVersion: string }) | null;
+  language: AssignmentLanguage;
+  cause: NotAssessableCause | null;
+};
+
+async function readStored(tx: Tx, row: LockedCopy, submissionId: string): Promise<Stored | null> {
+  // Read once the lock is held, by a statement of its own: a save that
+  // waited for the lock sees what the other one committed (READ COMMITTED
+  // re-reads the locked row only, never the rows joined to it).
+  const [found] = await tx
+    .select({
+      language: assignments.language,
+      cause: submissions.notAssessableCause,
+      proposal: aiProposals,
+      rubricVersion: evaluationRuns.rubricVersion,
+      evaluation: teacherEvaluations,
+    })
+    .from(submissions)
+    .innerJoin(assignments, eq(assignments.id, submissions.assignmentId))
+    .leftJoin(aiProposals, eq(aiProposals.id, submissions.currentProposalId))
+    .leftJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
+    .leftJoin(teacherEvaluations, activeEvaluation)
+    .where(and(eq(submissions.id, submissionId), eq(submissions.currentVersion, row.versionNumber)));
+  if (!found) return null;
+  const { proposal, evaluation } = found;
+  return {
+    language: found.language,
+    cause: found.cause,
+    proposal:
+      proposal && found.rubricVersion
+        ? { id: proposal.id, fields: fieldsFromProposal(proposalFromRow(proposal)), rubricVersion: found.rubricVersion }
+        : null,
+    evaluation: evaluation
+      ? { ...fieldsFromRow(evaluation), revision: evaluation.revision, origin: evaluation.origin, rubricVersion: evaluation.rubricVersion }
+      : null,
+  };
+}
 
 /**
  * One save of the whole form on a locked copy (E7.4), shared by the save and
  * the validation (E8): checks the status, then the revision, applies the
- * changes, and writes them with their log entries (record.ts). Q8 [D,
- * 2026-10-22]: a real change of a Validated or Published copy first sends it
- * back To review (transition 10, logged sent_back_to_review): the database
- * never lets an evaluation change outside To review (0019), and a published
- * one leaves the student's view. A change of a Published copy also needs the
- * right to write the published evaluation. `create` writes the evaluation
- * even unchanged (a validation without changes); `complete` refuses levels
- * or a grade missing before anything is written.
+ * changes, and writes them with their log entries (record.ts). Three starts:
+ * - the teacher's evaluation, once it exists (from a proposal or by hand);
+ * - the proposal in force, for the first write on a copy To review;
+ * - nothing, for a manual evaluation (REV-06) of a copy failed (a refusal
+ *   included) or not assessable: its first write is transition 6 or 7 to To
+ *   review, logged manual_started, then the evaluation born "manual" with its
+ *   rubric version (manualRubricFor, Q6), in this one transaction; a copy is
+ *   never To review without a proposal or an evaluation. teacher_started_at
+ *   is set: no retry or relaunch any more (PRC-02 R4).
+ * Q8 [D, 2026-10-22]: a real change of a Validated or Published copy first
+ * sends it back To review (transition 10, logged sent_back_to_review): the
+ * database never lets an evaluation change outside To review (0019), and a
+ * published one leaves the student's view. A change of a Published copy
+ * also needs the right to write the published evaluation. `create` writes
+ * the evaluation even unchanged (a validation without changes); `complete`
+ * refuses levels or a grade missing before anything is written.
  */
 export async function editLocked(
   tx: Tx,
@@ -391,65 +450,81 @@ export async function editLocked(
   changes: EvaluationChanges,
   options: { create?: boolean; complete?: boolean } = {},
 ): Promise<EditOutcome> {
-  if (!EDITABLE.includes(row.status) || !row.proposalId) return { ok: false, reason: "not_open" };
+  const manualFrom = MANUAL_FROM[row.status as keyof typeof MANUAL_FROM];
+  if (!manualFrom && row.status !== "to_review" && !DECIDED.includes(row.status)) return { ok: false, reason: "not_open" };
+  const stored = await readStored(tx, row, seen.submissionId);
+  if (!stored) return { ok: false, reason: "not_open" };
 
-  // Read once the lock is held, by a statement of its own: a save that
-  // waited for the lock sees what the other one committed (READ COMMITTED
-  // re-reads the locked row only, never the rows joined to it).
-  const [current] = await tx
-    .select({ proposal: aiProposals, rubricVersion: evaluationRuns.rubricVersion, evaluation: teacherEvaluations })
-    .from(aiProposals)
-    .innerJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
-    .leftJoin(
-      teacherEvaluations,
-      and(eq(teacherEvaluations.submissionId, aiProposals.submissionId), eq(teacherEvaluations.versionNumber, aiProposals.versionNumber)),
-    )
-    .where(eq(aiProposals.id, row.proposalId));
-  if (!current?.rubricVersion) return { ok: false, reason: "not_open" };
+  const { evaluation, proposal } = stored;
+  // Where the evaluation starts; a copy To review has its proposal, or its manual evaluation (never neither).
+  const start = evaluation
+    ? { fields: evaluation as EvaluationFields, revision: evaluation.revision }
+    : manualFrom
+      ? { fields: emptyFields(), revision: 0 }
+      : proposal
+        ? { fields: proposal.fields, revision: 0 }
+        : null;
+  if (!start) return { ok: false, reason: "not_open" };
+  const saved: SavedEvaluation = { ...pickFields(start.fields), revision: start.revision };
+  if (start.revision !== seen.revision) return { ok: false, reason: "conflict", saved };
+  // An evaluation from a proposal has its five levels (the database's check): refused before anything is written.
+  const fromProposal = evaluation ? evaluation.origin === "proposal" : !manualFrom;
+  if (fromProposal && criterionIds.some((id) => changes.levels[id] === null)) return { ok: false, reason: "incomplete" };
 
-  const { evaluation } = current;
-  const proposal = fieldsFromProposal(proposalFromRow(current.proposal));
-  const stored: SavedEvaluation = evaluation ? { ...fieldsFromRow(evaluation), revision: evaluation.revision } : { ...proposal, revision: 0 };
-  if (stored.revision !== seen.revision) return { ok: false, reason: "conflict", saved: stored };
-
-  const { revision: fromRevision, ...before } = stored;
+  const before = pickFields(start.fields);
   const after = applyChanges(before, changes);
   if (options.complete && !isComplete(after)) return { ok: false, reason: "incomplete" };
   const changed = diffEvaluation(before, after).length > 0;
+  const comparedWith = fromProposal ? (proposal?.fields ?? null) : null;
+  // A validation without changes creates the evaluation from the proposal (E8.1); a manual one needs a change.
+  const creating = !!options.create && saved.revision === 0 && !manualFrom;
+  if (!changed && !creating) {
+    return { ok: true, changed: false, evaluation: saved, proposal: comparedWith, status: row.status, sentBack: false };
+  }
 
-  const sentBack = changed && row.status !== "to_review";
+  const entry = { assignmentId: row.assignmentId, submissionId: seen.submissionId, actorId: grant.userId, versionNumber: row.versionNumber };
+  const sentBack = DECIDED.includes(row.status);
   if (sentBack) {
     if (row.status === "published") authorize(actor, "publishedEvaluation", "write");
-    const moved = await applyTransition(tx, seen.submissionId, 10, "to_review", {
-      where: eq(submissions.currentVersion, row.versionNumber),
-    });
+    const moved = await applyTransition(tx, seen.submissionId, 10, "to_review", { where: eq(submissions.currentVersion, row.versionNumber) });
     if (!moved) throw new Error("editLocked: the copy left its state under the row lock");
-    await appendJournal(tx, [
-      {
-        assignmentId: row.assignmentId,
-        submissionId: seen.submissionId,
-        actorId: grant.userId,
-        event: "sent_back_to_review",
-        newValue: { from: row.status },
-        versionNumber: row.versionNumber,
-      },
-    ]);
+    await appendJournal(tx, [{ ...entry, event: "sent_back_to_review", newValue: { from: row.status } }]);
+  }
+  if (manualFrom) {
+    const moved = await applyTransition(tx, seen.submissionId, manualFrom, "to_review", { where: eq(submissions.currentVersion, row.versionNumber) });
+    if (!moved) throw new Error("editLocked: the copy left its state under the row lock");
+    await appendJournal(tx, [{ ...entry, event: "manual_started", newValue: { from: row.status, cause: stored.cause } }]);
   }
 
   const written = await writeEvaluation(tx, {
-    assignmentId: row.assignmentId,
-    submissionId: seen.submissionId,
-    versionNumber: row.versionNumber,
-    actorId: grant.userId,
-    fromRevision,
-    start: { origin: "proposal", proposalId: current.proposal.id, rubricVersion: current.rubricVersion },
+    ...entry,
+    fromRevision: saved.revision,
+    // The first write only: an evaluation that exists keeps its start (0017).
+    start:
+      saved.revision > 0
+        ? undefined
+        : manualFrom
+          ? { origin: "manual", rubricVersion: manualRubricFor(stored.language).version.id }
+          : { origin: "proposal", proposalId: proposal!.id, rubricVersion: proposal!.rubricVersion },
     before,
     after,
     create: options.create,
   });
-  return written
-    ? { ok: true, changed, evaluation: { ...after, revision: written.revision }, proposal, sentBack }
-    : { ok: true, changed: false, evaluation: stored, proposal, sentBack: false };
+  if (!written) throw new Error("editLocked: a change was not written");
+  return {
+    ok: true,
+    changed,
+    evaluation: { ...after, revision: written.revision },
+    proposal: comparedWith,
+    status: "to_review",
+    sentBack,
+  };
+}
+
+/** The evaluation's fields only, without what the stored row adds (origin, rubric version). */
+function pickFields(fields: EvaluationFields): EvaluationFields {
+  const { levels, remarks, reread, generalComment, nextSteps, finalGrade, gradeFixed } = fields;
+  return { levels, remarks, reread, generalComment, nextSteps, finalGrade, gradeFixed };
 }
 
 /**
@@ -476,7 +551,7 @@ export async function saveEvaluation(
     const refused = lockedRefusal(row, seen);
     if (refused) return refused;
     const edit = await editLocked(tx, actor, grant, row, seen, changes);
-    if (!edit.ok) return edit.reason === "conflict" ? edit : { ok: false, reason: "not_open" };
+    if (!edit.ok) return edit;
     return { ok: true, changed: edit.changed, evaluation: edit.evaluation, sentBack: edit.sentBack };
   });
 }

@@ -48,12 +48,18 @@ describe("historyOf", () => {
     expect(items[1].changes[0]).toMatchObject({ before: "Empty", after: "A" });
   });
 
-  it("names the start of a manual evaluation, an act of its own (startManualEvaluation logs it)", () => {
+  it("names the start of a manual evaluation, an act of its own, and its first values (E8.2)", () => {
     const items = historyOf([entry({ event: "manual_started" }), entry({ event: "copy_opened" })]);
     expect(items.map((i) => [i.label, i.author, i.changes.length])).toEqual([
-      ["Started a manual evaluation", "Sarah Bennett", 0],
+      ["Entered manually, without AI proposal", "Sarah Bennett", 0],
       ["Opened the copy", "Sarah Bennett", 0],
     ]);
+    const first = historyOf([
+      entry({ event: "evaluation_changed", field: "level.task", oldValue: null, newValue: 3, evaluationRevision: 1 }),
+      entry({ event: "evaluation_created", newValue: { origin: "manual", rubricVersion: "en-1" }, evaluationRevision: 1 }),
+    ]);
+    expect(first.map((i) => i.label)).toEqual(["Entered the first values of their evaluation"]);
+    expect(first[0].changes[0]).toMatchObject({ before: "None", after: expect.stringMatching(/^3 – /) });
   });
 
   it("E8.1: a validation says its nature; a publication, its withdrawal and a change sending a copy back are acts of their own", () => {

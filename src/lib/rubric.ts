@@ -143,6 +143,23 @@ export function publishedRubric(
   return registry.findLast((version) => version.language === language) ?? null;
 }
 
+/**
+ * REV-06, Q6 (E8 plan §3, [D, 2026-10-22]): the rubric a manual evaluation is
+ * entered on, and recorded with it: the language's version in force; while
+ * a language has none (French, until the client validates it), the English
+ * one, `substitute`, said as such on the screens.
+ */
+export function manualRubricFor(
+  language: AssignmentLanguage,
+  registry: readonly RubricVersion[] = RUBRIC_VERSIONS,
+): { version: RubricVersion; substitute: boolean } {
+  const own = publishedRubric(language, registry);
+  if (own) return { version: own, substitute: false };
+  const english = publishedRubric("en", registry);
+  if (!english) throw new Error("manualRubricFor: no English rubric published");
+  return { version: english, substitute: true };
+}
+
 /** The English rubric in force, for the screens that show a single one (the copy, E7.3). */
 export const rubric = EN_1.criteria;
 export const levelNames: Record<Level, string> = {

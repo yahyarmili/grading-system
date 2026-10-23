@@ -12,7 +12,8 @@ import {
   type SeenDecision,
   type ValidateResult,
 } from "@/server/data/review/publication";
-import { EVALUATION_MESSAGES, readEvaluationForm, type SaveEvaluationState } from "./evaluation";
+import type { EvaluationChanges } from "@/lib/review";
+import { emptyLevelErrors, EVALUATION_MESSAGES, readEvaluationForm, type SaveEvaluationState } from "./evaluation";
 
 // REV-05, PUB-01 (E8.1), without Next request APIs so integration tests can
 // call it: validate (with the whole form on screen), publish, withdraw, and
@@ -29,7 +30,6 @@ export const PUBLICATION_MESSAGES = {
   withdrawn: "Publication withdrawn. The copy is Validated again; the student no longer sees the result.",
   alreadyWithdrawn: "Not published. Nothing changed.",
   notOpen: "This copy cannot be validated: it has no evaluation to validate. The page has been reloaded. Nothing was validated.",
-  incomplete: "Choose a level for each criterion and set a grade before validating. Nothing was validated.",
   notValidated: "Only a validated copy can be published. The page has been reloaded. Nothing was published.",
   notPublished: "This copy is not published. The page has been reloaded. Nothing changed.",
   changed: "This evaluation changed since this page was shown (another tab or window). The page has been reloaded. Nothing changed.",
@@ -48,7 +48,7 @@ export type DecisionState =
   | { status: "publish_failed"; evaluation: SavedEvaluation; message: string };
 
 /** The validation's refusals, as the form shows them (the same as a save's, E7.4). */
-function refusedValidation(result: Exclude<ValidateResult, { ok: true }>): DecisionState {
+function refusedValidation(result: Exclude<ValidateResult, { ok: true }>, changes: EvaluationChanges): DecisionState {
   switch (result.reason) {
     case "conflict":
       return { status: "conflict", message: EVALUATION_MESSAGES.conflict, saved: result.saved };
@@ -57,7 +57,8 @@ function refusedValidation(result: Exclude<ValidateResult, { ok: true }>): Decis
     case "notice_required":
       return { status: "not_open", message: PUBLICATION_MESSAGES.noticeRequired };
     case "incomplete":
-      return { status: "not_open", message: PUBLICATION_MESSAGES.incomplete };
+      // REV-05 R2, REV-06: each level left empty is said next to it; nothing was written.
+      return { status: "invalid", fieldErrors: emptyLevelErrors(changes) };
     case "not_open":
       return { status: "not_open", message: PUBLICATION_MESSAGES.notOpen };
   }
@@ -99,7 +100,7 @@ export async function validateTeacherEvaluation(
   try {
     const result = await validateEvaluation(actor, seen, changes);
     if (!result) return { status: "not_found", message: PUBLICATION_MESSAGES.notFound };
-    if (!result.ok) return refusedValidation(result);
+    if (!result.ok) return refusedValidation(result, changes);
     validated = result;
   } catch (error) {
     return denied(actor, error, { status: "not_found", message: PUBLICATION_MESSAGES.notFound } as const);

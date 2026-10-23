@@ -12,7 +12,8 @@ import { criterionIds, levels, type CriterionId, type Level } from "@/lib/rubric
 
 /** What the form holds while the teacher types. */
 export type Draft = {
-  levels: Record<CriterionId, Level>;
+  /** Null while not chosen: a manual evaluation in progress (REV-06). */
+  levels: Record<CriterionId, Level | null>;
   remarks: Record<CriterionId, string>;
   generalComment: string;
   /** One step per line. */
@@ -40,7 +41,7 @@ function isDraft(value: unknown): value is Draft {
   if (!isRecord(value) || !isRecord(value.levels) || !isRecord(value.remarks)) return false;
   const { levels: lv, remarks } = value;
   return (
-    criterionIds.every((id) => (levels as readonly unknown[]).includes(lv[id]) && typeof remarks[id] === "string") &&
+    criterionIds.every((id) => (lv[id] === null || (levels as readonly unknown[]).includes(lv[id])) && typeof remarks[id] === "string") &&
     typeof value.generalComment === "string" &&
     typeof value.nextSteps === "string" &&
     typeof value.gradeFixed === "boolean" &&

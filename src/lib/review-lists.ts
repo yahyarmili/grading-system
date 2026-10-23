@@ -8,7 +8,8 @@ export type TeacherEvaluationOrigin = (typeof teacherEvaluationOrigins)[number];
 /**
  * The events of the review log (REV-04 R2). Declared together so E8 adds no
  * enum value: validated, published, unpublished and sent_back_to_review are
- * written from E8; manual_started since E7.9 (startManualEvaluation).
+ * written from E8; manual_started since E7.9, with the first write of a manual
+ * evaluation since E8.2 (review/copy.ts#editLocked).
  */
 export const reviewEvents = [
   "list_opened",

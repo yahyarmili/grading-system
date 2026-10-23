@@ -42,12 +42,12 @@ export async function seedTeacher(
     classId,
     close: () => client.end(),
 
-    /** A locked assignment sent to these classes. */
-    async assignment(classNames: string[], title = "My town") {
+    /** A locked assignment sent to these classes, in English unless asked (a French one: E8.2, Q6). */
+    async assignment(classNames: string[], title = "My town", language: "en" | "fr" = "en") {
       const { id } = await one<{ id: string }>(
         `INSERT INTO assignments (teacher_id, title, subject, level, language, deadline, locked_at)
-         VALUES ($1, $2, 'Describe your town.', 'B1', 'en', now() + interval '7 days', now()) RETURNING id`,
-        [teacherId, title],
+         VALUES ($1, $2, 'Describe your town.', 'B1', $3, now() + interval '7 days', now()) RETURNING id`,
+        [teacherId, title, language],
       );
       for (const name of classNames) {
         await client.query(`INSERT INTO assignment_classes (assignment_id, class_id, teacher_id) VALUES ($1, $2, $3)`, [id, classId(name), teacherId]);

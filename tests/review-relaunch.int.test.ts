@@ -10,7 +10,7 @@ import { getSimulator } from "@/server/ai";
 import { createAssignment, getStudentAssignment } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { abandonEvaluationRequest } from "@/server/data/evaluation/system";
-import { listRelaunchable, startManualEvaluation, type EvaluationStartContext, type RelaunchConditions } from "@/server/data/evaluation/teacher";
+import { listRelaunchable, type EvaluationStartContext, type RelaunchConditions } from "@/server/data/evaluation/teacher";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
 
 
@@ -23,7 +23,7 @@ import { evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/eva
 import { REQUEST_MESSAGES, relaunchCopy, retryCopy } from "@/server/review/relaunch";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { recordTriggers } from "./helpers/triggers";
-import { getCopy, listAssignmentCopies, readTeacherNotice } from "./helpers/review";
+import { enterByHand, getCopy, listAssignmentCopies, readTeacherNotice } from "./helpers/review";
 
 // PRC-02 from the screen (E7.6): what the copy and the list read, and what
 // "Retry" and "Relaunch" do through their service: the request on the
@@ -184,7 +184,7 @@ describe("PRC-02 CA3 from the list and the copy: Relaunch", () => {
     const { teacher, refs, assignmentId } = await assignment(3);
     for (const ref of refs) expect(await step(ref, { guard: capReached })).toMatchObject({ status: "not_assessable" });
     // Evaluated by hand: never offered. Still evaluated: the third, left as is.
-    expect(await startManualEvaluation(teacher, seenOf(refs[1]))).toEqual({ ok: true });
+    expect(await enterByHand(teacher, seenOf(refs[1]))).toMatchObject({ ok: true, changed: true });
 
     // The cap still reached: nothing offered, the relaunch refused.
     const capped: RelaunchConditions = { ...ENGLISH_ONLY, costCapReached: true };

@@ -15,7 +15,6 @@ import {
   listRelaunchable,
   relaunchEvaluation,
   retryEvaluation,
-  startManualEvaluation,
   type EvaluationStartContext,
   type RelaunchConditions,
   type SeenVersion,
@@ -33,7 +32,7 @@ import { sweepEvaluations } from "@/server/evaluation/sweep";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { FR_TEST_RUBRIC } from "./fixtures/rubric-fr-test";
 import { recordTriggers } from "./helpers/triggers";
-import { readTeacherNotice } from "./helpers/review";
+import { enterByHand, readTeacherNotice } from "./helpers/review";
 
 // E6.3, PRC-02: after the attempts, "evaluation failed"; the owner teacher
 // retries it (transition 6), relaunches a copy "not assessable" once its
@@ -307,7 +306,7 @@ describe("PRC-02 CA3, R4: a relaunch offered when the cause disappears, for thos
     // French not published yet: nothing offered.
     expect(await relaunchConditions()).toEqual({ rubricLanguages: ["en"], costCapReached: false });
     expect(await listRelaunchable(teacher, assignmentId, await relaunchConditions())).toEqual([]);
-    expect(await startManualEvaluation(teacher, byHand)).toEqual({ ok: true });
+    expect(await enterByHand(teacher, byHand)).toMatchObject({ ok: true, changed: true });
 
     const french = await relaunchConditions(WITH_FRENCH);
     expect(french.rubricLanguages).toEqual(["en", "fr"]);
@@ -344,7 +343,7 @@ describe("PRC-02 CA3, R4: a relaunch offered when the cause disappears, for thos
   it("the claim itself refuses a relaunch of a copy without content or evaluated by hand", async () => {
     const { teacher, refs } = await assignment("fr", [TEXT.fr, "1234 5678 !!!"]);
     for (const ref of refs) await step(ref);
-    await startManualEvaluation(teacher, refs[0]);
+    await enterByHand(teacher, refs[0]);
     for (const ref of refs) expect(await step({ ...ref, origin: "relaunch" }, { registry: WITH_FRENCH })).toEqual({ status: "skipped" });
   });
 
@@ -419,7 +418,7 @@ describe("manual evaluation (REV-06, transitions 6 and 7 to to_review)", () => {
     getSimulator().failNext({ kind: "error", status: 529 }, AI_MAX_ATTEMPTS);
     await step(refs[0]);
     await step(refs[1]);
-    expect(await startManualEvaluation(teacher, refs[0])).toEqual({ ok: true });
+    expect(await enterByHand(teacher, refs[0])).toMatchObject({ ok: true, changed: true });
     expect(await row(refs[0].submissionId)).toMatchObject({ status: "to_review", current: null, started: expect.any(Date) });
     // REV-04: the teacher's act is logged in its transaction, by its author, without a revision (no entry before the fix).
     const manualStarted = (submissionId: string) =>
@@ -434,11 +433,11 @@ describe("manual evaluation (REV-06, transitions 6 and 7 to to_review)", () => {
     });
     const starts = recordStarts();
     expect(await retryEvaluation(teacher, refs[0], starts)).toEqual({ ok: false, reason: "not_failed" });
-    // A copy to review with its proposal is not evaluated by hand from here (E8 has its own form).
-    expect(await startManualEvaluation(teacher, refs[1])).toEqual({ ok: false, reason: "not_open" });
-    expect(await startManualEvaluation(teacher, { ...refs[0], versionNumber: 2 })).toEqual({ ok: false, reason: "changed" });
-    expect(await startManualEvaluation(await createUser("teacher"), refs[0])).toBeNull();
-    await expect(startManualEvaluation(students[0], refs[0])).rejects.toBeInstanceOf(AccessDeniedError);
+    // A copy to review with its proposal is not entered by hand: the page that saw no proposal is out of date.
+    expect(await enterByHand(teacher, refs[1])).toEqual({ ok: false, reason: "replaced" });
+    expect(await enterByHand(teacher, { ...refs[0], versionNumber: 2 })).toEqual({ ok: false, reason: "replaced" });
+    expect(await enterByHand(await createUser("teacher"), refs[0])).toBeNull();
+    await expect(enterByHand(students[0], refs[0])).rejects.toBeInstanceOf(AccessDeniedError);
     // The refused calls log nothing: still the one entry, none for the copy to review.
     expect(await manualStarted(refs[0].submissionId)).toEqual(logged);
     expect(await manualStarted(refs[1].submissionId)).toEqual([]);

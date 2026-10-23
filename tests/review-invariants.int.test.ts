@@ -14,7 +14,6 @@ import { getCurrentProposal } from "@/server/data/evaluation/proposals";
 import {
   relaunchEvaluation,
   retryEvaluation,
-  startManualEvaluation,
   type EvaluationStartContext,
 } from "@/server/data/evaluation/teacher";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
@@ -24,7 +23,7 @@ import { db } from "@/server/db/client";
 import { aiProposals, classMemberships, evaluationRuns, reviewJournalEntries, submissions, teacherEvaluations, users } from "@/server/db/schema";
 import { evaluateSubmission, type EvaluationDeps } from "@/server/evaluation/evaluate";
 import { submitStudentText } from "@/server/submissions/submissions";
-import { readTeacherNotice } from "./helpers/review";
+import { enterByHand, readTeacherNotice } from "./helpers/review";
 import { recordTriggers } from "./helpers/triggers";
 
 // Review of E7 (0018): what the database itself holds of the teacher's
@@ -360,15 +359,15 @@ describe("the normal paths still pass", { timeout: 60_000 }, () => {
     expect(await evaluate(relaunched.refs[0])).toMatchObject({ status: "to_review" });
   });
 
-  it("a manual evaluation (E8's path): started, then born on the started version with its creation entry", async () => {
+  it("a manual evaluation (E8.2): its first save starts the copy and the evaluation together, born on the started version with its entries", async () => {
     const copy = await failedCopy();
-    expect(await startManualEvaluation(copy.teacher, copy.ref)).toEqual({ ok: true });
-    await db.transaction(async (tx) => {
-      await tx.insert(teacherEvaluations).values({
-        submissionId: copy.submissionId, versionNumber: 1, origin: "manual", rubricVersion: "en-1", createdBy: copy.teacher.userId,
-      });
-      await tx.insert(reviewJournalEntries).values({ ...entryOf(copy), event: "evaluation_created", evaluationRevision: 1 });
-    });
-    expect(await evaluationOf(copy.submissionId)).toMatchObject({ origin: "manual", revision: 1 });
+    expect(await enterByHand(copy.teacher, copy.ref)).toMatchObject({ ok: true, changed: true, evaluation: { revision: 1 } });
+    expect(await evaluationOf(copy.submissionId)).toMatchObject({ origin: "manual", rubricVersion: "en-1", revision: 1, proposalId: null });
+    const events = await db
+      .select({ event: reviewJournalEntries.event })
+      .from(reviewJournalEntries)
+      .where(eq(reviewJournalEntries.submissionId, copy.submissionId))
+      .orderBy(reviewJournalEntries.createdAt);
+    expect(events.map((e) => e.event)).toEqual(["manual_started", "evaluation_created", ...events.slice(2).map(() => "evaluation_changed")]);
   });
 });

@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
 import { TEACHER_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
-import { getCopy as getCopyOrNotice } from "@/server/data/review/copy";
+import type { EvaluationChanges } from "@/lib/review";
+import { getCopy as getCopyOrNotice, saveEvaluation } from "@/server/data/review/copy";
 import { listAssignmentCopies as listOrNotice } from "@/server/data/review/list";
 import { db } from "@/server/db/client";
 import { noticeAcknowledgements } from "@/server/db/schema";
@@ -60,3 +61,21 @@ export async function giveCompleteEvaluation(submissionId: string): Promise<void
     await tx.execute(sql`update submissions set status = ${s.status} where id = ${submissionId}`);
   });
 }
+
+/** E8.2 (REV-06): a complete form entered by hand, every level 2 (grade 10). */
+export const MANUAL_FORM: EvaluationChanges = {
+  levels: { task: 2, organization: 2, vocabulary: 2, grammar: 2, mechanics: 2 },
+  remarks: { task: "Entered by hand.", organization: "", vocabulary: "", grammar: "", mechanics: "" },
+  generalComment: "",
+  nextSteps: [],
+  grade: { fixed: false },
+  rereadDone: [],
+};
+
+/**
+ * E8.2 (REV-06): the first save of a manual evaluation on a copy failed or
+ * not assessable, as its page sends it (no proposal, revision 0): what
+ * startManualEvaluation did before E8.2, now with the evaluation itself.
+ */
+export const enterByHand = (actor: Actor, seen: { submissionId: string; versionNumber: number }, changes: EvaluationChanges = MANUAL_FORM) =>
+  saveEvaluation(actor, { ...seen, proposalId: null, revision: 0 }, changes);

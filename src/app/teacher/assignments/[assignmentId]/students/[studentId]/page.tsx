@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { Ban, CalendarClock, CircleDashed, FileText, Hourglass, Image as ImageIcon, Mail, TriangleAlert, UserMinus, Users, type LucideIcon } from "lucide-react";
+import { Ban, CalendarClock, CircleDashed, FileText, Hourglass, Image as ImageIcon, Mail, PenLine, TriangleAlert, UserMinus, Users, type LucideIcon } from "lucide-react";
 import { z } from "zod";
 import { Alert } from "@/components/alert";
 import { EmptyState } from "@/components/empty-state";
@@ -14,6 +15,7 @@ import { formatDateTime } from "@/lib/dates";
 import { evaluationFailureLabel, notAssessableCauseLabels } from "@/lib/evaluation";
 import { mayOfferRelaunch } from "@/lib/relaunch-offer";
 import { parseReviewListQuery, reviewListSearch } from "@/lib/review-list";
+import { manualRubricFor, RUBRIC_VERSIONS } from "@/lib/rubric";
 import { getActor } from "@/server/auth/session";
 import { listRelaunchable } from "@/server/data/evaluation/teacher";
 import { getCopy, getStudentIdentity, type StudentIdentity, type TeacherCopy } from "@/server/data/review/copy";
@@ -60,12 +62,22 @@ export default async function Page({ params, searchParams }: Props) {
   }
 
   // The list's sort and filters, given back as they were (REV-01), read again so nothing else passes.
-  const list = (await searchParams).list;
+  const search = await searchParams;
+  const list = search.list;
   const listState = parseReviewListQuery(
     Object.fromEntries(new URLSearchParams(typeof list === "string" ? list : "")),
     copy.classes.map((c) => c.id),
   );
-  const reviewable = copy.proposal !== null && ["to_review", "validated", "published"].includes(copy.status);
+  const evaluable = ["to_review", "validated", "published"].includes(copy.status);
+  // REV-06 (E8.2): entered by hand, on a copy the AI did not evaluate (?manual=1, nothing written before
+  // the first save), or once its manual evaluation exists. Its rubric: the language's, or the English one (Q6).
+  const manualStart = (copy.status === "evaluation_failed" || copy.status === "not_assessable") && search.manual === "1";
+  const manual = manualStart || (evaluable && copy.evaluation?.origin === "manual");
+  const reviewable = manual || (copy.proposal !== null && evaluable);
+  const recorded = RUBRIC_VERSIONS.find((v) => v.id === copy.evaluation?.rubricVersion);
+  const manualHref = `?${new URLSearchParams({ ...(typeof list === "string" ? { list } : {}), manual: "1" })}`;
+  const substituteRubric =
+    manual && (recorded ? recorded.language !== copy.assignment.language : manualRubricFor(copy.assignment.language).substitute);
   // PRC-02 R4: read only for a copy that may be offered, by the list's rule (two round trips otherwise spared, C8b).
   const relaunchable =
     copy.seen !== null &&
@@ -82,7 +94,7 @@ export default async function Page({ params, searchParams }: Props) {
       <Identity copy={copy} identity={identity} />
       <NoticeArea>
         {copy.version === null ? (
-          <StatusCard copy={copy} relaunchable={relaunchable} />
+          <StatusCard copy={copy} relaunchable={relaunchable} manualHref={manualHref} />
         ) : (
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
             <div className="flex flex-col xl:sticky xl:top-[calc(var(--spacing-header)+1rem)] xl:max-h-[calc(100dvh-var(--spacing-header)-2rem)]">
@@ -93,18 +105,19 @@ export default async function Page({ params, searchParams }: Props) {
                 language={copy.assignment.language}
               />
             </div>
-            {reviewable && copy.proposal && copy.seen ? (
+            {reviewable && copy.seen ? (
               <EvaluationForm
                 // A copy replaced under the page starts a new form. A new revision does not:
                 // the form takes it, or asks when changes are typed (REV-03 CA4, evaluation-form.tsx).
                 key={`${copy.seen.versionNumber}:${copy.seen.proposalId}`}
-                proposal={copy.proposal}
+                proposal={manual ? null : copy.proposal}
                 evaluation={copy.evaluation}
                 seen={copy.seen}
                 language={copy.assignment.language}
+                substituteRubric={substituteRubric}
               />
             ) : (
-              <StatusCard copy={copy} relaunchable={relaunchable} />
+              <StatusCard copy={copy} relaunchable={relaunchable} manualHref={manualHref} />
             )}
           </div>
         )}
@@ -124,9 +137,10 @@ export default async function Page({ params, searchParams }: Props) {
  * REV-02 R4: a copy without a proposal to review shows why, without a form.
  * PRC-02 (E7.6): a failed copy offers "Retry"; a not assessable one,
  * "Relaunch" when listRelaunchable offers it. A request waiting for its run,
- * or dropped for want of a place, is said. Manual evaluation: E8.
+ * or dropped for want of a place, is said. Both offer "Evaluate manually"
+ * (REV-06, E8.2): the form, on the same page (?manual=1).
  */
-function StatusCard({ copy, relaunchable }: { copy: TeacherCopy; relaunchable: boolean }) {
+function StatusCard({ copy, relaunchable, manualHref }: { copy: TeacherCopy; relaunchable: boolean; manualHref: string }) {
   const { icon, title, description } = statusPage(copy, relaunchable);
   const seen = copy.seen;
   const refused = copy.status === "evaluation_failed" && copy.lastError === "refused";
@@ -134,6 +148,8 @@ function StatusCard({ copy, relaunchable }: { copy: TeacherCopy; relaunchable: b
   const relaunch = copy.status === "not_assessable" && relaunchable && seen;
   const waiting = copy.request === "pending" || ["received", "evaluating"].includes(copy.status);
   const asked = copy.status === "evaluation_failed" ? "Retry" : "Relaunch";
+  // REV-06: a failed copy (a refusal included) or a not assessable one (any cause) is evaluated by hand.
+  const manual = (copy.status === "evaluation_failed" || copy.status === "not_assessable") && seen;
 
   return (
     <div className="card">
@@ -143,7 +159,7 @@ function StatusCard({ copy, relaunchable }: { copy: TeacherCopy; relaunchable: b
         title={title}
         description={description}
         action={
-          (retry || relaunch || copy.request) && (
+          (retry || relaunch || manual || copy.request) && (
             <div className="flex max-w-md flex-col items-center gap-3 text-left">
               {copy.request === "pending" && (
                 <Alert tone="info" title={`${asked} requested`}>
@@ -162,16 +178,25 @@ function StatusCard({ copy, relaunchable }: { copy: TeacherCopy; relaunchable: b
                   </span>
                 </Alert>
               )}
-              {retry && (
-                <RequestButton
-                  kind="retry"
-                  seen={seen}
-                  label={refused ? "Retry anyway" : "Retry"}
-                  primary
-                  describedBy={refused ? "refusal-warning" : undefined}
-                />
-              )}
-              {relaunch && <RequestButton kind="relaunch" seen={seen} label="Relaunch" primary />}
+              <div className="flex flex-wrap justify-center gap-2">
+                {retry && (
+                  <RequestButton
+                    kind="retry"
+                    seen={seen}
+                    label={refused ? "Retry anyway" : "Retry"}
+                    primary={!refused}
+                    describedBy={refused ? "refusal-warning" : undefined}
+                  />
+                )}
+                {relaunch && <RequestButton kind="relaunch" seen={seen} label="Relaunch" primary />}
+                {/* REV-06: the teacher's own evaluation, without a proposal; nothing is written before its first save. */}
+                {manual && (
+                  <Link href={manualHref} className={(retry && !refused) || relaunch ? "btn btn-secondary" : "btn btn-primary"}>
+                    <PenLine aria-hidden="true" className="size-4" />
+                    Evaluate manually
+                  </Link>
+                )}
+              </div>
             </div>
           )
         }

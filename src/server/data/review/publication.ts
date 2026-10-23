@@ -51,8 +51,10 @@ export type ValidateResult =
  * established by content (E8 plan §1: the result against the proposal it
  * started from). A copy validated without any change gets its evaluation
  * created from the proposal (teacher_started_at set: SUB-05 CA3). Nothing
- * becomes visible to the student (R1). Refused for a copy failed, not
- * assessable, or not evaluated yet ("not_open"), whatever the screen allowed.
+ * becomes visible to the student (R1). A copy failed or not assessable is
+ * validated only with the five levels and a grade entered by hand (REV-06,
+ * "incomplete" otherwise: nothing written), its nature "manual"; one not
+ * evaluated yet is refused ("not_open"), whatever the screen allowed.
  */
 export async function validateEvaluation(
   actor: Actor,
@@ -68,8 +70,9 @@ export async function validateEvaluation(
     const edit = await editLocked(tx, actor, grant, row, seen, changes, { create: true, complete: true });
     if (!edit.ok) return edit;
     // Validated or Published already, and the form changed nothing: the same act again (a double click).
-    if (row.status !== "to_review" && !edit.sentBack) {
-      return { ok: true, already: true, status: row.status as "validated" | "published", evaluation: edit.evaluation };
+    // A copy failed or not assessable, entered by hand, is To review now (REV-06): validated next.
+    if (edit.status === "validated" || edit.status === "published") {
+      return { ok: true, already: true, status: edit.status, evaluation: edit.evaluation };
     }
 
     const moved = await applyTransition(tx, seen.submissionId, 8, "validated", {

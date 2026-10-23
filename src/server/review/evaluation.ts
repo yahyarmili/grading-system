@@ -56,7 +56,13 @@ const saveSchema = z.object({
   }),
   // Range checked here: the type follows it.
   levels: perCriterion(
-    z.int(EVALUATION_MESSAGES.level).min(LEVELS[0], EVALUATION_MESSAGES.level).max(LEVELS.at(-1)!, EVALUATION_MESSAGES.level).transform((level) => level as Level),
+    z
+      .int(EVALUATION_MESSAGES.level)
+      .min(LEVELS[0], EVALUATION_MESSAGES.level)
+      .max(LEVELS.at(-1)!, EVALUATION_MESSAGES.level)
+      .transform((level) => level as Level)
+      // REV-06: not chosen yet, in a manual evaluation only (the data layer refuses it otherwise: "incomplete").
+      .nullable(),
   ),
   remarks: perCriterion(text),
   generalComment: text,
@@ -80,6 +86,13 @@ function fieldErrors(error: z.ZodError): Partial<Record<EvaluationField, string>
     errors[field] ??= issue.message;
   }
   return errors;
+}
+
+/** REV-05 R2, REV-06: the message of each level left empty. */
+export function emptyLevelErrors(changes: EvaluationChanges): Partial<Record<EvaluationField, string>> {
+  return Object.fromEntries(
+    criterionIds.filter((id) => changes.levels[id] === null).map((id) => [`level.${id}`, EVALUATION_MESSAGES.levelMissing]),
+  );
 }
 
 /**
@@ -115,6 +128,8 @@ export async function saveTeacherEvaluation(actor: Actor, raw: unknown): Promise
     if (result.reason === "conflict") return { status: "conflict", message: EVALUATION_MESSAGES.conflict, saved: result.saved };
     // E7.7: the page reloads on the notice; the copy is not open to this teacher yet.
     if (result.reason === "notice_required") return { status: "not_open", message: EVALUATION_MESSAGES.noticeRequired };
+    // An evaluation from a proposal keeps its five levels: each one left empty is said next to it.
+    if (result.reason === "incomplete") return { status: "invalid", fieldErrors: emptyLevelErrors(changes) };
     return result.reason === "replaced"
       ? { status: "replaced", message: EVALUATION_MESSAGES.replaced }
       : { status: "not_open", message: EVALUATION_MESSAGES.notOpen };

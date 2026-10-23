@@ -143,6 +143,15 @@ export const TEACHER_NOTICE = {
   acknowledge: "I have read this notice",
 } as const;
 
+/**
+ * Q6 (E8 plan §3, [D, 2026-10-22]) [P] wording: a manual evaluation of an
+ * assignment whose language has no validated rubric (French) is entered on
+ * the English one, en-1, recorded with it; shown to the teacher, and to the
+ * student with the result (E8.3).
+ */
+export const MANUAL_RUBRIC_SUBSTITUTE_NOTICE =
+  "The rubric for this language is not validated yet: these are the criteria of the English rubric (en-1).";
+
 /** SUB-05, Q3 [D, 2026-10-15]: replacements left, until the teacher's first change or validation. */
 export const replacementsLeftNotice = (left: number) =>
   `You can replace your text ${left === 1 ? "once more" : `${left} more times`}, until your teacher starts marking it. Your teacher marks the last text you sent.`;

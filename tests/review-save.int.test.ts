@@ -188,6 +188,15 @@ describe("saving the teacher's evaluation (REV-03, REV-04)", { timeout: 120_000 
     });
   });
 
+  it("E8.2: an evaluation from a proposal keeps its five levels: a level left empty is refused next to it, nothing written", async () => {
+    const copy = await copyToReview();
+    expect(await saveTeacherEvaluation(copy.teacher, form(copy, { levels: { ...form(copy).levels, grammar: null } }))).toEqual({
+      status: "invalid", fieldErrors: { "level.grammar": EVALUATION_MESSAGES.levelMissing },
+    });
+    expect(await journalOf(copy.submissionId)).toEqual([]);
+    expect(await startedAt(copy.submissionId)).toBeNull();
+  });
+
   it("a save with nothing new writes nothing: the copy stays replaceable", async () => {
     const copy = await copyToReview();
     expect(await saveTeacherEvaluation(copy.teacher, form(copy))).toMatchObject({ status: "saved", changed: false, evaluation: { revision: 0 } });

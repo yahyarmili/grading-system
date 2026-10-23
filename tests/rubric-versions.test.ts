@@ -4,6 +4,7 @@ import { assignmentLanguages } from "@/lib/assignment";
 import {
   criterionIds,
   levels,
+  manualRubricFor,
   publishedRubric,
   RUBRIC_VERSIONS,
   type RubricVersion,
@@ -115,5 +116,15 @@ describe("the version in force", () => {
     ] satisfies RubricVersion[];
     expect(publishedRubric("en", registry)?.id).toBe("en-2");
     expect(publishedRubric("fr", registry)?.id).toBe("fr-1");
+  });
+});
+
+describe("the rubric of a manual evaluation (REV-06, Q6)", () => {
+  it("is the language's own when published; the English one, said a substitute, while French has none", () => {
+    expect(manualRubricFor("en")).toMatchObject({ version: { id: "en-1" }, substitute: false });
+    expect(manualRubricFor("fr")).toMatchObject({ version: { id: "en-1" }, substitute: true });
+    const [en1] = RUBRIC_VERSIONS;
+    const withFrench = [en1, { ...en1, id: "fr-1", language: "fr" }] satisfies RubricVersion[];
+    expect(manualRubricFor("fr", withFrench)).toMatchObject({ version: { id: "fr-1" }, substitute: false });
   });
 });
