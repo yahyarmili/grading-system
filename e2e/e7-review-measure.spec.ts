@@ -71,56 +71,28 @@ test("E7.8: list, copy and save on an assignment of 120 copies, measured", async
     samples: { list, openCopy: copy, save },
   };
   console.log(JSON.stringify(result, null, 2));
-  // MEASURE_LABEL names a run, so that runs compared the same day do not overwrite each other (E8.6).
-  const label = process.env.MEASURE_LABEL ? `-${process.env.MEASURE_LABEL}` : "";
-  await writeFile(`test-results/e7-review-measure${E2E_ONLINE_URL ? "-online" : ""}${label}.json`, JSON.stringify(result, null, 2));
+  await writeFile(`test-results/e7-review-measure${E2E_ONLINE_URL ? "-online" : ""}.json`,JSON.stringify(result, null, 2));
 });
 
-/** TEMPORARY (E8.6): the proxy's Server-Timing on the page's own GET, in ms; null when not sent. */
-type ProxyTiming = Record<string, number> | null;
-type Sample = { shownMs: number; documentMs: number | null; proxy: ProxyTiming };
-
-/** TEMPORARY (E8.6): runs `act` and gives the Server-Timing of the first GET of `pathname` it caused. */
-async function withProxyTiming<T>(page: Page, pathname: string, act: () => Promise<T>): Promise<[T, ProxyTiming]> {
-  const timings: ProxyTiming[] = [];
-  const listen = (response: import("@playwright/test").Response) => {
-    if (response.request().method() !== "GET" || new URL(response.url()).pathname !== pathname) return;
-    const header = response.headers()["server-timing"];
-    timings.push(header ? Object.fromEntries(header.split(",").map((part) => {
-      const [name, dur] = part.trim().split(";dur=");
-      return [name, Number(dur)];
-    })) : null);
-  };
-  page.on("response", listen);
-  try {
-    return [await act(), timings[0] ?? null];
-  } finally {
-    page.off("response", listen);
-  }
-}
+type Sample = { shownMs: number; documentMs: number | null };
 
 /** From the navigation to the first page of the table, 50 rows. */
 async function showList(page: Page, url: string): Promise<Sample> {
   const started = Date.now();
-  const [, proxy] = await withProxyTiming(page, url, async () => {
-    await page.goto(url);
-    await expect(page.getByRole("table", { name: "Submissions" }).getByRole("row")).toHaveCount(51, { timeout: 60_000 });
-  });
+  await page.goto(url);
+  await expect(page.getByRole("table", { name: "Submissions" }).getByRole("row")).toHaveCount(51, { timeout: 60_000 });
   const shownMs = Date.now() - started;
-  return { shownMs, documentMs: await documentMs(page), proxy };
+  return { shownMs, documentMs: await documentMs(page) };
 }
 
 /** From the click on the n-th name of the list to the form. */
 async function openCopy(page: Page, n: number): Promise<Sample> {
   const link = page.getByRole("table", { name: "Submissions" }).getByRole("link").nth(n);
-  const copyPath = (await link.getAttribute("href"))!.split("?")[0];
   const started = Date.now();
-  const [, proxy] = await withProxyTiming(page, copyPath, async () => {
-    await link.click();
-    await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible({ timeout: 60_000 });
-  });
+  await link.click();
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible({ timeout: 60_000 });
   // A client navigation: no new document.
-  return { shownMs: Date.now() - started, documentMs: null, proxy };
+  return { shownMs: Date.now() - started, documentMs: null };
 }
 
 /** The first criterion's level changed, then saved: from the click to "Saved". */
@@ -129,12 +101,9 @@ async function saveOneLevel(page: Page): Promise<Sample> {
   const four = task.getByRole("radio", { name: /^4 –/ });
   await task.getByRole("radio", { name: (await four.isChecked()) ? /^3 –/ : /^4 –/ }).check({ force: true });
   const started = Date.now();
-  // The refresh after the save fetches the copy again: that GET goes through the proxy.
-  const [, proxy] = await withProxyTiming(page, new URL(page.url()).pathname, async () => {
-    await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(page.locator("form > div.sticky").getByRole("status")).toHaveText("Saved", { timeout: 60_000 });
-  });
-  return { shownMs: Date.now() - started, documentMs: null, proxy };
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.locator("form > div.sticky").getByRole("status")).toHaveText("Saved", { timeout: 60_000 });
+  return { shownMs: Date.now() - started, documentMs: null };
 }
 
 /** The document: request sent to response ended (server and network, streaming included). */
@@ -150,11 +119,7 @@ function summary(samples: Sample[]) {
     return { median: sorted[Math.floor(sorted.length / 2)], min: sorted[0], max: sorted.at(-1)! };
   };
   const documents = samples.map((s) => s.documentMs).filter((v): v is number => v !== null);
-  const timed = samples.map((s) => s.proxy).filter((v): v is Record<string, number> => v !== null);
-  const proxy = timed.length
-    ? Object.fromEntries(Object.keys(timed[0]).map((name) => [name, stat(timed.map((t) => t[name]))]))
-    : null;
-  return { shownMs: stat(samples.map((s) => s.shownMs)), documentMs: documents.length ? stat(documents) : null, proxy };
+  return { shownMs: stat(samples.map((s) => s.shownMs)), documentMs: documents.length ? stat(documents) : null };
 }
 
 /**

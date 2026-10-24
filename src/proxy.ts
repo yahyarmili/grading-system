@@ -13,38 +13,25 @@ import { resourceFound } from "@/server/routes/resources";
 // before the page runs, so only this check gives an absent resource its 404.
 
 export async function proxy(request: NextRequest) {
-  // TEMPORARY (E8.6, measurement of the resource check): Server-Timing, removed once measured.
-  const started = performance.now();
   const session = await auth.api.getSession({ headers: request.headers });
-  const sessionMs = performance.now() - started;
   const role = (session?.user as { role?: Role } | undefined)?.role ?? null;
   const decision = decideRoute(request.nextUrl.pathname, role);
-  const timed = (response: NextResponse, resourceMs = 0) =>
-    withTiming(noStore(response), { proxy: performance.now() - started, session: sessionMs, resource: resourceMs });
 
   if (decision === "sign-in") {
-    return timed(NextResponse.redirect(new URL("/sign-in", request.url)));
+    return noStore(NextResponse.redirect(new URL("/sign-in", request.url)));
   }
   // Pages only: a Server Action posts to its page's path and checks its own access;
   // rewritten, it would no longer be found (the result's freshness check, once withdrawn).
   const isPage = request.method === "GET" || request.method === "HEAD";
-  const checked = performance.now();
   const missing =
     decision === "allow" && isPage && session && role
       ? await resourceMissing(request.nextUrl.pathname, { kind: "user", userId: session.user.id, role })
       : false;
-  const resourceMs = performance.now() - checked;
   if (decision === "not-found" || missing) {
     // No page lives at this path, or nothing for this person: Next.js answers with its 404 page and status.
-    return timed(NextResponse.rewrite(new URL("/not-found", request.url)), resourceMs);
+    return noStore(NextResponse.rewrite(new URL("/not-found", request.url)));
   }
-  return timed(NextResponse.next(), resourceMs);
-}
-
-/** TEMPORARY (E8.6): the proxy's durations, in milliseconds, for the measurement. */
-function withTiming(response: NextResponse, durations: Record<string, number>): NextResponse {
-  response.headers.set("Server-Timing", Object.entries(durations).map(([name, ms]) => `${name};dur=${ms.toFixed(1)}`).join(", "));
-  return response;
+  return noStore(NextResponse.next());
 }
 
 /**
