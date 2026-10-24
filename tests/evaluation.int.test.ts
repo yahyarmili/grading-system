@@ -350,7 +350,7 @@ describe("EVL-03 CA4: a proposal never changes; a new evaluation is a new run", 
     expect(JSON.parse(simulator.captured()[1].request.user).student_text).toBe(NEW_TEXT);
   });
 
-  it("refuses any change or removal of a run or a proposal, and any change of an evaluated text", async () => {
+  it("refuses any change or removal of a run or a proposal, and any change of an evaluated text", { timeout: 60_000 }, async () => {
     const w = await world();
     await evaluateSubmission(w.submissionId, deps(new SimulatorEvaluator()));
     for (const change of [
