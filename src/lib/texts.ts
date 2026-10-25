@@ -64,8 +64,7 @@ export const TO_BE_DEFINED = "To be defined.";
  * systems kept up to 2 years. Said as Anthropic's word, which the app cannot
  * check. A change of provider, of these pages or of the Console: change the
  * sentence, raise the version.
- * Version 5 (E9, spec 0011, drafted by /develop on 2026-10-25, to be
- * validated by the engineer): photos of pages. They go to the same provider,
+ * Version 5 (E9, spec 0011), approved [D, 2026-10-25]: photos of pages. They go to the same provider,
  * under the same terms, to be read; the app strips their hidden details
  * (EXIF: place, date, device) by encoding them again, and keeps the photos and
  * the reading for the teacher. Read before the next first submission of any
