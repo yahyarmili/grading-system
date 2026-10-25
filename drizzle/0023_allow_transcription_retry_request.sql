@@ -1,0 +1,2 @@
+ALTER TABLE "submissions" DROP CONSTRAINT "submissions_evaluation_request_status";--> statement-breakpoint
+ALTER TABLE "submissions" ADD CONSTRAINT "submissions_evaluation_request_status" CHECK ("submissions"."evaluation_request" is null or "submissions"."status" in ('evaluation_failed', 'not_assessable', 'transcription_failed'));

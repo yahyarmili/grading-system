@@ -125,9 +125,10 @@ export const submissions = pgTable(
       "submissions_claim_token_iff_evaluating",
       sql`(${t.status} in ('evaluating', 'transcribing')) = (${t.claimToken} is not null)`,
     ),
+    // E9: the teacher's Retry of a failed transcription (transition 4) carries its request too.
     check(
       "submissions_evaluation_request_status",
-      sql`${t.evaluationRequest} is null or ${t.status} in ('evaluation_failed', 'not_assessable')`,
+      sql`${t.evaluationRequest} is null or ${t.status} in ('evaluation_failed', 'not_assessable', 'transcription_failed')`,
     ),
   ],
 );

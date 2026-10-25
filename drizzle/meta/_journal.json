@@ -162,6 +162,13 @@
       "when": 1792946459561,
       "tag": "0022_protect_image_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792960582463,
+      "tag": "0023_allow_transcription_retry_request",
+      "breakpoints": true
     }
   ]
 }
