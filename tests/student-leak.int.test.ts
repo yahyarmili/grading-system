@@ -1,23 +1,29 @@
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
+import { AI_MAX_ATTEMPTS } from "@/config/provisional";
+import type { EvaluationRef } from "@/lib/evaluation";
 import { RUBRIC_VERSIONS } from "@/lib/rubric";
 import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
-import { getSimulator } from "@/server/ai";
+import { getReaderSimulator, getSimulator } from "@/server/ai";
 import { createAssignment } from "@/server/data/assignments/assignments";
 import { getStudentAssignment, listStudentAssignments } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { getPublishedResult } from "@/server/data/results/student";
+import { getOwnDraft } from "@/server/data/submissions/drafts";
 import { getOwnSubmission } from "@/server/data/submissions/student";
 import { submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import { classMemberships, users } from "@/server/db/schema";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
+import { endTranscription, startTranscription, transcribePage } from "@/server/evaluation/transcribe";
 import { acknowledgeNoticeReading } from "@/server/notices/notices";
 import { saveTeacherEvaluation } from "@/server/review/evaluation";
 import { publishTeacherEvaluation, validateTeacherEvaluation, withdrawTeacherPublication } from "@/server/review/publication";
 import { checkAssignmentFreshness, checkListFreshness, checkResultFreshness, resultToken, viewToken } from "@/server/results/freshness";
+import { confirmStudentImages, readStudentPage, uploadDraftPage } from "@/server/submissions/images";
 import { replaceStudentText, submitStudentText } from "@/server/submissions/submissions";
 import { findLeak, INTERNAL_CODES, INTERNAL_LABELS, leakMarkers, type Received } from "./helpers/leak";
 import { getCopy, readTeacherNotice } from "./helpers/review";
@@ -34,6 +40,9 @@ import { noTrigger } from "./helpers/triggers";
 // published then withdrawn; published then changed (back To review, Q8); the
 // AI's refusal; a manual evaluation, Validated; Published, where the
 // teacher's markers appear in the result only, through its closed list.
+// Images (E9, AC-14): a checked copy, To review; an unchecked one whose
+// reading failed in the pipeline (transcription_failed); the draft and the
+// page reading join the entry points.
 // The Server Actions add nothing but getActor() and refresh() around these
 // services; their HTTP answers and the back button: e2e/student-leak.spec.ts.
 
@@ -63,8 +72,8 @@ async function createUser(role: "student" | "teacher"): Promise<Actor & { kind: 
   return { kind: "user", userId: user.id, role };
 }
 
-/** A student and a classmate; the student submitted TEXT, then the simulator evaluated it with the markers (or refused). */
-async function evaluatedCopy({ refused = false } = {}) {
+/** A teacher, an assignment of theirs, a student who read the notice and a classmate, both in its class. */
+async function recipients() {
   const teacher = await createUser("teacher");
   const [student, classmate] = [await createUser("student"), await createUser("student")];
   const made = await createClass(teacher, { name: "C1" });
@@ -76,12 +85,24 @@ async function evaluatedCopy({ refused = false } = {}) {
   });
   if (!created.ok) throw new Error("Assignment not created");
   await acknowledgeNotice(student, STUDENT_NOTICE.version);
-  const submitted = await submitText(student, { assignmentId: created.assignmentId, contentVersion: 1, requestId: randomUUID(), text: TEXT });
-  if (!submitted?.ok) throw new Error("Not submitted");
+  return { teacher, student, classmate, assignmentId: created.assignmentId };
+}
 
+/** The simulator's proposal: every text a marker, and the model's three flags. */
+function markedProposal() {
   const simulator = getSimulator();
   simulator.clear();
   simulator.setTexts({ ...markers.proposal, flags: { other_language: true, off_topic: true, addressed_to_marker: true } });
+  return simulator;
+}
+
+/** A student and a classmate; the student submitted TEXT, then the simulator evaluated it with the markers (or refused). */
+async function evaluatedCopy({ refused = false } = {}) {
+  const { teacher, student, classmate, assignmentId } = await recipients();
+  const submitted = await submitText(student, { assignmentId, contentVersion: 1, requestId: randomUUID(), text: TEXT });
+  if (!submitted?.ok) throw new Error("Not submitted");
+
+  const simulator = markedProposal();
   if (refused) simulator.failNext({ kind: "refusal", category: "cyber" });
   const outcome = await evaluateSubmission(
     submitted.ref.submissionId,
@@ -90,9 +111,64 @@ async function evaluatedCopy({ refused = false } = {}) {
   );
   simulator.clear();
   expect(outcome.status).toBe(refused ? "evaluation_failed" : "to_review");
-  return { teacher, student, classmate, assignmentId: created.assignmentId };
+  return { teacher, student, classmate, assignmentId };
 }
 type Copy = Awaited<ReturnType<typeof evaluatedCopy>>;
+
+/** A blank photographed page, as the browser sends it. */
+const PAGE = () => sharp({ create: { width: 600, height: 800, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
+
+/**
+ * E9: the student sent one photographed page. Checked: read, one word
+ * changed, confirmed, then evaluated with the markers (To review). Unchecked:
+ * its reading failed, sent as is, then the pipeline's reading failed too
+ * (transcription_failed, a state the student never sees).
+ */
+async function imageCopy({ checked }: { checked: boolean }): Promise<Copy> {
+  const copy = await recipients();
+  const { student, assignmentId } = copy;
+  const uploaded = await uploadDraftPage(student, assignmentId, { uploadRequestId: randomUUID(), position: "1" }, await PAGE());
+  if (uploaded.status !== 200 || !("pageId" in uploaded.body)) throw new Error("Page not uploaded");
+  const { draftId, pageId } = uploaded.body;
+  const reader = getReaderSimulator();
+  reader.clear();
+  if (!checked) reader.failNext({ kind: "error", status: 500 }, 2);
+  const read = await readStudentPage(student, pageId, { reader });
+  expect(read.status).toBe(checked ? "read" : "error");
+
+  let ref: EvaluationRef | undefined;
+  const confirmed = await confirmStudentImages(
+    student,
+    {
+      assignmentId, draftId, contentVersion: 1, requestId: randomUUID(), mode: checked ? "checked" : "unchecked",
+      changes: checked && read.status === "read" ? [{ pageId, wordIndex: 0, engineWord: read.words[0], studentWord: "Changed" }] : [],
+    },
+    { onReceived: (received) => (ref = received) },
+  );
+  if (confirmed.status !== "done" || !ref) throw new Error("Pages not confirmed");
+
+  if (checked) {
+    const simulator = markedProposal();
+    const outcome = await evaluateSubmission(
+      ref.submissionId,
+      { evaluator: simulator, registry: RUBRIC_VERSIONS, sleep: async () => {}, callTimeoutMs: 5_000 },
+      { expectedVersion: 1, claimToken: randomUUID() },
+    );
+    simulator.clear();
+    expect(outcome.status).toBe("to_review");
+  } else {
+    const token = randomUUID();
+    const start = await startTranscription(ref, token, undefined);
+    if (start.status !== "claimed") throw new Error("Not claimed for transcription");
+    reader.failNext({ kind: "error", status: 500 }, AI_MAX_ATTEMPTS);
+    for (const page of start.pageIds) {
+      expect(await transcribePage(ref, token, page, { reader, limits: { attempts: AI_MAX_ATTEMPTS, maxMs: 5_000, sleep: async () => {} } })).toBe("failed");
+    }
+    expect(await endTranscription(ref, token)).toBe("transcription_failed");
+  }
+  reader.clear();
+  return copy;
+}
 
 const seenOf = async (copy: Copy) => (await getCopy(copy.teacher, copy.assignmentId, copy.student.userId))!.seen!;
 
@@ -122,6 +198,9 @@ async function studentReceives(copy: Copy): Promise<Received[]> {
     await keep(received, `${who}: getStudentAssignment`, () => getStudentAssignment(actor, assignmentId));
     await keep(received, `${who}: getPublishedResult`, () => getPublishedResult(actor, assignmentId));
     await keep(received, `${who}: getOwnSubmission`, () => getOwnSubmission(actor, assignmentId));
+    // E9: the draft of photographed pages (none once sent), and a reading asked for.
+    await keep(received, `${who}: getOwnDraft`, () => getOwnDraft(actor, assignmentId));
+    await keep(received, `${who}: readPageAction`, () => readStudentPage(actor, randomUUID(), { reader: getReaderSimulator() }));
     await keep(received, `${who}: checkFreshnessAction`, () => checkResultFreshness(actor, { assignmentId, token }));
     // E8.7: the checks of My assignments and of the assignment, with the token of the page as shown.
     await keep(received, `${who}: checkListFreshnessAction`, async () =>
@@ -199,5 +278,18 @@ describe("the leak sweep (E8.4, PUB-02 R2): nothing of the review reaches the st
     expect(await validateTeacherEvaluation(copy.teacher, { ...TEACHER_FORM, seen })).toMatchObject({ status: "decided", published: false });
     expect((await seenOf(copy)).status).toBe("validated");
     expectNoLeak(await studentReceives(copy));
+  });
+
+  it("images (E9, AC-14): a checked copy To review, its teacher's evaluation saved; an unchecked one whose transcription failed: nothing", async () => {
+    const checked = await imageCopy({ checked: true });
+    expect((await saveTeacherEvaluation(checked.teacher, { ...TEACHER_FORM, seen: await seenOf(checked) })).status).toBe("saved");
+    const received = await studentReceives(checked);
+    expectNoLeak(received);
+    // The sweep reads the image entry points: the student's own pages and the reading they checked.
+    expect(received.find((r) => r.source === "student: getOwnSubmission")!.body).toContain("Changed");
+
+    const unchecked = await imageCopy({ checked: false });
+    expect((await seenOf(unchecked)).status).toBe("transcription_failed");
+    expectNoLeak(await studentReceives(unchecked));
   });
 });

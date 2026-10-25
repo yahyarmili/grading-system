@@ -13,7 +13,7 @@ import type { AssignmentLanguage } from "@/lib/assignment";
 import { checkPhotoFile, PHOTO_HEAD_BYTES, type PhotoFileRefusal } from "@/lib/page-file";
 import { PhotoOpenError, shrinkPhoto } from "@/lib/page-shrink";
 import { normalizeStudentWord } from "@/lib/submission-text";
-import { wordsOf, type PageReadingStatus } from "@/lib/transcription";
+import { ILLEGIBLE, wordsOf, type PageReadingStatus } from "@/lib/transcription";
 import type { OwnDraft } from "@/server/data/submissions/drafts";
 import type { ConfirmImagesState } from "@/server/submissions/images";
 import { confirmImagesAction, deletePageAction, readPageAction, reorderPagesAction } from "./actions";
@@ -57,8 +57,6 @@ const FILE_MESSAGES: Record<PhotoFileRefusal, string> = {
   tooLarge: "This photo is larger than 20 MB. Take it again with a lower quality setting.",
   empty: "This file is empty. Choose the photo again.",
 };
-
-const ILLEGIBLE = "[illisible]";
 
 export function ImagesSection({
   assignmentId,

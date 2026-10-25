@@ -8,6 +8,7 @@ import type { RowClass } from "@/lib/review-list";
 import type { TeacherEvaluationOrigin } from "@/lib/review-lists";
 import { criterionIds, manualRubricFor, type CriterionId, type Level } from "@/lib/rubric";
 import type { SubmissionMode, SubmissionStatus } from "@/lib/submission-status";
+import type { WordChange } from "@/lib/transcription";
 import type { Actor } from "@/server/access/actor";
 import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
@@ -56,6 +57,19 @@ export type CopySeen = {
   status: SubmissionStatus;
 };
 
+/**
+ * A page of an image copy (E9, spec 0011): by id (the image route serves
+ * it), with the engine's reading (null until read; `hasWriting` false for a
+ * page without writing) and the words the student changed (REV-02 CA3).
+ */
+export type TranscribedPage = {
+  id: string;
+  position: number;
+  reading: string | null;
+  hasWriting: boolean | null;
+  changes: WordChange[];
+};
+
 export type TeacherCopy = {
   assignment: { id: string; title: string; subject: string; instructions: string | null; language: AssignmentLanguage };
   /** R1: the student's recipient classes of this assignment, all the teacher's own (invariant 3). */
@@ -75,7 +89,7 @@ export type TeacherCopy = {
     mode: SubmissionMode;
     text: string | null;
     createdAt: string;
-    transcription: { checkedByStudent: boolean; pages: { id: string; position: number }[] } | null;
+    transcription: { checkedByStudent: boolean; pages: TranscribedPage[] } | null;
   } | null;
   cause: NotAssessableCause | null;
   /** The last attempt's error of the active version's last run: why it failed. */
@@ -164,8 +178,14 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
       },
       transcription: {
         checkedByStudent: submissionTranscriptions.checkedByStudent,
-        pages: sql<{ id: string; position: number }[]>`coalesce((
-          select json_agg(json_build_object('id', p.id, 'position', p.position) order by p.position)
+        pages: sql<TranscribedPage[]>`coalesce((
+          select json_agg(json_build_object(
+            'id', p.id, 'position', p.position, 'reading', p.reading_text, 'hasWriting', p.has_writing,
+            'changes', coalesce((
+              select json_agg(json_build_object('wordIndex', c.word_index, 'engineWord', c.engine_word, 'studentWord', c.student_word) order by c.word_index)
+              from transcription_changes c where c.page_id = p.id
+            ), '[]')
+          ) order by p.position)
           from submission_pages p where p.version_id = ${submissionVersions.id}
         ), '[]')`,
       },

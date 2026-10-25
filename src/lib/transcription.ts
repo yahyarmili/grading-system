@@ -6,6 +6,9 @@
 export const pageReadingStatuses = ["pending", "read", "failed"] as const;
 export type PageReadingStatus = (typeof pageReadingStatuses)[number];
 
+/** What the reader writes for anything it cannot read; one word for the student's check. */
+export const ILLEGIBLE = "[illisible]";
+
 /** What one reading run gave: a text, a page without writing, or a failure. */
 export const readingOutcomes = ["read", "no_writing", "failed"] as const;
 export type ReadingOutcome = (typeof readingOutcomes)[number];
@@ -31,17 +34,38 @@ export type AssembledPage = {
   changes?: readonly WordChange[];
 };
 
+/** A piece of a page's text: as read, or a word the student changed, with the engine's word it replaced. */
+export type TextSegment = { text: string; engineWord?: string };
+
+/**
+ * The reading of one page cut where the student changed a word (REV-02 CA3:
+ * the teacher sees each change next to the engine's word); joined, the
+ * pieces give `applyWordChanges`.
+ */
+export function pageSegments(reading: string, changes: readonly WordChange[] = []): TextSegment[] {
+  if (changes.length === 0) return reading === "" ? [] : [{ text: reading }];
+  const byIndex = new Map(changes.map((c) => [c.wordIndex, c]));
+  const segments: TextSegment[] = [];
+  let index = 0;
+  let last = 0;
+  for (const match of reading.matchAll(/\S+/g)) {
+    const change = byIndex.get(index++);
+    if (!change) continue;
+    if (change.engineWord !== match[0]) throw new Error("applyWordChanges: the engine's word does not match");
+    if (match.index > last) segments.push({ text: reading.slice(last, match.index) });
+    segments.push({ text: change.studentWord, engineWord: match[0] });
+    last = match.index + match[0].length;
+  }
+  if (last < reading.length) segments.push({ text: reading.slice(last) });
+  return segments;
+}
+
 /** The reading of one page with the student's changes applied, its whitespace and line breaks kept. */
 export function applyWordChanges(reading: string, changes: readonly WordChange[] = []): string {
   if (changes.length === 0) return reading;
-  const byIndex = new Map(changes.map((c) => [c.wordIndex, c]));
-  let index = 0;
-  return reading.replace(/\S+/g, (word) => {
-    const change = byIndex.get(index++);
-    if (!change) return word;
-    if (change.engineWord !== word) throw new Error("applyWordChanges: the engine's word does not match");
-    return change.studentWord;
-  });
+  return pageSegments(reading, changes)
+    .map((segment) => segment.text)
+    .join("");
 }
 
 /**
@@ -56,4 +80,12 @@ export function assembleText(pages: readonly AssembledPage[]): string {
     .filter((page) => page.hasWriting)
     .map((page) => applyWordChanges(page.text, page.changes))
     .join("\n\n");
+}
+
+/** `assembleText` cut where the student changed a word: joined, the pieces give the same text. */
+export function assembleSegments(pages: readonly AssembledPage[]): TextSegment[] {
+  return [...pages]
+    .sort((a, b) => a.position - b.position)
+    .filter((page) => page.hasWriting)
+    .flatMap((page, at) => [...(at > 0 ? [{ text: "\n\n" }] : []), ...pageSegments(page.text, page.changes)]);
 }

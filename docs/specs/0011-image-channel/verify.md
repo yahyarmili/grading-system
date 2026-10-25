@@ -73,3 +73,29 @@ _Added 2026-10-25. Run under the simulator reader (its `failed` and `no_writing`
 - [ ] `tests/notice.int.test.ts`: expect notice version 5 and its text on photos (approved in d2a14f7), instead of version 4 without images → AC-17
 - [ ] `tests/e4-replays.int.test.ts`, `tests/student-result.int.test.ts`: the student reread now also carries `mode` and `pages` → AC-14
 - [ ] `tests/evaluation-relaunch.int.test.ts:254`: give the test an explicit timeout (15.4 s against the 15 s default; Neon latency, no step 6 query on that path)
+
+## Build step 7: teacher and student reads
+_Added 2026-10-25. Highlights rebuilt from `submission_pages.reading_text` and `transcription_changes` (`pageSegments`, `assembleSegments` in `src/lib/transcription.ts`)._
+
+### UI / manual
+- [ ] As the teacher, open a checked image copy with two changed words → each student word is highlighted, the engine's word struck next to it; the footer says "N words, 2 changed by the student" → AC-13, AC-4
+- [ ] The same copy, an `[illisible]` left by the student → it shows outlined, read as "(unreadable)" by a screen reader → AC-6
+- [ ] Open the copy without pressing "Compare with the pages" → no request to `/api/pages/…` in the network panel → AC-13
+- [ ] Press "Compare with the pages" → a dialog shows page 1's photo next to its own reading with the changes; switching to page 2 loads only then page 2's photo; "Open page N full size" opens the image route in a new tab → AC-13
+- [ ] An unchecked copy, read by the pipeline → "not checked by the student", no highlight, the pages' readings in the dialog → AC-13, AC-7
+- [ ] An unchecked copy not read yet (`transcribing` or `transcription_failed`) → "The transcription of this copy is not available yet."; the dialog says "This page has not been read yet." → AC-7, AC-13
+- [ ] A page without writing → the dialog says "No writing was found on this page." → AC-6
+- [ ] In the list, an image copy shows the mode "Images" and the image states (Transcribing, Transcription failed) → AC-13
+- [ ] As the student, after sending checked pages → the pages and "The reading you checked" (their words, no highlight, no engine word); sent unchecked → the pages only, never a state or a reading failure; back then forward → the page is checked again by `FreshnessGuard` → AC-14
+
+### Value sourcing
+- [ ] Highlight → source: `transcription_changes` (`engine_word`, `student_word`, `word_index`) applied to the page's `reading_text`; the pieces joined must give back `submission_transcriptions.text`, else the text shows as evaluated, without highlight → AC-13
+- [ ] Mention → source: `submission_transcriptions.checked_by_student` → AC-13
+
+### Commands
+- [ ] `docker compose exec -T web npx vitest run --project integration tests/student-leak.int.test.ts` (ask first: shared test database) → the image situation passes: a checked copy To review and an unchecked one in `transcription_failed` leak nothing; `getOwnDraft` and `readPageAction` are swept → AC-14
+
+### Acceptance-criteria coverage (step 7)
+- AC-13 … UI steps 1, 3, 4, 5, 6, 8; value sourcing steps 1, 2
+- AC-14 … UI step 9; commands step 1
+- AC-6 (display) … UI steps 2, 7

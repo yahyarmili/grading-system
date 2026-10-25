@@ -1,5 +1,6 @@
 import { READER_EFFORT, READER_THINKING } from "@/config/decisions";
 import { READER_MAX_OUTPUT_TOKENS } from "@/config/provisional";
+import { ILLEGIBLE } from "@/lib/transcription";
 import type { JsonSchema, ReadingRequest } from "./types";
 
 // The one place a page reading request is built (spec 0011, rule 5, EVL-02):
@@ -15,8 +16,8 @@ import type { JsonSchema, ReadingRequest } from "./types";
  */
 export const PROMPT_VERSION = "transcription-1";
 
-/** What the reader writes for anything it cannot read; one word for the student's check (spec 0011). */
-export const ILLEGIBLE = "[illisible]";
+/** What the reader writes for anything it cannot read (spec 0011), shared with the screens. */
+export { ILLEGIBLE };
 
 export const READING_SCHEMA_NAME = "transcription";
 
