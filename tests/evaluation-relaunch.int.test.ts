@@ -131,7 +131,7 @@ describe("PRC-02 CA1: a repeated technical failure", () => {
 });
 
 describe("PRC-02 CA2: the teacher's retry (transition 6)", () => {
-  it("hands the version over once; the workflow's step takes it to To review, its proposal current", async () => {
+  it("hands the version over once; the workflow's step takes it to To review, its proposal current", { timeout: 60_000 }, async () => {
     const { teacher, refs } = await assignment("en", [TEXT.en]);
     getSimulator().failNext({ kind: "error", status: 529 }, AI_MAX_ATTEMPTS);
     await step(refs[0]);

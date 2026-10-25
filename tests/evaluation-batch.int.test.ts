@@ -265,7 +265,7 @@ describe("PRC-01 CA4: a failing submission never stops the others", () => {
     const current = await db.select({ id: submissions.id, proposal: submissions.currentProposalId }).from(submissions).where(inArray(submissions.id, ids));
     expect(current.filter((c) => c.proposal !== null)).toHaveLength(3);
     // A second sweep, a step delivered again: nothing more.
-    expect(await sweepEvaluations(async (ref) => void started.push(ref))).toEqual({ released: [], restarted: [] });
+    expect(await sweepEvaluations(async (ref) => void started.push(ref))).toEqual({ released: [], restarted: [], draftsDeleted: [] });
     expect(await evaluateStep(refs[0], randomUUID())).toEqual({ status: "skipped" });
     expect(await db.select().from(evaluationRuns)).toHaveLength(6);
   });
@@ -490,7 +490,7 @@ describe("the sweep leaves alone what is not late", () => {
     const release = getSimulator().holdNext();
     const pending = evaluateStep(refs[0], randomUUID());
     await expect.poll(evaluatingCount, { timeout: 30_000 }).toBe(1);
-    expect(await sweepEvaluations(async () => {})).toEqual({ released: [], restarted: [] });
+    expect(await sweepEvaluations(async () => {})).toEqual({ released: [], restarted: [], draftsDeleted: [] });
     release();
     expect(await pending).toMatchObject({ status: "to_review" });
     expect(await states([refs[1].submissionId])).toEqual({ [refs[1].submissionId]: "received" });
