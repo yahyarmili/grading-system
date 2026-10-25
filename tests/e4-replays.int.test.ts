@@ -340,7 +340,7 @@ describe("the Submission row (§5.4): the student writes their own and reads its
     const { row } = (await storedSubmission(lina))!;
     for (const status of storedSubmissionStatuses) {
       // Set as E5 to E8 will: validated and published only once the teacher started,
-      // not assessable with its cause and no other state with one, evaluating with a claim
+      // not assessable with its cause and no other state with one, evaluating (or transcribing, E9) with a claim
       // token and no other state with one (check constraints).
       const started = status === "validated" || status === "published";
       // 0019: Validated, then Published, need the teacher's complete evaluation (given once: the states come in order).
@@ -351,7 +351,7 @@ describe("the Submission row (§5.4): the student writes their own and reads its
           status,
           teacherStartedAt: started ? sql`now()` : null,
           notAssessableCause: status === "not_assessable" ? "no_content" : null,
-          claimToken: status === "evaluating" ? "test-claim" : null,
+          claimToken: status === "evaluating" || status === "transcribing" ? "test-claim" : null,
         })
         .where(eq(submissions.id, row.id));
       const list = await listStudentAssignments(lina);
@@ -363,7 +363,8 @@ describe("the Submission row (§5.4): the student writes their own and reads its
       const own = await getOwnSubmission(lina, assignmentId);
       // Replaced just above while the teacher has not started: then the new text.
       expect(own?.text, status).toBe(replaced.status === "done" ? "One more." : texts[1]);
-      expect(Object.keys(own!).sort()).toEqual(["lastVersionAt", "submittedAt", "text"]);
+      // E9 (AC-14): the mode, and the pages by id for an image version.
+      expect(Object.keys(own!).sort()).toEqual(["lastVersionAt", "mode", "pages", "submittedAt", "text"]);
       expect(leaks(own, []), status).toEqual([]);
       expect(detail?.status, status).toBe(toStudentStatus(status));
       expect(list[0].status, status).toBe(toStudentStatus(status));

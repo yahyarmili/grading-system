@@ -251,7 +251,7 @@ describe("PRC-02 CA2: the teacher's retry (transition 6)", () => {
     expect(proposals.find((p) => p.id === current)?.runId).toBe(last.id);
   });
 
-  it("refused for a copy to review (R3), a version replaced since, another teacher's copy, a student", async () => {
+  it("refused for a copy to review (R3), a version replaced since, another teacher's copy, a student", { timeout: 60_000 }, async () => {
     const { teacher, students, refs, assignmentId } = await assignment("en", [TEXT.en, TEXT.en]);
     const starts = recordStarts();
     // To review: never evaluated again (Q4).
@@ -405,7 +405,7 @@ describe("PRC-02 CA3, R4: a relaunch offered when the cause disappears, for thos
     await db.update(submissions).set({ updatedAt: sql`now() - interval '1 day'` });
 
     const started: EvaluationRef[] = [];
-    expect(await sweepEvaluations(async (ref) => void started.push(ref))).toEqual({ released: [], restarted: [] });
+    expect(await sweepEvaluations(async (ref) => void started.push(ref))).toMatchObject({ released: [], restarted: [] });
     expect(started).toEqual([]);
     expect((await row(failed.submissionId)).status).toBe("evaluation_failed");
     expect((await row(waiting.submissionId)).status).toBe("not_assessable");

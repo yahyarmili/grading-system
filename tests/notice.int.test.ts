@@ -112,7 +112,7 @@ describe("the reading is recorded: account, date, version", () => {
 
   it("E7.7: a teacher records their own notice, never the student's", async () => {
     const { teacher } = await setup();
-    // TEACHER_NOTICE.version 1 is not STUDENT_NOTICE.version 4: the student's version is outdated for them.
+    // TEACHER_NOTICE.version 1 is not STUDENT_NOTICE.version 5: the student's version is outdated for them.
     expect(await acknowledgeNoticeReading(teacher, { version: String(STUDENT_NOTICE.version) })).toMatchObject({ reason: "outdated" });
     expect(await readings()).toEqual([]);
     expect(await acknowledgeNoticeReading(teacher, { version: String(TEACHER_NOTICE.version) })).toEqual({ status: "done" });
@@ -135,8 +135,8 @@ describe("the notice text (Q10, QNF-1)", () => {
     expect(all).toContain("if you write your name in it, your name is sent too");
   });
 
-  it("says who receives the text, where, for how long and for what, as Anthropic's word, never more (version 4)", () => {
-    expect(STUDENT_NOTICE.version).toBe(4);
+  it("says who receives the text, where, for how long and for what, as Anthropic's word, never more (version 5)", () => {
+    expect(STUDENT_NOTICE.version).toBe(5);
     expect(all).toContain("sent to Anthropic, a company based in the United States");
     expect(all).toContain("processed and stored in the United States");
     expect(all).toContain("does not use them to train its models");
@@ -146,8 +146,12 @@ describe("the notice text (Q10, QNF-1)", () => {
     expect(all).not.toMatch(/OpenRouter|Phala|Mistral|zero.data|ZDR|keep nothing|is set so that|may (use|train)|improve its models|never (kept|stored)|guarantee/i);
   });
 
-  it("says nothing about images: only the text is sent until the reading of images (E9)", () => {
-    expect(all).not.toMatch(/image|photo|picture|handwrit/i);
+  it("says the photos go to Anthropic too, without their hidden details, and what is kept of them (version 5, E9, AC-17)", () => {
+    expect(all).toContain("each photo is sent to Anthropic too, so that the AI reads what you wrote");
+    expect(all).toContain("removes the hidden details a photo carries");
+    expect(all).toContain("Everything visible in the photo is sent.");
+    expect(all).toContain("A text or photo that its safety systems flag may be kept for up to 2 years.");
+    expect(all).toContain("each word you changed in that reading");
   });
 
   it("says it is a demonstration with fictitious data, and leaves the undecided to be defined", () => {

@@ -220,7 +220,7 @@ describe("the student reads their submission back (SUB-01 R2 [D, 2026-10-22])", 
     const copy = await submittedCopy();
     const [{ submittedAt }] = await db.select({ submittedAt: submissions.submittedAt }).from(submissions).where(eq(submissions.id, copy.submissionId));
     expect(await getOwnSubmission(copy.student, copy.assignmentId)).toEqual({
-      text: TEXT, submittedAt: submittedAt.toISOString(), lastVersionAt: expect.any(String),
+      mode: "text", text: TEXT, pages: [], submittedAt: submittedAt.toISOString(), lastVersionAt: expect.any(String),
     });
     await evaluate(copy.submissionId, { refused: true });
     expect((await getOwnSubmission(copy.student, copy.assignmentId))?.text).toBe(TEXT);

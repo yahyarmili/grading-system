@@ -46,13 +46,20 @@ import {
 } from "@/server/data/evaluation/teacher";
 import { getPublishedRubrics } from "@/server/data/rubric/rubric";
 import { getPublishedResult } from "@/server/data/results/student";
+import { addDraftPage, deleteDraftPage, getOwnDraft, readDraftPage, reorderDraftPages } from "@/server/data/submissions/drafts";
+import { getPageImage } from "@/server/data/submissions/pages";
 import { getOwnSubmission } from "@/server/data/submissions/student";
-import { replaceText, submitText } from "@/server/data/submissions/submissions";
+import { confirmImages, replaceText, submitText } from "@/server/data/submissions/submissions";
 import { db } from "@/server/db/client";
 import {
   assignmentClasses, assignments, classes, classMemberships, noticeAcknowledgements, submissions, teacherEvaluations, users,
 } from "@/server/db/schema";
+import { getReaderSimulator } from "@/server/ai";
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
+import { readPageWith } from "@/server/evaluation/read-page";
+import { confirmStudentImages, readStudentPage, uploadDraftPage } from "@/server/submissions/images";
+import { preparePage } from "@/server/submissions/page-image";
+import sharp from "sharp";
 import { STUDENT_NOTICE, TEACHER_NOTICE } from "@/lib/texts";
 import { checkDataExports, dataSources, type SourceFile } from "./helpers/access-inventory";
 
@@ -309,7 +316,10 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       });
       if (!first?.ok) throw new Error("Not submitted");
       await forceState(first.ref.submissionId, "not_assessable", "ai_unavailable");
-      return { ...fixture, submittedId };
+      // E9, AC-12: a page of a version, served by the image route alone.
+      const { assignmentId: imagesId } = await ownedAssignment(fixture.classId);
+      const { versionPageId } = await confirmedPages(imagesId);
+      return { ...fixture, submittedId, versionPageId };
     },
     // A student reads their own text back (SUB-01 R2, E8.3); each teacher's
     // screen is replayed for the teachers and the administrator.
@@ -326,6 +336,8 @@ const REAL: Partial<Record<Resource, RealResource>> = {
           return recordCopyOpened(actor, id);
         }),
       },
+      // E9, AC-12: a version's page, to its author and the owner teacher only (getPageImage, the route /api/pages/[pageId]).
+      { run: (actor, { versionPageId }) => getPageImage(actor, versionPageId) },
     ],
     write: [
       {
@@ -337,6 +349,39 @@ const REAL: Partial<Record<Resource, RealResource>> = {
           replaceText(actor, { assignmentId: submittedId, requestId: randomUUID(), text: "My new text." }),
       },
     ],
+  },
+  // E9 (spec 0011, AC-12): the concerned student's pages before sending, two
+  // in their draft; another student finds nothing, every other role is
+  // refused: the teacher never sees a draft.
+  draft: {
+    setup: ownDraft,
+    read: { run: (actor, { assignmentId }) => getOwnDraft(actor, assignmentId) },
+    write: [
+      { run: (actor, { pageId }) => readDraftPage(actor, pageId, readPageWith(pageId, { reader: getReaderSimulator() })) },
+      { run: (actor, { draftId, pageId, secondPageId }) => reorderDraftPages(actor, draftId, [secondPageId, pageId]) },
+      { run: (actor, { secondPageId }) => deleteDraftPage(actor, secondPageId) },
+      { run: async (actor, { assignmentId }) => addDraftPage(actor, { assignmentId, uploadRequestId: randomUUID(), page: await blankPage() }) },
+    ],
+  },
+  // E9: the student writes their transcription once, at confirmation, and
+  // reads it back; the owner teacher reads it on the copy.
+  transcription: {
+    setup: async () => {
+      const fixture = await ownDraft();
+      // The other teacher read their notice: what they miss is the owner's copy (as noticeRead).
+      await db.insert(noticeAcknowledgements).values({ userId: people.otherTeacher.userId, notice: "teacher_review", version: TEACHER_NOTICE.version });
+      const { assignmentId: imagesId } = await ownedAssignment(fixture.classId);
+      await confirmedPages(imagesId);
+      return { ...fixture, imagesId };
+    },
+    read: {
+      run: (actor, { imagesId }) =>
+        isStudent(actor) ? getOwnSubmission(actor, imagesId) : getCopy(actor, imagesId, people.concernedStudent.userId),
+    },
+    write: {
+      run: (actor, { assignmentId, draftId }) =>
+        confirmImages(actor, { assignmentId, draftId, contentVersion: 1, requestId: randomUUID(), changes: [], mode: "unchecked" }),
+    },
   },
   // PRC-02 (E6.3): the owner teacher retries a failed copy, relaunches one
   // offered, evaluates one by hand; another teacher finds nothing; a student
@@ -613,6 +658,41 @@ async function ownedClass(): Promise<Fixture> {
     .returning({ id: classes.id });
   await db.insert(classMemberships).values({ classId: owned.id, studentId: people.concernedStudent.userId });
   return { classId: owned.id };
+}
+
+/** A blank photographed page, as the browser sends it. */
+const blankJpeg = () => sharp({ create: { width: 600, height: 800, channels: 3, background: "#ffffff" } }).jpeg().toBuffer();
+
+/** The same page checked as the upload route checks it. */
+const blankPage = async () => preparePage(await blankJpeg(), { formats: ["jpeg"] });
+
+/** One page into the concerned student's draft for the assignment. */
+async function uploadPage(assignmentId: string) {
+  const uploaded = await uploadDraftPage(people.concernedStudent, assignmentId, { uploadRequestId: randomUUID() }, await blankJpeg());
+  if (uploaded.status !== 200 || !("pageId" in uploaded.body)) throw new Error("Page not uploaded");
+  return uploaded.body;
+}
+
+/** The concerned student's draft for an owned assignment: two pages, not read yet. */
+async function ownDraft(): Promise<Fixture> {
+  const fixture = { ...(await ownedAssignment()), ...(await noticesOfOwners()) };
+  const first = await uploadPage(fixture.assignmentId);
+  const second = await uploadPage(fixture.assignmentId);
+  return { ...fixture, draftId: first.draftId, pageId: first.pageId, secondPageId: second.pageId };
+}
+
+/** The concerned student's page read and sent to the assignment (notice read already): the version's page. */
+async function confirmedPages(assignmentId: string) {
+  const { draftId, pageId } = await uploadPage(assignmentId);
+  getReaderSimulator().clear();
+  if ((await readStudentPage(people.concernedStudent, pageId, { reader: getReaderSimulator() })).status !== "read") throw new Error("Page not read");
+  const confirmed = await confirmStudentImages(
+    people.concernedStudent,
+    { assignmentId, draftId, contentVersion: 1, requestId: randomUUID(), changes: [], mode: "checked" },
+    { onReceived: () => {} },
+  );
+  if (confirmed.status !== "done") throw new Error("Pages not confirmed");
+  return { versionPageId: pageId };
 }
 
 const OWN_COLUMN = { student: "concernedStudent", teacher: "ownerTeacher" } as const;
