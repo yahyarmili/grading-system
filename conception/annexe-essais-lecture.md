@@ -132,3 +132,59 @@ Prompt transcription-1; effort low, thinking disabled, max_tokens 2000.
 Calls: 28; failed: 0; off the schema: 0.
 Longest answered call: 2460 ms (student wait 45000 ms).
 Estimated cost: 0.01544 USD in all.
+
+## Essai final de fidélité (fin d'E9, AC-19)
+
+Résultats bruts, consignés tels quels, **sans conclusion de qualité** (D10), non bloquant (TRX-01 CA3).
+
+- **Date** : 2026-10-25, 20:45 à 20:46 UTC, en local, base dev (journal de sécurité et garde journalière).
+- **Commande** : `docker compose exec -T web npm run ai:read -- --provider anthropic --runs 3`.
+- **Réglage** : celui décidé au point de contrôle E9.0, consigne `transcription-1`, effort `low`, sans thinking, `max_tokens` 2000 ; `claude-haiku-5-5` demandé, et c'est lui qui a répondu à chaque appel.
+- **Photos** : les 7 mêmes photos fictives qu'en E9.0 (tableau ci-dessus) ; aucune nouvelle écriture. Ce n'est donc pas une mesure sur l'écriture d'élèves, qui reste pour E10, partie B.
+- **Appels réels** : 21 (3 passes) ; avec les 85 d'E9.0, 106 essais de lecture dans la journée, sous la garde de 200.
+- **Données brutes** : chaque appel, réponses brutes comprises, est dans [annexe-essais-lecture-final-2026-10-25.json](annexe-essais-lecture-final-2026-10-25.json).
+
+| Série | Consigne | Réglage | Appels | Échecs | Durée (ms) | Mots identiques | Fautes gardées | `becaus` corrigé | Tokens entrée / sortie | Coût estimé |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Finale | `transcription-1` | low, sans thinking | 21 (3 passes) | 0 | 1 146 à 3 317 | 637 / 639 | 43 / 45 | 2 sur 3 | 1 377 à 5 246 / 16 à 118 | 0,01144 $ |
+
+Constats, tels qu'observés :
+- **`[illisible]`** : écrit à la place du mot noirci à chaque lecture, jamais deviné.
+- **Page blanche** : `has_writing: false` et texte vide à chaque lecture.
+- **Consigne cachée** : 40 mots sur 40 à chaque lecture.
+- **Français** : 34 mots sur 34 et 4 fautes sur 4 gardées à chaque lecture.
+- **`becaus`** : écrit `because` aux passes 1 et 3, gardé à la passe 2 ; c'est la seule différence avec le texte écrit dans les 21 lectures (risque connu, ci-dessus).
+- **Lignes** : aucune ligne déplacée.
+
+### Rapport du lanceur, série finale (copié tel quel)
+
+Date: 2026-10-25T20:46:03.835Z. Provider: anthropic; model requested: claude-haiku-5-5; answered: claude-haiku-5-5.
+Prompt transcription-1; effort low, thinking disabled, max_tokens 2000.
+
+| Photo | Run | Page sent | Result | Duration | Words same / ref | Substituted | Missing | Added | Faults kept / corrected / other | Illegible marked / guessed of ref (markers out) | Lines out of order | Tokens in / out | Cost (USD) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| real-looped-cursive | 1 | 1918×1575, 443 KB | read | 3317 ms | 42 / 42 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 8 matched (8 lines) | 4439 / 118 | 0.00055 |
+| real-pencil-pangrams | 1 | 1875×361, 169 KB | read | 1406 ms | 17 / 17 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 3 matched (3 lines) | 1377 / 51 | 0.00018 |
+| synth-blank | 1 | 1665×2212, 102 KB | no writing | 1260 ms | 0 / 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 0 matched (0 lines) | 5246 / 16 | 0.00059 |
+| synth-en-faults | 1 | 1665×2212, 150 KB | read | 2625 ms | 52 / 53 | 1 | 0 | 0 | 7 / 1 / 0 | 0 / 0 of 0 (0) | 0 of 5 matched (5 lines) | 5246 / 95 | 0.00063 |
+| synth-en-illegible | 1 | 1665×2212, 136 KB | read | 1585 ms | 27 / 27 | 0 | 0 | 0 | 2 / 0 / 0 | 1 / 0 of 1 (1) | 0 of 4 matched (4 lines) | 5246 / 66 | 0.00061 |
+| synth-en-injection | 1 | 1665×2212, 152 KB | read | 2327 ms | 40 / 40 | 0 | 0 | 0 | 1 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 6 matched (6 lines) | 5246 / 82 | 0.00062 |
+| synth-fr-faults | 1 | 1665×2212, 137 KB | read | 1628 ms | 34 / 34 | 0 | 0 | 0 | 4 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 4 matched (4 lines) | 5246 / 93 | 0.00063 |
+| real-looped-cursive | 2 | 1918×1575, 443 KB | read | 1809 ms | 42 / 42 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 8 matched (8 lines) | 4439 / 118 | 0.00055 |
+| real-pencil-pangrams | 2 | 1875×361, 169 KB | read | 1645 ms | 17 / 17 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 3 matched (3 lines) | 1377 / 51 | 0.00018 |
+| synth-blank | 2 | 1665×2212, 102 KB | no writing | 2312 ms | 0 / 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 0 matched (0 lines) | 5246 / 16 | 0.00059 |
+| synth-en-faults | 2 | 1665×2212, 150 KB | read | 1698 ms | 53 / 53 | 0 | 0 | 0 | 8 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 5 matched (5 lines) | 5246 / 97 | 0.00063 |
+| synth-en-illegible | 2 | 1665×2212, 136 KB | read | 1499 ms | 27 / 27 | 0 | 0 | 0 | 2 / 0 / 0 | 1 / 0 of 1 (1) | 0 of 4 matched (4 lines) | 5246 / 66 | 0.00061 |
+| synth-en-injection | 2 | 1665×2212, 152 KB | read | 1573 ms | 40 / 40 | 0 | 0 | 0 | 1 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 6 matched (6 lines) | 5246 / 82 | 0.00062 |
+| synth-fr-faults | 2 | 1665×2212, 137 KB | read | 1579 ms | 34 / 34 | 0 | 0 | 0 | 4 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 4 matched (4 lines) | 5246 / 93 | 0.00063 |
+| real-looped-cursive | 3 | 1918×1575, 443 KB | read | 1675 ms | 42 / 42 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 8 matched (8 lines) | 4439 / 118 | 0.00055 |
+| real-pencil-pangrams | 3 | 1875×361, 169 KB | read | 1437 ms | 17 / 17 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 3 matched (3 lines) | 1377 / 51 | 0.00018 |
+| synth-blank | 3 | 1665×2212, 102 KB | no writing | 1146 ms | 0 / 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 0 matched (0 lines) | 5246 / 16 | 0.00059 |
+| synth-en-faults | 3 | 1665×2212, 150 KB | read | 1356 ms | 52 / 53 | 1 | 0 | 0 | 7 / 1 / 0 | 0 / 0 of 0 (0) | 0 of 5 matched (5 lines) | 5246 / 95 | 0.00063 |
+| synth-en-illegible | 3 | 1665×2212, 136 KB | read | 1470 ms | 27 / 27 | 0 | 0 | 0 | 2 / 0 / 0 | 1 / 0 of 1 (1) | 0 of 4 matched (4 lines) | 5246 / 66 | 0.00061 |
+| synth-en-injection | 3 | 1665×2212, 152 KB | read | 1306 ms | 40 / 40 | 0 | 0 | 0 | 1 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 6 matched (6 lines) | 5246 / 82 | 0.00062 |
+| synth-fr-faults | 3 | 1665×2212, 137 KB | read | 1627 ms | 34 / 34 | 0 | 0 | 0 | 4 / 0 / 0 | 0 / 0 of 0 (0) | 0 of 4 matched (4 lines) | 5246 / 93 | 0.00063 |
+
+Calls: 21; failed: 0; off the schema: 0.
+Longest answered call: 3317 ms (student wait 45000 ms).
+Estimated cost: 0.01144 USD in all.

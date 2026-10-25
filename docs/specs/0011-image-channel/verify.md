@@ -150,3 +150,41 @@ _Locked by `tests/draft-purge.int.test.ts`, passed 2026-10-25._
 
 ### Acceptance-criteria coverage (step 9)
 - AC-18 … integration steps 1 to 4; command step 1; value sourcing step 1
+
+## Build step 10: replays, mixed batch, security cases, E2E and final fidelity trial
+_Added 2026-10-25. Replays locked by `tests/e9-replays.int.test.ts` (22 cases) and the image rows of `tests/access-matrix.int.test.ts`; journey `e2e/e9-journey.spec.ts`; trial recorded in `conception/annexe-essais-lecture.md`._
+
+### Integration (ask first: shared test database)
+_Passed 2026-10-25 (touched files: 308 of 309 at first, the one left being the defect fixed in 94b997d, then green)._
+- [x] Three pages reordered, two words changed (one an `[illisible]`), confirmed → one submission in mode `images`, pages in the chosen order, text rebuilt by the server in page order; each page's run records `simulator` and `transcription-1`; the same `requestId` again gives the same answer, one version → AC-1, AC-3, AC-4, AC-5
+- [x] The same `uploadRequestId` twice → one page → AC-3
+- [x] A PNG, a PDF, a cut JPEG → 422 `notJpeg`; over `PAGE_UPLOAD_MAX_BYTES` → 413; no draft created → AC-2
+- [x] A 6th page refused, a retake at 5 keeps position 3; an empty, 61 character, two line, out of range, doubled or blank page change → `badChange`; a trimmed NFC word accepted → AC-8
+- [x] Every page without writing → sent, then `not_assessable` / `no_writing`, no call to the evaluator; the teacher evaluates by hand → AC-6, REV-06
+- [x] Unchecked pages read by the pipeline → To review, text "not checked by the student", one run per page with `submission_id`; the student sees pages, never the text → AC-7, AC-14
+- [x] Reading failing every attempt → `transcription_failed`; the teacher's Retry reads the pages again and reaches To review; or the teacher evaluates by hand → AC-7
+- [x] Cost cap closed during the pipeline's reading → `transcription_failed`, nothing sent → AC-7
+- [x] French, rubric not published → transcribed, then `not_assessable` / `rubric_unavailable`, offered for a relaunch → AC-16
+- [x] A transcription stuck past the limit → released to `transcription_failed` → AC-16
+- [x] Mixed batch (2 texts, 1 checked, 1 unchecked read, 1 unchecked failing) run together → four To review, one `transcription_failed` → AC-16
+- [x] Confirmed after the deadline (pages read before it) → late; replaced by pages after it → first date and late mark kept → AC-9
+- [x] The reader's request: keys `system`, `image`, `instruction`, `schema`, `schemaName`, `generation` only; the image the stored JPEG in base64; no identifier, title or account value → AC-11
+- [x] An instruction written on a page reaches the evaluation as the student's text → AC-15
+- [x] Images → text → images: modes kept per version, old pages readable by the author and the owner teacher only; no third replacement → AC-10
+- [x] Pages and the teacher's first act at once → exactly one wins → AC-10
+- [x] A pipeline reading of a replaced version stops, `stale`, no text written → AC-10
+- [x] A draft page: the owner only; teacher and classmate nothing; an administrator refused; a classmate cannot read, retake nor send it → AC-12
+- [x] The matrix replays `draft` and `transcription`, and `getPageImage` on a version page → AC-12
+
+### E2E (ask first)
+- [x] `docker compose run --rm e2e` on `e2e/e9-journey.spec.ts` → three photos read, page 3 moved first, "page." corrected to "pages.", sent; To review by itself; the list shows "Images"; the copy shows "checked by the student", the word highlighted next to the engine's; no `/api/pages/…` request before "Compare with the pages", then page 1's only; validated and published; the student reads the result, then "The reading you checked" → AC-20, AC-13, AC-14 (passed 2026-10-25, 2.8 min)
+
+### Commands
+- [x] `docker compose exec -T web npm run ai:read -- --provider anthropic --runs 3` → 21 calls, 0 failed, 0 off the schema, recorded as is in `conception/annexe-essais-lecture.md` (section "Essai final de fidélité") → AC-19
+
+### Acceptance-criteria coverage (step 10)
+- AC-1 to AC-6, AC-8 … integration steps 1 to 5
+- AC-7 … integration steps 6 to 8
+- AC-9 … integration step 12; AC-10 … steps 15 to 17; AC-11, AC-15 … steps 13, 14; AC-12 … steps 18, 19
+- AC-16 … integration steps 9 to 11
+- AC-19 … commands step 1; AC-20 … E2E step 1

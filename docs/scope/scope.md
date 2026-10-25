@@ -75,12 +75,12 @@ Students hand in photos of a handwritten copy; the AI reads them faithfully (spe
 **Done when:** SUB-03 criteria and the TRX-01 contract pass; every image branch replayed (SUB-04, SUB-05, PRC-01, PRC-02, EVL-02 CA3, EVL-04 CA1, REV-01, REV-02, REV-06); a mixed text and image batch runs with no technical help; the matrix holds for images; the fidelity trial is recorded as is.
 Spec [0011](../specs/0011-image-channel/index.md)
 - [x] Design it (spec): `/architect image channel`
-- [ ] Build it: `/develop image channel`
+- [x] Build it: `/develop image channel`
   - [x] Reader, `transcription-1` and the E9.0 trial, engineer checkpoint (AC-11, AC-15, AC-19)
   - [x] Migration and one page end to end on the simulator, image route and matrix (AC-1, AC-3, AC-5, AC-12, AC-14)
   - [x] Student draft screen: pages, order, retake, word changes, limits, notice v5 (AC-2, AC-3, AC-4, AC-8, AC-17)
   - [x] Failure branches and pipeline wiring, teacher and student reads, replacement and late, draft purge (AC-6, AC-7, AC-9, AC-10, AC-13, AC-16, AC-18)
-  - [ ] Replays, mixed batch, security cases, E2E and final fidelity trial (AC-16, AC-19, AC-20)
+  - [x] Replays, mixed batch, security cases, E2E and final fidelity trial (AC-16, AC-19, AC-20)
 - [ ] Verify it: `/check verify image channel`
 - [ ] Test it: `/test image channel`
 - [x] Review it (fresh model): `/check review image channel`

@@ -61,15 +61,16 @@ test("E9 journey: three pages photographed, read, reordered, one word corrected,
   for (const [i, shade] of [230, 200, 170].entries()) {
     await student.locator("#page-photo").setInputFiles(await photo(student, shade));
     await expect(pages).toHaveCount(i + 1);
-    await expect(pages.nth(i)).toContainText("Read", { timeout: 60_000 });
-    await expect(pages.nth(i)).toContainText(READING);
+    // "Read" would match "Reading…": the reading itself says the page was read.
+    await expect(pages.nth(i)).toContainText(READING, { timeout: 60_000 });
   }
   const ids = await pageIdsOf(lina.email);
 
   // 3. AC-3: page 3 moved to the top, twice up.
-  await pages.nth(2).getByRole("button", { name: "Move up: page 3" }).click();
-  await expect(pages.nth(1).getByRole("button", { name: "Move up: page 2" })).toBeEnabled();
-  await pages.nth(1).getByRole("button", { name: "Move up: page 2" }).click();
+  // Chrome names the button "Move up : page 3" (the hidden span is positioned apart).
+  await pages.nth(2).getByRole("button", { name: /^Move up\W+page 3$/ }).click();
+  await expect(pages.nth(1).getByRole("button", { name: /^Move up\W+page 2$/ })).toBeEnabled();
+  await pages.nth(1).getByRole("button", { name: /^Move up\W+page 2$/ }).click();
   await expect.poll(() => pageIdsOf(lina.email)).toEqual([ids[2], ids[0], ids[1]]);
 
   // 4. AC-4: on the first page, the AI's "page." was "pages." in the copy.
@@ -101,7 +102,8 @@ test("E9 journey: three pages photographed, read, reordered, one word corrected,
   await openByName(teacher, row, assignmentId);
   await expect(teacher.getByText("Transcribed automatically, checked by the student")).toBeVisible();
   await expect(teacher.locator("del").filter({ hasText: "page." }).first()).toBeVisible();
-  await expect(teacher.locator("ins").filter({ hasText: "pages." }).first()).toBeVisible();
+  // The teacher's copy highlights the student's word (`mark`), the engine's struck next to it.
+  await expect(teacher.locator("mark").filter({ hasText: "pages." }).first()).toBeVisible();
 
   // The pages only on demand: no image requested before the dialog, page 1's on opening.
   const images: string[] = [];
