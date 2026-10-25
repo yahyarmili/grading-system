@@ -1,6 +1,7 @@
 import { inspect } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAnthropicEvaluator, forbiddenVariables, guardedFetch, type AnthropicOptions } from "./anthropic";
+import { createAnthropicEvaluator, createAnthropicReader, forbiddenVariables, guardedFetch, type AnthropicOptions } from "./anthropic";
+import { buildReadingRequest } from "./reading";
 import { AiConfigurationError, AiJournalError, EvaluatorError, type EvaluationRequest } from "./types";
 
 // The Anthropic adapter against a fake fetch, one test per guarantee of the
@@ -177,6 +178,65 @@ describe("what leaves: host, method, headers and body, exactly", () => {
       });
       expect(Object.fromEntries(fetcher.mock.calls[0][0].headers)).toEqual({ "content-type": "application/json", "x-api-key": KEY });
     });
+  });
+});
+
+describe("a page reading (spec 0011, AC-11): the same client, an image block before the fixed text", () => {
+  const PAGE = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 7, 7, 7, 0xff, 0xd9]);
+
+  function reader(answer: (req: Request) => Response) {
+    const sent: Sent[] = [];
+    const log: (string | null)[] = [];
+    const read = createAnthropicReader({
+      apiKey: KEY,
+      env: {},
+      journal: async (subjectId) => {
+        log.push(subjectId);
+      },
+      fetcher: async (req) => {
+        sent.push({ url: req.url, method: req.method, headers: Object.fromEntries(req.headers), body: await req.clone().json() });
+        return answer(req);
+      },
+    });
+    return { read, sent, log };
+  }
+
+  it("sends one POST, four headers, the page as base64 then the instruction; no URL, no other key", async () => {
+    const { read, sent, log } = reader(() => message('{"has_writing":true,"text":"hello"}'));
+    const request = buildReadingRequest(PAGE);
+    const response = await read.read(request, { signal: new AbortController().signal, subjectId: "draft-1" });
+    expect(response.content).toBe('{"has_writing":true,"text":"hello"}');
+    expect(log).toEqual(["draft-1"]);
+    expect(sent).toHaveLength(1);
+    const [req] = sent;
+    expect(req.url).toBe(ENDPOINT);
+    expect(Object.keys(req.headers).sort()).toEqual(["accept", "anthropic-version", "content-type", "x-api-key"]);
+    expect(req.body).toEqual({
+      model: "claude-haiku-5-5",
+      max_tokens: request.generation.maxOutputTokens,
+      system: request.system,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: Buffer.from(PAGE).toString("base64") } },
+            { type: "text", text: request.instruction },
+          ],
+        },
+      ],
+      output_config: { format: { type: "json_schema", schema: request.schema }, effort: request.generation.effort },
+      thinking: request.generation.thinking === "adaptive" ? { type: "adaptive", display: "omitted" } : { type: "disabled" },
+      inference_geo: "us",
+    });
+    expect(JSON.stringify(req.body)).not.toMatch(/"url"|https?:/);
+  });
+
+  it("classifies a failed reading like an evaluation, carrying nothing", async () => {
+    const { read } = reader(() => json(529, failure("overloaded_error")));
+    const error = await failed(read.read(buildReadingRequest(PAGE), { signal: new AbortController().signal, subjectId: null }));
+    expect(error).toBeInstanceOf(EvaluatorError);
+    expect(error).toMatchObject({ kind: "unavailable" });
+    expectNothingLeaked(error);
   });
 });
 

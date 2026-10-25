@@ -1,8 +1,8 @@
 import "server-only";
 import { selectableAiProviders } from "@/lib/evaluation";
-import { createAnthropicEvaluator } from "./anthropic";
-import { SimulatorEvaluator } from "./simulator";
-import { AiConfigurationError, type Evaluator } from "./types";
+import { createAnthropicEvaluator, createAnthropicReader } from "./anthropic";
+import { SimulatorEvaluator, SimulatorReader } from "./simulator";
+import { AiConfigurationError, type Evaluator, type Reader } from "./types";
 
 export type {
   EvaluationContext,
@@ -11,11 +11,21 @@ export type {
   Evaluator,
   Generation,
   JsonSchema,
+  Reader,
+  ReadingRequest,
+  ReadingResponse,
   Usage,
   UsageDetail,
 } from "./types";
 export { AiConfigurationError, AiJournalError, EvaluatorError } from "./types";
-export { SimulatorEvaluator, type CapturedRequest, type SimulatedFault } from "./simulator";
+export {
+  SimulatorEvaluator,
+  SimulatorReader,
+  type CapturedReading,
+  type CapturedRequest,
+  type SimulatedFault,
+  type SimulatedReadingFault,
+} from "./simulator";
 
 type AiEnv = Record<string, string | undefined> & {
   NODE_ENV?: string;
@@ -81,4 +91,30 @@ export function getSimulator(): SimulatorEvaluator {
   const evaluator = getEvaluator();
   if (!(evaluator instanceof SimulatorEvaluator)) throw new Error("The AI simulator is not active");
   return evaluator;
+}
+
+/** The reader's choice follows the evaluator's: the same provider, key and refusals. */
+function createReader(env: AiEnv, provider = env.AI_PROVIDER): Reader {
+  const choice = selectEvaluator({ ...env, AI_PROVIDER: provider });
+  return choice.provider === "anthropic" ? createAnthropicReader({ apiKey: choice.apiKey, env }) : new SimulatorReader();
+}
+
+/** The internal commands' reader (ai:read): the simulator unless the command line names Anthropic. */
+export function readerForCommand(provider: string | undefined, env: AiEnv = process.env): Reader {
+  return createReader(env, provider ?? "simulator");
+}
+
+const globalForReader = globalThis as unknown as { reader?: Reader };
+
+/** The only way the application reads a page (spec 0011). */
+export function getReader(): Reader {
+  globalForReader.reader ??= createReader(process.env);
+  return globalForReader.reader;
+}
+
+/** Tests: the reading simulator, to read requests, set readings and inject faults. */
+export function getReaderSimulator(): SimulatorReader {
+  const reader = getReader();
+  if (!(reader instanceof SimulatorReader)) throw new Error("The AI reading simulator is not active");
+  return reader;
 }

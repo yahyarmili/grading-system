@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { AI_CALL_TIMEOUT_MS } from "@/config/provisional";
 import { criterionIds, type CriterionId, type Level } from "@/lib/rubric";
 import type { CallError } from "@/lib/evaluation";
@@ -7,10 +8,14 @@ import {
   type EvaluationRequest,
   type EvaluationResponse,
   type Evaluator,
+  type Reader,
+  type ReadingRequest,
+  type ReadingResponse,
   type Usage,
 } from "./types";
+import type { Reading } from "./reading";
 
-// The default evaluator everywhere (tests, development, E2E): nothing leaves
+// The default evaluator and reader everywhere (tests, development, E2E): nothing leaves
 // the machine, so nothing is written to the security log. Its answers follow
 // the output contract of the plan (E5, §5), derived from the request alone,
 // and faults are injected on demand (NFR-EXP-04).
@@ -90,6 +95,39 @@ const firstWords = (text: string) => text.match(/\S+(?:[ \t]+\S+){0,5}/)?.[0] ??
 
 const abortError = () => new EvaluatorError("timeout");
 
+/** The faults of a failed call, shared by the evaluation and the reading simulators. */
+type CallFault = Extract<SimulatedFault, { kind: "error" | "spend_limit" | "refusal" | "max_tokens" | "timeout" }>;
+
+const CALL_FAULTS: readonly string[] = ["error", "spend_limit", "refusal", "max_tokens", "timeout"] satisfies CallFault["kind"][];
+const isCallFault = (fault: { kind: string }): fault is CallFault => CALL_FAULTS.includes(fault.kind);
+
+/** Throws as the adapter would for this fault; a timeout waits for the abort. */
+function failWith(fault: CallFault, signal: AbortSignal): Promise<never> {
+  if (fault.kind === "error") {
+    const [kind, type] = STATUS_FAULTS[fault.status];
+    throw new EvaluatorError(kind, kind === "rate_limited" ? fault.retryAfterMs : undefined, type);
+  }
+  if (fault.kind === "spend_limit") throw new EvaluatorError("budget", undefined, "invalid_request_error/spend_limit");
+  if (fault.kind === "refusal") {
+    throw new EvaluatorError("refused", undefined, `refusal/${fault.category ?? "null"}`, {
+      stopReason: "refusal",
+      usage: REFUSAL_USAGE,
+    });
+  }
+  if (fault.kind === "max_tokens") {
+    throw new EvaluatorError("truncated", undefined, "stop_reason/max_tokens", { stopReason: "max_tokens", usage: TRUNCATED_USAGE });
+  }
+  return untilAborted(signal);
+}
+
+const reply = (content: string, model: string): EvaluationResponse => ({
+  content,
+  modelAnswered: model,
+  providerAnswered: null,
+  stopReason: "end_turn",
+  usage: null,
+});
+
 /** Resolves when the signal aborts (never before), rejecting as a timeout. */
 const untilAborted = (signal: AbortSignal) =>
   new Promise<never>((_, reject) => {
@@ -130,31 +168,10 @@ export class SimulatorEvaluator implements Evaluator {
     if (hold) await Promise.race([hold, untilAborted(signal)]);
 
     const fault = this.faults.shift();
-    if (fault?.kind === "error") {
-      const [kind, type] = STATUS_FAULTS[fault.status];
-      throw new EvaluatorError(kind, kind === "rate_limited" ? fault.retryAfterMs : undefined, type);
-    }
-    if (fault?.kind === "spend_limit") throw new EvaluatorError("budget", undefined, "invalid_request_error/spend_limit");
-    if (fault?.kind === "refusal") {
-      throw new EvaluatorError("refused", undefined, `refusal/${fault.category ?? "null"}`, {
-        stopReason: "refusal",
-        usage: REFUSAL_USAGE,
-      });
-    }
-    if (fault?.kind === "timeout") return untilAborted(signal);
+    if (fault && isCallFault(fault)) return failWith(fault, signal);
 
     const answer = JSON.stringify(this.answer(request, fault));
-    const reply = (content: string, stopReason: string): EvaluationResponse => ({
-      content,
-      modelAnswered: this.model,
-      providerAnswered: null,
-      stopReason,
-      usage: null,
-    });
-    if (fault?.kind === "max_tokens") {
-      throw new EvaluatorError("truncated", undefined, "stop_reason/max_tokens", { stopReason: "max_tokens", usage: TRUNCATED_USAGE });
-    }
-    return reply(fault?.kind === "invalid_output" && fault.variant === "not_json" ? "This is not JSON." : answer, "end_turn");
+    return reply(fault?.kind === "invalid_output" && fault.variant === "not_json" ? "This is not JSON." : answer, this.model);
   }
 
   /** The next `times` calls fail with this fault, in order after any already queued. */
@@ -224,5 +241,82 @@ export class SimulatorEvaluator implements Evaluator {
       next_steps: [remarks.next],
       flags: texts?.flags ?? { other_language: false, off_topic: false, addressed_to_marker: false },
     };
+  }
+}
+
+/** A fault of the reading simulator: a failed call, an answer off the schema, or a page read as blank. */
+export type SimulatedReadingFault = CallFault | { kind: "invalid_output" } | { kind: "no_writing" };
+
+export type CapturedReading = { request: ReadingRequest; subjectId: string | null };
+
+/** What the reading simulator reads on a page no test named. */
+export const SIMULATED_READING = "Simulated reading of a page.";
+
+const sha256 = (base64: string) => createHash("sha256").update(Buffer.from(base64, "base64")).digest("hex");
+
+/**
+ * The default reader everywhere (spec 0011): nothing leaves the machine. It
+ * reads a fixture image as the test said (keyed on the image's bytes), any
+ * other as SIMULATED_READING, and fails on demand like the evaluator, plus
+ * a page without writing.
+ */
+export class SimulatorReader implements Reader {
+  readonly provider = "simulator" as const;
+  readonly model = "simulator";
+
+  private faults: SimulatedReadingFault[] = [];
+  private holds: Promise<void>[] = [];
+  private requests: CapturedReading[] = [];
+  private readings = new Map<string, Reading>();
+
+  constructor(private readonly callTimeoutMs: number = AI_CALL_TIMEOUT_MS) {}
+
+  async read(request: ReadingRequest, context: EvaluationContext): Promise<ReadingResponse> {
+    const signal = AbortSignal.any([context.signal, AbortSignal.timeout(this.callTimeoutMs)]);
+    if (signal.aborted) throw abortError();
+    this.requests.push({ request, subjectId: context.subjectId });
+    if (this.requests.length > CAPTURE_LIMIT) this.requests.shift();
+
+    const hold = this.holds.shift();
+    if (hold) await Promise.race([hold, untilAborted(signal)]);
+
+    const fault = this.faults.shift();
+    if (fault && isCallFault(fault)) return failWith(fault, signal);
+    if (fault?.kind === "invalid_output") return reply("This is not JSON.", this.model);
+    const reading =
+      fault?.kind === "no_writing"
+        ? { hasWriting: false, text: "" }
+        : (this.readings.get(sha256(request.image.base64)) ?? { hasWriting: true, text: SIMULATED_READING });
+    return reply(JSON.stringify({ has_writing: reading.hasWriting, text: reading.text }), this.model);
+  }
+
+  /** What the next readings of this image (its JPEG bytes) give. */
+  setReading(jpeg: Uint8Array, reading: Reading): void {
+    this.readings.set(sha256(Buffer.from(jpeg).toString("base64")), reading);
+  }
+
+  /** The next `times` calls fail with this fault, in order after any already queued. */
+  failNext(fault: SimulatedReadingFault, times = 1): void {
+    for (let i = 0; i < times; i++) this.faults.push(fault);
+  }
+
+  /** The next call waits until release() (or its abort): to confirm or replace while a page is read. */
+  holdNext(): () => void {
+    let release!: () => void;
+    this.holds.push(new Promise<void>((resolve) => (release = resolve)));
+    return () => release();
+  }
+
+  /** The last requests received, oldest first (at most 20). */
+  captured(): readonly CapturedReading[] {
+    return this.requests;
+  }
+
+  /** Forgets the requests, faults, holds and readings. */
+  clear(): void {
+    this.requests = [];
+    this.faults = [];
+    this.holds = [];
+    this.readings.clear();
   }
 }

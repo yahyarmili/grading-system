@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { publishedRubric, RUBRIC_VERSIONS, criterionIds } from "@/lib/rubric";
 import { bodyOf } from "@/server/ai/anthropic";
+import { buildReadingRequest, PROMPT_VERSION as READING_PROMPT_VERSION } from "@/server/ai/reading";
 import { buildEvaluationRequest, PROMPT_VERSION, type EvaluationInput } from "@/server/ai/request";
 
 // EVL-02, rule 5: the request is built in one place, from the whitelist only.
@@ -137,5 +138,26 @@ describe("buildEvaluationRequest", () => {
 
   it("is built for the English rubric in force", () => {
     expect(publishedRubric("en")).toBe(en1);
+  });
+});
+
+describe("the reading prompt version (spec 0011)", () => {
+  /** A fixed page: the bytes do not matter, only that the body built around them is frozen. */
+  const page = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]);
+
+  const PUBLISHED_READING_BODIES: Record<string, string> = {
+    // Frozen before E9.0: the trial may still change it, while no reading run is stored under it.
+    "transcription-1": "4414795df4c395bb2d6c7e5e6763ea9ddffd3094e91c9b0be9d1ff5edfbe2608",
+  };
+
+  it("freezes the whole body sent for a page: rules, instruction, schema and generation", () => {
+    expect({ [READING_PROMPT_VERSION]: digest(bodyOf(buildReadingRequest(page))) }).toEqual({
+      [READING_PROMPT_VERSION]: PUBLISHED_READING_BODIES[READING_PROMPT_VERSION],
+    });
+  });
+
+  it("asks for no reasoning anywhere, key or text", () => {
+    const { system, instruction, schema, schemaName } = buildReadingRequest(page);
+    expect(JSON.stringify({ system, instruction, schema, schemaName }).toLowerCase()).not.toContain("reasoning");
   });
 });

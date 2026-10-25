@@ -24,6 +24,12 @@ export const IMPORT_RESTRICTIONS = [
     allowed: ["src/server/ai/anthropic.ts"],
   },
   {
+    // Spec 0011: a page is decoded, shrunk and stripped of its metadata in one place.
+    group: ["sharp", "sharp/*"],
+    message: "Only src/server/submissions/page-image.ts imports sharp: pages are decoded and encoded there alone.",
+    allowed: ["src/server/submissions/page-image.ts", "tests/**"],
+  },
+  {
     // The evaluation's system functions take no Actor and read the student's text: the evaluation service only.
     group: ["@/server/data/evaluation/system", "**/data/evaluation/system", "**/evaluation/system"],
     message: "Only the evaluation service (src/server/evaluation/) uses these system functions, which take no Actor.",

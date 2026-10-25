@@ -13,6 +13,9 @@ const DATABASE = `import { db } from "@/server/db/client";\nexport const databas
 const SYSTEM = `import { readEvaluationInput } from "@/server/data/evaluation/system";\nexport const read = readEvaluationInput;\n`;
 const SYSTEM_RELATIVE = `import { readEvaluationInput } from "../data/evaluation/system";\nexport const read = readEvaluationInput;\n`;
 
+const SHARP = `import sharp from "sharp";
+export const decode = sharp;
+`;
 const WORKFLOW = `import { start } from "workflow/api";\nexport const begin = start;\n`;
 
 const REVIEW = `import { teacherEvaluations } from "@/server/db/schema";\nexport const table = teacherEvaluations;\n`;
@@ -57,6 +60,19 @@ describe("each import is allowed where the table says, refused everywhere else",
     ["scripts/x.ts", SYSTEM],
   ])("refuses the evaluation's system functions in %s", { timeout: 30_000 }, async (path, text) => {
     expect(await restricted(path, text)).toEqual([expect.stringContaining("Only the evaluation service")]);
+  });
+
+  // Spec 0011: one file decodes and encodes pages.
+  it.each([["src/app/x.ts"], ["src/server/submissions/x.ts"], ["src/server/ai/x.ts"], ["scripts/x.ts"]])(
+    "refuses sharp in %s",
+    { timeout: 30_000 },
+    async (path) => {
+      expect(await restricted(path, SHARP)).toEqual([expect.stringContaining("Only src/server/submissions/page-image.ts imports sharp")]);
+    },
+  );
+
+  it.each([["src/server/submissions/page-image.ts"], ["tests/x.ts"]])("allows sharp in %s", { timeout: 30_000 }, async (path) => {
+    expect(await restricted(path, SHARP)).toEqual([]);
   });
 
   it.each([["src/app/x.ts"], ["src/server/data/x.ts"], ["scripts/x.ts"]])(

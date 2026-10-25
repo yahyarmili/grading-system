@@ -12,10 +12,14 @@ import {
   type EvaluationRequest,
   type EvaluationResponse,
   type Evaluator,
+  type Generation,
+  type Reader,
+  type ReadingRequest,
+  type ReadingResponse,
   type Usage,
 } from "./types";
 
-// The Anthropic adapter (rule 3), the only file that imports the SDK
+// The Anthropic adapter (rule 3), evaluator and reader, the only file that imports the SDK
 // (@anthropic-ai/sdk, pinned to 0.135.0: audited in
 // conception/annexe-ia-anthropic.md §5). Real sendings only: the simulator is
 // the default (index.ts). What it guarantees (plan of E5, §3):
@@ -109,14 +113,17 @@ export class AiRequestBlockedError extends Error {
 /** What one call's fetch saw, read after the SDK has wrapped its errors. */
 type CallState = { journalFailed: boolean; blocked: boolean };
 
-export function createAnthropicEvaluator({
+/** One call through the hardened client: the body given, bounded, logged, classified. */
+type Send = (body: Anthropic.MessageCreateParamsNonStreaming, generation: Generation, context: EvaluationContext) => Promise<EvaluationResponse>;
+
+function createSender({
   apiKey,
   fetcher,
   journal = journalSending,
   callTimeoutMs = AI_CALL_TIMEOUT_MS,
   env = process.env,
   maxRetries = 0,
-}: AnthropicOptions): Evaluator {
+}: AnthropicOptions): Send {
   assertCleanEnvironment(env);
   const key = apiKey.trim();
   if (key === "") throw new AiConfigurationError("GRADING_ANTHROPIC_API_KEY is empty.");
@@ -124,59 +131,83 @@ export function createAnthropicEvaluator({
     throw new AiConfigurationError("The call timeout must be a positive whole number of milliseconds.");
   }
 
-  return {
-    provider: "anthropic",
-    model: AI_MODEL,
+  return async (body, { effort, thinking }, { signal, subjectId }) => {
+    // A variable set after the start does not pass either.
+    assertCleanEnvironment(env);
+    if (thinking === "disabled" && (effort === "xhigh" || effort === "max")) {
+      throw new AiConfigurationError("Thinking cannot be disabled at the xhigh or max effort.");
+    }
+    const deadline = AbortSignal.any([signal, AbortSignal.timeout(callTimeoutMs)]);
+    if (deadline.aborted) throw new EvaluatorError("timeout");
 
-    async evaluate(request: EvaluationRequest, { signal, subjectId }: EvaluationContext): Promise<EvaluationResponse> {
-      // A variable set after the start does not pass either.
-      assertCleanEnvironment(env);
-      const { effort, thinking } = request.generation;
-      if (thinking === "disabled" && (effort === "xhigh" || effort === "max")) {
-        throw new AiConfigurationError("Thinking cannot be disabled at the xhigh or max effort.");
-      }
-      const deadline = AbortSignal.any([signal, AbortSignal.timeout(callTimeoutMs)]);
-      if (deadline.aborted) throw new EvaluatorError("timeout");
+    // One client per call: the log's subject stays in this call's fetch, shared with no other call.
+    const state: CallState = { journalFailed: false, blocked: false };
+    const client = new Anthropic({
+      apiKey: key,
+      authToken: null,
+      webhookKey: null,
+      baseURL: BASE_URL,
+      maxRetries,
+      timeout: callTimeoutMs,
+      logLevel: "off",
+      logger: SILENT,
+      openTelemetry: false,
+      fetch: guardedFetch({ key, subjectId, state, journal, fetcher }),
+      fetchOptions: { cache: "no-store" },
+      defaultHeaders: Object.fromEntries(PLATFORM_HEADERS.map((name) => [name, null])),
+    });
 
-      // One client per call: the log's subject stays in this call's fetch, shared with no other call.
-      const state: CallState = { journalFailed: false, blocked: false };
-      const client = new Anthropic({
-        apiKey: key,
-        authToken: null,
-        webhookKey: null,
-        baseURL: BASE_URL,
-        maxRetries,
-        timeout: callTimeoutMs,
-        logLevel: "off",
-        logger: SILENT,
-        openTelemetry: false,
-        fetch: guardedFetch({ key, subjectId, state, journal, fetcher }),
-        fetchOptions: { cache: "no-store" },
-        defaultHeaders: Object.fromEntries(PLATFORM_HEADERS.map((name) => [name, null])),
-      });
-
-      let message: unknown;
-      try {
-        message = await untilDeadline(client.messages.create(bodyOf(request), { signal: deadline, maxRetries }), deadline);
-      } catch (error) {
-        // Nothing of the SDK's error leaves: its message holds the error body.
-        if (state.journalFailed) throw new AiJournalError();
-        if (state.blocked) throw new AiRequestBlockedError();
-        throw classify(error, deadline);
-      }
-      return readMessage(message);
-    },
+    let message: unknown;
+    try {
+      message = await untilDeadline(client.messages.create(body, { signal: deadline, maxRetries }), deadline);
+    } catch (error) {
+      // Nothing of the SDK's error leaves: its message holds the error body.
+      if (state.journalFailed) throw new AiJournalError();
+      if (state.blocked) throw new AiRequestBlockedError();
+      throw classify(error, deadline);
+    }
+    return readMessage(message);
   };
 }
 
-/** The body sent (plan §4): the whitelist request, the pinned model and region, nothing else. Exported for its digest test only (tests/ai-request.test.ts). */
-export function bodyOf(request: EvaluationRequest): Anthropic.MessageCreateParamsNonStreaming {
+export function createAnthropicEvaluator(options: AnthropicOptions): Evaluator {
+  const send = createSender(options);
+  return {
+    provider: "anthropic",
+    model: AI_MODEL,
+    evaluate: (request: EvaluationRequest, context: EvaluationContext) => send(bodyOf(request), request.generation, context),
+  };
+}
+
+/** The reader (spec 0011): the same client, guarantees and journal as the evaluator; only the body differs. */
+export function createAnthropicReader(options: AnthropicOptions): Reader {
+  const send = createSender(options);
+  return {
+    provider: "anthropic",
+    model: AI_MODEL,
+    read: (request: ReadingRequest, context: EvaluationContext): Promise<ReadingResponse> => send(bodyOf(request), request.generation, context),
+  };
+}
+
+/**
+ * The body sent (plan §4): the whitelist request, the pinned model and region, nothing else. A reading
+ * sends one user message: the page as a base64 JPEG block, then the fixed instruction; never a URL (spec 0011).
+ * Exported for its digest test only (tests/ai-request.test.ts).
+ */
+export function bodyOf(request: EvaluationRequest | ReadingRequest): Anthropic.MessageCreateParamsNonStreaming {
   const { effort, thinking, maxOutputTokens } = request.generation;
+  const content: Anthropic.MessageParam["content"] =
+    "image" in request
+      ? [
+          { type: "image", source: { type: "base64", media_type: request.image.mediaType, data: request.image.base64 } },
+          { type: "text", text: request.instruction },
+        ]
+      : request.user;
   return {
     model: AI_MODEL,
     max_tokens: maxOutputTokens,
     system: request.system,
-    messages: [{ role: "user", content: request.user }],
+    messages: [{ role: "user", content }],
     output_config: { format: { type: "json_schema", schema: { ...request.schema } }, effort },
     thinking: thinking === "adaptive" ? { type: "adaptive", display: "omitted" } : { type: "disabled" },
     inference_geo: AI_INFERENCE_GEO,

@@ -83,6 +83,39 @@ export interface Evaluator {
   evaluate(request: EvaluationRequest, context: EvaluationContext): Promise<EvaluationResponse>;
 }
 
+/**
+ * One page to read (spec 0011): the image, then fixed instructions, and
+ * nothing else. The image is a JPEG already shrunk and stripped of its
+ * metadata; never a URL, a file name or an identifier.
+ */
+export type ReadingRequest = {
+  /** Fixed reading rules, the same in English and French (TRX-01 R2). */
+  system: string;
+  image: { mediaType: "image/jpeg"; base64: string };
+  /** Fixed text sent after the image. */
+  instruction: string;
+  /** Name of the answer schema: part of the prompt version, not sent. */
+  schemaName: string;
+  schema: JsonSchema;
+  generation: Generation;
+};
+
+/** A reader answers like an evaluator: a raw text the caller validates, the model, the stop reason and the usage. */
+export type ReadingResponse = EvaluationResponse;
+
+/**
+ * The single reading interface (spec 0011, rule 3): the Anthropic adapter and
+ * the simulator implement it. It sees one page's image, never a submission,
+ * a draft or an identity. Its failures are EvaluatorErrors, of the same kinds.
+ */
+export interface Reader {
+  readonly provider: SelectableAiProvider;
+  /** The model requested at each call. */
+  readonly model: string;
+  /** One call, one answer: no retry inside, bounded like evaluate. */
+  read(request: ReadingRequest, context: EvaluationContext): Promise<ReadingResponse>;
+}
+
 /** Fixed messages: an error never carries a request, an answer, a key or a provider message. */
 const MESSAGES: Record<CallError, string> = {
   timeout: "The AI did not answer in time.",

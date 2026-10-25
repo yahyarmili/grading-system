@@ -1,7 +1,7 @@
 # 0011. Image channel: scanned pages, faithful reading, student check (E9)
 
 **Date**: 2026-10-25
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

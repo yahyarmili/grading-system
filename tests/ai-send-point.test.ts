@@ -8,7 +8,7 @@ import { importsOf, UNFOLLOWABLE } from "./helpers/imports";
 // other AI client library anywhere; Anthropic's API address is written in the
 // adapter alone; the adapter and the simulator are imported by
 // src/server/ai/index.ts alone; that index by the evaluation service (E5.5)
-// and the two internal scripts alone. The SDK is pinned to the version
+// and the internal scripts alone. The SDK is pinned to the version
 // audited (annexe-ia-anthropic.md §5). Tests may import anything. Scope: the
 // .ts and .tsx files of src/ and scripts/.
 
@@ -23,7 +23,7 @@ const INDEX = "src/server/ai";
 const IMPLEMENTATIONS = ["src/server/ai/anthropic", "src/server/ai/simulator", "src/server/ai/openrouter"];
 
 const mayUseIndex = (file: string) =>
-  file.startsWith("src/server/evaluation/") || file === "scripts/evaluate.ts" || file === "scripts/ai-trial.ts";
+  file.startsWith("src/server/evaluation/") || file === "scripts/evaluate.ts" || file === "scripts/ai-trial.ts" || file === "scripts/ai-read.ts";
 
 const isAiPackage = (target: string) => AI_PACKAGES.some((name) => target === name || target.startsWith(`${name}/`));
 const isSdk = (target: string) => target === SDK || target.startsWith(`${SDK}/`);

@@ -247,4 +247,6 @@ export const SCRIPTS: Record<string, string> = {
     "npm run ai:report: the evaluation report by assignment (EXP-01, E6.4): delays, attempts, failure rate, AI usage and estimated cost; reads only, no identity or content",
   "scripts/ai-trial.ts":
     "npm run ai:trial: connection trial and trial sets (E5.7, E5.14) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
+  "scripts/ai-read.ts":
+    "npm run ai:read: the handwriting trial (E9.0, spec 0011) on fictitious photos through the product's Reader; stores nothing but the security log; the simulator unless --provider anthropic",
 };
