@@ -23,7 +23,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 10 | Batch processing & relaunch (E6) | Slice 1: text cycle | existing |
 | 11 | Teacher review (E7) | Slice 1: text cycle | existing |
 | 12 | Validation, publication & student result (E8) | Slice 1: text cycle | existing |
-| 13 | Image channel (E9) | Slice 2: image | planned |
+| 13 | Image channel (E9) | Slice 2: image | in-progress |
 | 14 | Hardening & quality measurement (E10) | Slice 3: hardening | planned |
 | 15 | Demonstration (E11) | Slice 4: demo | planned |
 | 16 | Final review | Slice 4: demo | planned |
@@ -70,10 +70,21 @@ Validate, publish, withdraw, manual evaluation, student result through a closed 
 
 ## Slice 2: Image channel
 
-### 13. Image channel (E9) · needs a decision
+### 13. Image channel (E9) · in-progress
 Students hand in photos of a handwritten copy; the AI reads them faithfully (spelling kept, `[illisible]` never guessed); the student checks and corrects the transcription once before sending (Q4); the teacher sees the confirmed transcription with changed words highlighted, image on demand. Opens with the E9.0 handwriting trial (fictitious photos, `claude-haiku-5-5`).
 **Done when:** SUB-03 criteria and the TRX-01 contract pass; every image branch replayed (SUB-04, SUB-05, PRC-01, PRC-02, EVL-02 CA3, EVL-04 CA1, REV-01, REV-02, REV-06); a mixed text and image batch runs with no technical help; the matrix holds for images; the fidelity trial is recorded as is.
-- [ ] Design it (spec): `/architect image channel`
+Spec [0011](../specs/0011-image-channel/index.md)
+- [x] Design it (spec): `/architect image channel`
+- [ ] Build it: `/develop image channel`
+  - [ ] Reader, `transcription-1` and the E9.0 trial, engineer checkpoint (AC-11, AC-15, AC-19)
+  - [ ] Migration and one page end to end on the simulator, image route and matrix (AC-1, AC-3, AC-5, AC-12, AC-14)
+  - [ ] Student draft screen: pages, order, retake, word changes, limits, notice v5 (AC-2, AC-3, AC-4, AC-8, AC-17)
+  - [ ] Failure branches and pipeline wiring, teacher and student reads, replacement and late, draft purge (AC-6, AC-7, AC-9, AC-10, AC-13, AC-16, AC-18)
+  - [ ] Replays, mixed batch, security cases, E2E and final fidelity trial (AC-16, AC-19, AC-20)
+- [ ] Verify it: `/check verify image channel`
+- [ ] Test it: `/test image channel`
+- [ ] Review it (fresh model): `/check review image channel`
+- [ ] Document it: `/document image channel`
 
 ## Slice 3: Hardening
 
@@ -103,6 +114,7 @@ Out of scope for the MVP (V2, `conception/fonctionnalites.md` §3.2), kept so th
 - **Scans uploaded by the teacher for students**
 - **Student data rights page** · needs a decision
 - **Image quality alert before sending** (blur, dark, cut)
+- **Image deletion at the end of review and retention** (DON-01, step 5; a storage risk on Neon's 1 GB), from spec 0011
 - **Advanced assignment and class management**: add a class, extend, close, archive, duplicate
 - **PDF hand in** (excluded from the MVP, Q4)
 - **Return a copy to the student, per assignment hand in modes, text file import, saved draft**
