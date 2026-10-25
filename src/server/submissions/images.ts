@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { SUBMISSION_PAGES_MAX } from "@/config/decisions";
+import { SUBMISSION_MAX_REPLACEMENTS, SUBMISSION_PAGES_MAX } from "@/config/decisions";
 import { DRAFT_READS_MAX, PAGE_INPUT_MAX_PIXELS, PAGE_UPLOAD_MAX_BYTES, STUDENT_DAILY_READS_MAX } from "@/config/provisional";
 import { normalizeStudentWord } from "@/lib/submission-text";
 import { wordsOf } from "@/lib/transcription";
@@ -167,12 +167,17 @@ export const CONFIRM_MESSAGES = {
   staleChange: "A page was read again since you changed it. Check your changes, then send.",
   badChange: "One of your changes is not valid. Check them, then send.",
   allRead: "Every page is read now. Check the reading, then send.",
+  // AC-10, SUB-05: pages sent in place of the submission.
+  teacherStarted: "Your teacher has started marking your submission: it can no longer be replaced. Your pages were not sent.",
+  limitReached: `You have already replaced this submission ${SUBMISSION_MAX_REPLACEMENTS} times, the most allowed. Your pages were not sent.`,
 } as const;
 
 export type ConfirmImagesState =
   | { status: "idle" }
   | { status: "error"; reason: keyof typeof CONFIRM_MESSAGES; message: string }
-  | { status: "done"; submittedAt: string; late: boolean };
+  | { status: "done"; submittedAt: string; late: boolean }
+  /** AC-10: the pages replaced the submission; its first date and late mark stay. */
+  | { status: "replaced"; replacedAt: string; replacementsLeft: number };
 
 const confirmFields = z.object({
   assignmentId: z.uuid(),
@@ -195,6 +200,8 @@ const notConfirmed = (reason: keyof typeof CONFIRM_MESSAGES) => ({ status: "erro
  * `ctx.onReceived` and evaluated on the confirmed text, as a pasted one.
  * AC-7, sent "unchecked" after a failed reading: the pipeline reads the
  * pages left first, and the teacher sees the text "not checked by the student".
+ * AC-10: once submitted, the pages replace the submission, under the guards
+ * of a text replacement (SUB-05), and are evaluated again.
  */
 export async function confirmStudentImages(actor: Actor, raw: unknown, ctx: SubmissionContext): Promise<ConfirmImagesState> {
   const fields = confirmFields.safeParse(raw);
@@ -219,10 +226,13 @@ export async function confirmStudentImages(actor: Actor, raw: unknown, ctx: Subm
         all_read: "allRead",
         stale_change: "staleChange",
         bad_change: "badChange",
+        teacher_started: "teacherStarted",
+        limit_reached: "limitReached",
       } as const;
       return notConfirmed(reasons[result.reason]);
     }
     ctx.onReceived(result.ref);
+    if ("replacedAt" in result) return { status: "replaced", replacedAt: result.replacedAt, replacementsLeft: result.replacementsLeft };
     return { status: "done", submittedAt: result.submittedAt, late: result.late };
   } catch (error) {
     if (!(error instanceof AccessDeniedError)) throw error;

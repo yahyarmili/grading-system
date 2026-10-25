@@ -31,12 +31,13 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
   const actor = await getActor();
   const assignment = await getStudentAssignment(actor, assignmentId);
   if (!assignment) notFound();
-  // NFR-DON-04: before the first submission only.
+  // NFR-DON-04: before the first submission, and before pages sent in its place (AC-17).
+  const mayHandIn = assignment.canSubmit || assignment.canReplace;
   const [noticeRead, submission, draft] = await Promise.all([
-    !assignment.canSubmit || getNoticeAcknowledgement(actor).then((read) => read !== null),
+    !mayHandIn || getNoticeAcknowledgement(actor).then((read) => read !== null),
     assignment.submittedAt ? getOwnSubmission(actor, assignment.id) : null,
-    // E9: the pages not sent yet, before the first submission.
-    assignment.canSubmit && !assignment.submittedAt ? getOwnDraft(actor, assignment.id) : null,
+    // E9: the pages not sent yet, before the first submission or for a replacement (AC-10).
+    mayHandIn ? getOwnDraft(actor, assignment.id) : null,
   ]);
 
   return (

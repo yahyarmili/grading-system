@@ -13,6 +13,7 @@ import type { AssignmentLanguage } from "@/lib/assignment";
 import { checkPhotoFile, PHOTO_HEAD_BYTES, type PhotoFileRefusal } from "@/lib/page-file";
 import { PhotoOpenError, shrinkPhoto } from "@/lib/page-shrink";
 import { normalizeStudentWord } from "@/lib/submission-text";
+import { REPLACEMENT_KEEPS_DATE_NOTICE, replacementsLeftNotice } from "@/lib/texts";
 import { ILLEGIBLE, wordsOf, type PageReadingStatus } from "@/lib/transcription";
 import type { OwnDraft } from "@/server/data/submissions/drafts";
 import type { ConfirmImagesState } from "@/server/submissions/images";
@@ -26,6 +27,8 @@ import { NoNameInstruction } from "./text-field";
 // server rebuilds from the readings and the changes. Unsaved word changes
 // live in this state only: a reload loses them, by design. When a reading
 // fails, they may send the pages unchecked: the pipeline reads them (AC-7).
+// Once submitted, the same screen sends pages in place of the submission
+// (AC-10, SUB-05), inside the replacement section.
 
 type Page = {
   id: string;
@@ -64,6 +67,7 @@ export function ImagesSection({
   requestId,
   language,
   draft,
+  replacement,
 }: {
   assignmentId: string;
   contentVersion: number;
@@ -71,6 +75,8 @@ export function ImagesSection({
   requestId: string;
   language: AssignmentLanguage;
   draft: OwnDraft | null;
+  /** AC-10: the pages replace the submission; told once they did. */
+  replacement?: { left: number; onReplaced: (state: Extract<ConfirmImagesState, { status: "replaced" }>) => void };
 }) {
   const router = useRouter();
   const [draftId, setDraftId] = useState(draft?.id ?? null);
@@ -215,7 +221,9 @@ export function ImagesSection({
     startSending(async () => {
       // Unchecked: no change goes, the pages left are read after sending (AC-7).
       const sent = mode === "checked" ? changeList : [];
-      setConfirm(await confirmImagesAction({ assignmentId, draftId, contentVersion, requestId, changes: sent, mode }));
+      const state = await confirmImagesAction({ assignmentId, draftId, contentVersion, requestId, changes: sent, mode });
+      setConfirm(state);
+      if (state.status === "replaced") replacement?.onReplaced(state);
     });
   }
 
@@ -236,17 +244,25 @@ export function ImagesSection({
     />
   );
 
+  // Inside the replacement section, a part of its card, one heading level down.
+  const Heading = replacement ? "h3" : "h2";
   return (
-    <section aria-labelledby="your-pages-title" className="card flex flex-col gap-4 p-4">
-      <h2 id="your-pages-title" className="text-base font-semibold">
-        Send photos of your pages
-      </h2>
+    <section aria-labelledby="your-pages-title" className={replacement ? "flex flex-col gap-4" : "card flex flex-col gap-4 p-4"}>
+      <Heading id="your-pages-title" className="text-base font-semibold">
+        {replacement ? "Send photos of your new pages" : "Send photos of your pages"}
+      </Heading>
       <NoNameInstruction />
       <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-fg-muted">
         <li>Up to {SUBMISSION_PAGES_MAX} pages, one photo each, in the order you wrote them.</li>
         <li>Each page is read by the AI exactly as written: nothing is corrected.</li>
         <li>If the AI misread a word, tap it and type what you actually wrote. Fix only reading mistakes, not your own.</li>
         <li>Nothing is sent until you press Send.</li>
+        {replacement && (
+          <>
+            <li>{replacementsLeftNotice(replacement.left)}</li>
+            <li>{REPLACEMENT_KEEPS_DATE_NOTICE}</li>
+          </>
+        )}
       </ul>
 
       {pages.length > 0 && (
@@ -254,6 +270,7 @@ export function ImagesSection({
           {pages.map((page, index) => (
             <PageCard
               key={page.id}
+              nested={replacement !== undefined}
               page={page}
               position={index + 1}
               count={pages.length}
@@ -362,6 +379,7 @@ export function ImagesSection({
 }
 
 function PageCard({
+  nested,
   page,
   position,
   count,
@@ -374,6 +392,8 @@ function PageCard({
   onDelete,
   onChange,
 }: {
+  /** Under the replacement section's h3: the page title is an h4. */
+  nested: boolean;
   page: Page;
   position: number;
   count: number;
@@ -389,11 +409,12 @@ function PageCard({
   const [editingWord, setEditingWord] = useState<number | null>(null);
   const reading = page.status === "reading";
   const words = page.status === "read" && page.hasWriting && page.text !== null ? wordsOf(page.text) : [];
+  const Title = nested ? "h4" : "h3";
 
   return (
     <li className="flex flex-col gap-3 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-semibold">Page {position}</h3>
+        <Title className="font-semibold">Page {position}</Title>
         <PageStatus status={page.status} />
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element -- a private page, never optimized nor cached */}

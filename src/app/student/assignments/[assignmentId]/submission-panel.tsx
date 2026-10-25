@@ -47,13 +47,13 @@ export function SubmissionPanel({
   language: AssignmentLanguage;
   contentVersion: number;
   requestId: string;
-  /** One per page shown, for the confirmation of the pages (E9). */
+  /** One per page shown, for the confirmation of the pages (E9), first or replacing. */
   imagesRequestId: string;
   replaceRequestId: string;
   status: StudentStatus;
   /** The active version's mode, once submitted. */
   mode: SubmissionMode | null;
-  /** E9: the student's pages not sent yet. */
+  /** E9: the student's pages not sent yet, for a first submission or a replacement. */
   draft: OwnDraft | null;
   submittedAt: string | null;
   /** SUB-04: the first submission came after the deadline. */
@@ -100,7 +100,11 @@ export function SubmissionPanel({
           <ReplaceSection
             assignmentId={assignmentId}
             language={language}
+            contentVersion={contentVersion}
             requestId={replaceRequestId}
+            imagesRequestId={imagesRequestId}
+            draft={draft}
+            noticeRead={noticeRead}
             replacementsLeft={replacementsLeft}
             canReplace={canReplace}
           />

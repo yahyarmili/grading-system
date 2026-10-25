@@ -152,7 +152,7 @@ test("SUB-05: a student replaces their text twice, then can no longer", async ({
   await student.getByRole("button", { name: "Submit my text" }).click();
 
   const section = student.getByRole("region", { name: "Replace my submission" });
-  await expect(section.getByText(/You can replace your text 2 more times/)).toBeVisible();
+  await expect(section.getByText(/You can replace your submission 2 more times/)).toBeVisible();
   await student.waitForLoadState("networkidle");
   await student.screenshot({ path: "test-results/sub05-1-can-replace-phone.png", fullPage: true });
 
@@ -166,7 +166,7 @@ test("SUB-05: a student replaces their text twice, then can no longer", async ({
     await section.getByRole("button", { name: "Submit the new text" }).click();
     await expect(section.getByText(/Your new text was submitted on .+ \(Casablanca time, GMT\+\d\)\./)).toBeVisible();
     await expect(student.getByText(/Last replaced on /)).toBeVisible();
-    if (left) await expect(section.getByText(new RegExp(`replace your text ${left}`))).toBeVisible();
+    if (left) await expect(section.getByText(new RegExp(`replace your submission ${left}`))).toBeVisible();
   }
 
   // No replacement left: said in words, no button.

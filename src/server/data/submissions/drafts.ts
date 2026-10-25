@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { DEADLINE_TIME_ZONE, SUBMISSION_PAGES_MAX } from "@/config/decisions";
 import { DRAFT_READS_MAX, STUDENT_DAILY_READS_MAX } from "@/config/provisional";
 import type { AiProvider, EvaluationError } from "@/lib/evaluation";
@@ -10,6 +10,7 @@ import { db } from "@/server/db/client";
 import { assignments, readingRuns, submissionDrafts, submissionPages, submissions, users } from "@/server/db/schema";
 import { receivedBy } from "../assignments/received";
 import { acknowledgedNotice } from "../notices/notices";
+import { replacementOpen } from "./submissions";
 
 // SUB-03 (E9, spec 0011): the student's draft of pages, before anything is
 // sent. Every draft write first locks the draft row (FOR UPDATE), and bumps
@@ -37,8 +38,8 @@ export type NewDraftPage = {
  * (the only refusal the student sees as such, a 409), the most pages reached,
  * or a position taken or out of bounds. Null when the assignment is not one
  * the student may submit for (absent, not received, unconfirmed account, or
- * already submitted: replacing by images comes with E9 step 8), or the page
- * to retake is not in their draft.
+ * already submitted with no replacement open), or the page to retake is not
+ * in their draft.
  */
 export type AddDraftPageResult =
   | { ok: true; draftId: string; pageId: string; position: number }
@@ -47,8 +48,16 @@ export type AddDraftPageResult =
 const confirmed = (userId: string) =>
   sql`exists (select 1 from ${users} where ${users.id} = ${userId} and ${users.emailVerified})`;
 
-const noSubmission = (userId: string) =>
-  sql`not exists (select 1 from ${submissions} where ${submissions.assignmentId} = ${assignments.id} and ${submissions.studentId} = ${userId})`;
+/**
+ * Pages may go into a draft before the first submission, or while the
+ * student may still replace it (AC-10, SUB-05: the guard of transition 11,
+ * checked again at the confirmation).
+ */
+const mayAddPages = (userId: string) =>
+  or(
+    sql`not exists (select 1 from ${submissions} where ${submissions.assignmentId} = ${assignments.id} and ${submissions.studentId} = ${userId})`,
+    sql`exists (select 1 from ${submissions} where ${submissions.assignmentId} = ${assignments.id} and ${submissions.studentId} = ${userId} and ${replacementOpen(userId)})`,
+  );
 
 /** The student's draft for this assignment, found or created, then locked; its updated_at bumped. */
 async function lockOwnDraft(tx: Tx, assignmentId: string, userId: string): Promise<string> {
@@ -67,7 +76,7 @@ async function lockOwnDraft(tx: Tx, assignmentId: string, userId: string): Promi
 
 /**
  * One transaction: the assignment is checked (received, account confirmed,
- * no submission yet, the notice read), the draft found or created and
+ * no submission yet or a replacement open, the notice read), the draft found or created and
  * locked, then the page stored. A retake drops the old page and stores the
  * new one at its position in the same transaction, so it works at
  * SUBMISSION_PAGES_MAX pages.
@@ -78,7 +87,7 @@ export async function addDraftPage(actor: Actor, input: NewDraftPage): Promise<A
     const [assignment] = await tx
       .select({ noticeRead: sql<boolean>`${acknowledgedNotice(userId)}` })
       .from(assignments)
-      .where(and(eq(assignments.id, input.assignmentId), receivedBy(userId), confirmed(userId), noSubmission(userId)));
+      .where(and(eq(assignments.id, input.assignmentId), receivedBy(userId), confirmed(userId), mayAddPages(userId)));
     if (!assignment) return null;
     if (!assignment.noticeRead) return { ok: false, reason: "notice_not_read" } as const;
 

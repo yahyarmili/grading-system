@@ -178,7 +178,7 @@ export const RESULT_RUBRIC_SUBSTITUTE_NOTICE =
 
 /** SUB-05, Q3 [D, 2026-10-15]: replacements left, until the teacher's first change or validation. */
 export const replacementsLeftNotice = (left: number) =>
-  `You can replace your text ${left === 1 ? "once more" : `${left} more times`}, until your teacher starts marking it. Your teacher marks the last text you sent.`;
+  `You can replace your submission ${left === 1 ? "once more" : `${left} more times`}, with a text or with photos of your pages, until your teacher starts marking it. Your teacher marks the last one you sent.`;
 
 /** SUB-04 R2 [P]: a replacement keeps the first date and the late mark. */
 export const REPLACEMENT_KEEPS_DATE_NOTICE = "The date of your first submission stays, and so does a late mark.";

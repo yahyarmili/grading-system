@@ -78,12 +78,12 @@ test("E4 journey: on time, late, replaced, then read only; the assignment locked
   // replacement, still not late (SUB-04 CA2).
   await lina.reload();
   const replaceSection = lina.getByRole("region", { name: "Replace my submission" });
-  await expect(replaceSection.getByText(/replace your text 2 more times/)).toBeVisible();
+  await expect(replaceSection.getByText(/replace your submission 2 more times/)).toBeVisible();
   await replaceSection.getByRole("button", { name: "Replace my submission" }).click();
   await replaceSection.getByRole("textbox", { name: /^Your new text/ }).fill(LINA_NEW_TEXT);
   await replaceSection.getByRole("button", { name: "Submit the new text" }).dblclick();
   await expect(replaceSection.getByText(/Your new text was submitted on /)).toBeVisible();
-  await expect(replaceSection.getByText(/replace your text once more/)).toBeVisible();
+  await expect(replaceSection.getByText(/replace your submission once more/)).toBeVisible();
   await expect(submittedCard(lina).getByText(/Last replaced on /)).toBeVisible();
   await expect(submittedCard(lina).getByText("Late", { exact: true })).toHaveCount(0);
   expect(await submissionOf(linaEmail)).toEqual([{ late: false, versions: 2 }]);

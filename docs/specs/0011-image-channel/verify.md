@@ -99,3 +99,35 @@ _Added 2026-10-25. Highlights rebuilt from `submission_pages.reading_text` and `
 - AC-13 … UI steps 1, 3, 4, 5, 6, 8; value sourcing steps 1, 2
 - AC-14 … UI step 9; commands step 1
 - AC-6 (display) … UI steps 2, 7
+
+## Build step 8: replacement and late
+_Added 2026-10-25. One replacement core for text and pages (`replaceWith` in `src/server/data/submissions/submissions.ts`); a draft takes pages before the first submission or while transition 11 is open._
+
+### UI / manual
+- [ ] As a student with a text submission, open "Replace my submission", choose "Photograph new pages", add 2 pages, read them, send → "Your new pages were submitted on …"; the read back shows the pages; the first date and the late mark are unchanged; the version is evaluated again → AC-10, AC-9
+- [ ] With an image submission, replace it by a text → the read back shows the text; the old pages still open for the student and the owner teacher through `/api/pages/…` → AC-10
+- [ ] With an image submission, replace it by new pages, then once more → the third replacement is refused: "You have replaced this submission 2 times …", no draft page can be added (the upload answers 404) → AC-10
+- [ ] Add pages for a replacement, leave, come back → the replace form opens on the photos with the pages kept → AC-10
+- [ ] As an account that read notice v4 only, with a submission, open "Photograph new pages" → notice v5 shows before the first page; a direct upload gets a 409 → AC-17
+- [ ] Teacher saves a change on the copy while the student's replacement pages are ready, then the student sends → "Your teacher has started marking your submission … Your pages were not sent."; the draft stays → AC-10
+
+### Integration (ask first: shared test database)
+- [ ] Text to images: `confirmImages` on a submitted assignment → version 2 in mode `images`, its pages attached, the draft gone, `submitted_at` and `late` of version 1 kept, status `received`, `current_proposal_id` null → AC-10, AC-9
+- [ ] The same `requestId` sent again → the same `replacedAt` and `replacementsLeft`, one version → AC-3, AC-10
+- [ ] Replacement by pages and the teacher's first act at once → exactly one wins → AC-10
+- [ ] A first submission after the deadline replaced by pages before it → `late` stays true; neither the late flag nor the mode reaches the reader or the evaluation request (captured requests) → AC-9, AC-11
+- [ ] `addDraftPage` when the replacement is closed (teacher started, limit reached, or no longer a member) → null, nothing stored → AC-10
+
+### Value sourcing
+- [ ] `submittedAt`, late → source: the first submission's `submitted_at` and `late`, never the replacement's `now()` nor its first page → AC-9
+- [ ] Version number, replacements left → source: `submissions.current_version` + 1 under the row lock, shared by text and pages (`replaceWith`) → AC-10
+- [ ] Replaced date → source: the new version's `created_at` → AC-10
+
+### Commands
+- [ ] `docker compose exec -T web npx tsc --noEmit` → no error
+- [ ] `docker compose run --rm e2e` (ask first) → `e2e/submit-text.spec.ts` and `e2e/e4-journey.spec.ts` pass with the new wording "replace your submission …"
+
+### Acceptance-criteria coverage (step 8)
+- AC-9 … UI step 1; integration step 4; value sourcing step 1
+- AC-10 … UI steps 1 to 4, 6; integration steps 1, 2, 3, 5; value sourcing steps 2, 3
+- AC-17 (replacement by pages) … UI step 5

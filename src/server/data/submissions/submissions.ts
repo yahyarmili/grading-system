@@ -161,7 +161,10 @@ export type ConfirmImagesInput = FirstSubmissionInput & {
 
 /**
  * Confirmed (again, for the same request: idempotent, although the draft is
- * gone), or refused as a text is, or: a page not read yet (checked), every
+ * gone) as version 1, or as a replacement when the student already submitted
+ * (AC-10: text or pages replaced by pages; `replacedAt` then), or refused as
+ * a text is, or as a replacement is (the teacher started, no replacement
+ * left), or: a page not read yet (checked), every
  * page read ("all_read": unchecked, which is for a page left to read), a
  * change that no longer matches the reading ("stale_change"), two changes of
  * one word, a change on a page without writing, or any change sent unchecked
@@ -170,6 +173,7 @@ export type ConfirmImagesInput = FirstSubmissionInput & {
  */
 export type ConfirmImagesResult =
   | SubmitTextResult
+  | ReplaceTextResult
   | { ok: false; reason: "no_pages" | "page_not_read" | "all_read" | "stale_change" | "bad_change" };
 
 /**
@@ -178,10 +182,12 @@ export type ConfirmImagesResult =
  * submission, the draft already deleted. Then the draft row is locked (every
  * draft write takes it first), its pages read and checked, the text
  * assembled from the readings and the changes (never from the browser), and
- * the shared core creates the submission and version 1 in mode images; the
- * pages are attached in one statement, the transcription and the changes
- * added, the draft deleted. Unchecked (AC-7): the same, without changes nor
- * text, checked_by_student false for the whole version.
+ * a shared core creates the version in mode images: version 1 of a new
+ * submission (submitFirst), or the next one when the student has a
+ * submission (replaceWith, which keeps its submitted_at and late); the pages
+ * are attached in one statement, the transcription and the changes added,
+ * the draft deleted. Unchecked (AC-7): the same, without changes nor text,
+ * checked_by_student false for the whole version.
  */
 export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Promise<ConfirmImagesResult | null> {
   const { userId } = authorize(actor, "submission", "write");
@@ -190,7 +196,14 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
 
   return db.transaction(async (tx) => {
     const [same] = await tx
-      .select({ submittedAt: submissions.submittedAt, late: submissions.late, submissionId: submissions.id, number: submissionVersions.number })
+      .select({
+        submittedAt: submissions.submittedAt,
+        late: submissions.late,
+        submissionId: submissions.id,
+        currentVersion: submissions.currentVersion,
+        number: submissionVersions.number,
+        createdAt: submissionVersions.createdAt,
+      })
       .from(submissions)
       .innerJoin(submissionVersions, eq(submissionVersions.submissionId, submissions.id))
       .where(
@@ -201,12 +214,10 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
         ),
       );
     if (same) {
-      return {
-        ok: true,
-        submittedAt: same.submittedAt.toISOString(),
-        late: same.late,
-        ref: { submissionId: same.submissionId, versionNumber: same.number },
-      } as const;
+      const ref = { submissionId: same.submissionId, versionNumber: same.number };
+      return same.number === 1
+        ? ({ ok: true, submittedAt: same.submittedAt.toISOString(), late: same.late, ref } as const)
+        : ({ ok: true, replacedAt: same.createdAt.toISOString(), replacementsLeft: left(same.currentVersion), ref } as const);
     }
 
     const [draft] = await tx
@@ -237,13 +248,7 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
       // AC-7: the pages as they are, read ones keeping their reading; no change, no text yet.
       if (input.changes.length > 0) return { ok: false, reason: "bad_change" } as const;
       if (pages.every((page) => page.status === "read")) return { ok: false, reason: "all_read" } as const;
-      return submitFirst(tx, userId, input, async (submissionId) => {
-        const [version] = await tx
-          .insert(submissionVersions)
-          .values({ submissionId, number: 1, mode: "images", text: null, requestId: input.requestId })
-          .returning({ id: submissionVersions.id });
-        await attachDraft(tx, draft.id, version.id, null, []);
-      });
+      return submitPages(tx, userId, input, draft.id, null, []);
     }
     if (pages.some((page) => page.status !== "read")) return { ok: false, reason: "page_not_read" } as const;
 
@@ -261,13 +266,39 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
     }
     const text = assembleText([...byPage.values()].map((page) => ({ ...page, hasWriting: page.hasWriting!, text: page.text! })));
 
-    return submitFirst(tx, userId, input, async (submissionId) => {
-      const [version] = await tx
-        .insert(submissionVersions)
-        .values({ submissionId, number: 1, mode: "images", text: null, requestId: input.requestId })
-        .returning({ id: submissionVersions.id });
-      await attachDraft(tx, draft.id, version.id, text, input.changes);
-    });
+    return submitPages(tx, userId, input, draft.id, text, input.changes);
+  });
+}
+
+/**
+ * The draft's pages as a new version in mode images: version 1 when the
+ * student has no submission for the assignment, else a replacement (AC-10).
+ * A first submission made meanwhile by another tab is refused by the unique
+ * pair ("already_submitted"), as for a text.
+ */
+async function submitPages(
+  tx: Tx,
+  userId: string,
+  input: ConfirmImagesInput,
+  draftId: string,
+  text: string | null,
+  changes: readonly ConfirmedChange[],
+): Promise<ConfirmImagesResult | null> {
+  const insertPages = async (submissionId: string, number: number) => {
+    const [version] = await tx
+      .insert(submissionVersions)
+      .values({ submissionId, number, mode: "images", text: null, requestId: input.requestId })
+      .returning({ id: submissionVersions.id, createdAt: submissionVersions.createdAt });
+    await attachDraft(tx, draftId, version.id, text, changes);
+    return version.createdAt;
+  };
+  const [existing] = await tx
+    .select({ id: submissions.id })
+    .from(submissions)
+    .where(and(eq(submissions.assignmentId, input.assignmentId), eq(submissions.studentId, userId)));
+  if (existing) return replaceWith(tx, userId, input, insertPages);
+  return submitFirst(tx, userId, input, async (submissionId) => {
+    await insertPages(submissionId, 1);
   });
 }
 
@@ -317,69 +348,79 @@ export type ReplaceTextResult =
   | { ok: false; reason: "teacher_started" | "limit_reached" };
 
 /**
- * One transaction. The submission row is locked first (FOR UPDATE): two
- * replacements, or a replacement and the teacher's first act (E7, E8: an
- * update of this row that names the version seen), run one after the other,
- * and the first one wins. The guard is in the write statement itself.
- * submitted_at and late stay those of the first submission (SUB-04 R2).
+ * The core of a replacement, shared by the text and the images (spec 0011,
+ * AC-10), inside the caller's transaction. The submission row is locked
+ * first (FOR UPDATE): two replacements, or a replacement and the teacher's
+ * first act (E7, E8: an update of this row that names the version seen), run
+ * one after the other, and the first one wins. The guard is in the write
+ * statement itself. submitted_at and late stay those of the first submission
+ * (SUB-04 R2), whatever the mode. `insertVersion` adds the new version, in
+ * its mode, and gives back its creation date.
  */
+async function replaceWith(
+  tx: Tx,
+  userId: string,
+  input: { assignmentId: string; requestId: string },
+  insertVersion: (submissionId: string, number: number) => Promise<Date>,
+): Promise<ReplaceTextResult | null> {
+  const [submission] = await tx
+    .select({
+      id: submissions.id,
+      currentVersion: submissions.currentVersion,
+      teacherStarted: sql<boolean>`${submissions.teacherStartedAt} is not null`,
+    })
+    .from(submissions)
+    .where(and(eq(submissions.assignmentId, input.assignmentId), eq(submissions.studentId, userId)))
+    .for("update");
+  if (!submission) return null;
+
+  // The same form sent again: the same answer, nothing counted twice.
+  const [same] = await tx
+    .select({ createdAt: submissionVersions.createdAt })
+    .from(submissionVersions)
+    .where(and(eq(submissionVersions.submissionId, submission.id), eq(submissionVersions.requestId, input.requestId)));
+  if (same) {
+    return {
+      ok: true,
+      replacedAt: same.createdAt.toISOString(),
+      replacementsLeft: left(submission.currentVersion),
+      ref: { submissionId: submission.id, versionNumber: submission.currentVersion },
+    } as const;
+  }
+
+  const replaced = await applyTransition(tx, submission.id, 11, "received", {
+    where: replacementOpen(userId),
+    // The proposal in force was of the old version: none is current any more (SUB-05 R2).
+    set: { currentVersion: sql`${submissions.currentVersion} + 1`, currentProposalId: null },
+  });
+  if (!replaced) {
+    if (submission.teacherStarted) return { ok: false, reason: "teacher_started" } as const;
+    if (left(submission.currentVersion) === 0) return { ok: false, reason: "limit_reached" } as const;
+    // Validated or published without the mark is impossible (check constraint): not a member.
+    return null;
+  }
+
+  const createdAt = await insertVersion(submission.id, replaced.currentVersion);
+  return {
+    ok: true,
+    replacedAt: createdAt.toISOString(),
+    replacementsLeft: left(replaced.currentVersion),
+    ref: { submissionId: submission.id, versionNumber: replaced.currentVersion },
+  } as const;
+}
+
+/** One transaction: the shared core (replaceWith), then the text as the new version. */
 export async function replaceText(actor: Actor, input: ReplaceTextInput): Promise<ReplaceTextResult | null> {
   const { userId } = authorize(actor, "submission", "write");
   if (checkSubmissionText(input.text)) throw new Error("replaceText: the text was not checked");
 
-  return db.transaction(async (tx) => {
-    const [submission] = await tx
-      .select({
-        id: submissions.id,
-        currentVersion: submissions.currentVersion,
-        teacherStarted: sql<boolean>`${submissions.teacherStartedAt} is not null`,
-      })
-      .from(submissions)
-      .where(and(eq(submissions.assignmentId, input.assignmentId), eq(submissions.studentId, userId)))
-      .for("update");
-    if (!submission) return null;
-
-    // The same form sent again: the same answer, nothing counted twice.
-    const [same] = await tx
-      .select({ createdAt: submissionVersions.createdAt })
-      .from(submissionVersions)
-      .where(and(eq(submissionVersions.submissionId, submission.id), eq(submissionVersions.requestId, input.requestId)));
-    if (same) {
-      return {
-        ok: true,
-        replacedAt: same.createdAt.toISOString(),
-        replacementsLeft: left(submission.currentVersion),
-        ref: { submissionId: submission.id, versionNumber: submission.currentVersion },
-      } as const;
-    }
-
-    const replaced = await applyTransition(tx, submission.id, 11, "received", {
-      where: replacementOpen(userId),
-      // The proposal in force was of the old version: none is current any more (SUB-05 R2).
-      set: { currentVersion: sql`${submissions.currentVersion} + 1`, currentProposalId: null },
-    });
-    if (!replaced) {
-      if (submission.teacherStarted) return { ok: false, reason: "teacher_started" } as const;
-      if (left(submission.currentVersion) === 0) return { ok: false, reason: "limit_reached" } as const;
-      // Validated or published without the mark is impossible (check constraint): not a member.
-      return null;
-    }
-
-    const [version] = await tx
-      .insert(submissionVersions)
-      .values({
-        submissionId: submission.id,
-        number: replaced.currentVersion,
-        mode: "text",
-        text: input.text,
-        requestId: input.requestId,
-      })
-      .returning({ createdAt: submissionVersions.createdAt });
-    return {
-      ok: true,
-      replacedAt: version.createdAt.toISOString(),
-      replacementsLeft: left(replaced.currentVersion),
-      ref: { submissionId: submission.id, versionNumber: replaced.currentVersion },
-    } as const;
-  });
+  return db.transaction((tx) =>
+    replaceWith(tx, userId, input, async (submissionId, number) => {
+      const [version] = await tx
+        .insert(submissionVersions)
+        .values({ submissionId, number, mode: "text", text: input.text, requestId: input.requestId })
+        .returning({ createdAt: submissionVersions.createdAt });
+      return version.createdAt;
+    }),
+  );
 }
