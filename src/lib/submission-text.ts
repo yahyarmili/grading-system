@@ -1,4 +1,5 @@
 import { SUBMISSION_TEXT_MAX_LENGTH } from "@/config/decisions";
+import { TRANSCRIPTION_CHANGE_MAX_GRAPHEMES } from "@/config/provisional";
 
 // SUB-02: the text a student submits, checked the same way in the browser and
 // on the server (the server decides). Nothing is corrected: the one change is
@@ -36,4 +37,16 @@ export function checkSubmissionText(text: string): SubmissionTextError | null {
   if (text.includes("\u0000")) return "invalid";
   if (countCharacters(text) > SUBMISSION_TEXT_MAX_LENGTH) return "tooLong";
   return null;
+}
+
+/**
+ * SUB-03 R5 (E9, AC-8): the word a student types in place of a misread one,
+ * checked the same way in the browser and on the server: trimmed, NFC, 1 to
+ * TRANSCRIPTION_CHANGE_MAX_GRAPHEMES graphemes, no line break, no U+0000;
+ * null when refused. One or more words: inner spaces are kept.
+ */
+export function normalizeStudentWord(word: string): string | null {
+  const normalized = word.normalize("NFC").trim();
+  if (normalized === "" || /[\r\n\u0000]/.test(normalized)) return null;
+  return countCharacters(normalized) <= TRANSCRIPTION_CHANGE_MAX_GRAPHEMES ? normalized : null;
 }

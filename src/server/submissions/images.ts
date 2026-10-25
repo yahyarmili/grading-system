@@ -1,15 +1,16 @@
 import "server-only";
 import { z } from "zod";
-import { AI_CALL_TIMEOUT_MS, PAGE_INPUT_MAX_PIXELS, PAGE_UPLOAD_MAX_BYTES, READ_REQUEST_MAX_MS, TRANSCRIPTION_CHANGE_MAX_GRAPHEMES } from "@/config/provisional";
+import { SUBMISSION_PAGES_MAX } from "@/config/decisions";
+import { AI_CALL_TIMEOUT_MS, DRAFT_READS_MAX, PAGE_INPUT_MAX_PIXELS, PAGE_UPLOAD_MAX_BYTES, READ_REQUEST_MAX_MS, STUDENT_DAILY_READS_MAX } from "@/config/provisional";
 import type { EvaluationError } from "@/lib/evaluation";
-import { countCharacters } from "@/lib/submission-text";
+import { normalizeStudentWord } from "@/lib/submission-text";
 import { wordsOf } from "@/lib/transcription";
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
 import { EvaluatorError, getReader, type Reader, type Usage } from "@/server/ai";
 import { buildReadingRequest, parseReading, PROMPT_VERSION } from "@/server/ai/reading";
 import { recordSecurityEvent } from "@/server/data/auth/security-events";
-import { addDraftPage, readDraftPage, type PageReadResult } from "@/server/data/submissions/drafts";
+import { addDraftPage, deleteDraftPage, readDraftPage, reorderDraftPages, type PageReadResult } from "@/server/data/submissions/drafts";
 import { confirmImages, type ConfirmedChange } from "@/server/data/submissions/submissions";
 import { aiGuard, type AiGuard } from "@/server/evaluation/budget";
 import { addUsage } from "@/server/evaluation/evaluate";
@@ -90,6 +91,8 @@ export const READING_MESSAGES = {
   busy: "This page is already being read. Wait a few seconds.",
   failed: "The page could not be read. Try again.",
   closed: "Reading is not available right now. Try again later.",
+  draftCap: `You have asked for ${DRAFT_READS_MAX} readings of these pages, the most allowed. Send your pages as they are, or ask your teacher.`,
+  dailyCap: `You have asked for ${STUDENT_DAILY_READS_MAX} readings today, the most allowed in a day. Try again tomorrow.`,
 } as const;
 
 export type ReadPageState =
@@ -167,13 +170,56 @@ export async function readStudentPage(actor: Actor, rawPageId: unknown, deps: Re
     const result = await readDraftPage(actor, pageId.data, readPageWith(pageId.data, deps));
     if (result === null) return readFailed("unavailable");
     if (result === "closed") return readFailed("closed");
-    if (!result.ok) return readFailed(result.reason === "busy" ? "busy" : "unavailable");
+    if (!result.ok) {
+      const reasons = { busy: "busy", already_read: "unavailable", dropped: "unavailable", draft_cap: "draftCap", daily_cap: "dailyCap" } as const;
+      return readFailed(reasons[result.reason]);
+    }
     if (!result.reading) return readFailed("failed");
     return { status: "read", text: result.reading.text, words: wordsOf(result.reading.text), hasWriting: result.reading.hasWriting };
   } catch (error) {
     if (!(error instanceof AccessDeniedError)) throw error;
     await accessDenied(actor);
     return readFailed("notAllowed");
+  }
+}
+
+// Order and deletion (reorderPagesAction, deletePageAction).
+
+export const DRAFT_MESSAGES = {
+  notAllowed: SUBMISSION_MESSAGES.notAllowed,
+  unavailable: "Your pages changed in another window. Reload the page.",
+} as const;
+
+export type DraftEditState = { status: "done" } | { status: "error"; reason: keyof typeof DRAFT_MESSAGES; message: string };
+
+const draftEditFailed = (reason: keyof typeof DRAFT_MESSAGES) => ({ status: "error", reason, message: DRAFT_MESSAGES[reason] }) as const;
+
+const reorderFields = z.object({ draftId: z.uuid(), pageIds: z.array(z.uuid()).min(1).max(SUBMISSION_PAGES_MAX) });
+
+/** AC-3: the student's pages in the order they chose, every page of the draft named once. */
+export async function reorderStudentPages(actor: Actor, raw: unknown): Promise<DraftEditState> {
+  const fields = reorderFields.safeParse(raw);
+  if (!fields.success) return draftEditFailed("unavailable");
+  try {
+    const result = await reorderDraftPages(actor, fields.data.draftId, fields.data.pageIds);
+    return result?.ok ? { status: "done" } : draftEditFailed("unavailable");
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+    await accessDenied(actor);
+    return draftEditFailed("notAllowed");
+  }
+}
+
+/** A page out of the student's draft; the ones after it move up. */
+export async function deleteStudentPage(actor: Actor, rawPageId: unknown): Promise<DraftEditState> {
+  const pageId = z.uuid().safeParse(rawPageId);
+  if (!pageId.success) return draftEditFailed("unavailable");
+  try {
+    return (await deleteDraftPage(actor, pageId.data)) ? { status: "done" } : draftEditFailed("unavailable");
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+    await accessDenied(actor);
+    return draftEditFailed("notAllowed");
   }
 }
 
@@ -201,13 +247,6 @@ const confirmFields = z.object({
     .array(z.object({ pageId: z.uuid(), wordIndex: z.number().int().nonnegative(), engineWord: z.string(), studentWord: z.string() }))
     .max(10_000),
 });
-
-/** A student's word: trimmed, NFC, 1 to TRANSCRIPTION_CHANGE_MAX_GRAPHEMES graphemes, no line break; null when refused. */
-export function normalizeStudentWord(word: string): string | null {
-  const normalized = word.normalize("NFC").trim();
-  if (normalized === "" || /[\r\n]/.test(normalized)) return null;
-  return countCharacters(normalized) <= TRANSCRIPTION_CHANGE_MAX_GRAPHEMES ? normalized : null;
-}
 
 const notConfirmed = (reason: keyof typeof CONFIRM_MESSAGES) => ({ status: "error", reason, message: CONFIRM_MESSAGES[reason] }) as const;
 

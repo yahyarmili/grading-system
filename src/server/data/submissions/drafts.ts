@@ -1,6 +1,7 @@
 import "server-only";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { SUBMISSION_PAGES_MAX } from "@/config/decisions";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { DEADLINE_TIME_ZONE, SUBMISSION_PAGES_MAX } from "@/config/decisions";
+import { DRAFT_READS_MAX, STUDENT_DAILY_READS_MAX } from "@/config/provisional";
 import type { AiProvider, EvaluationError } from "@/lib/evaluation";
 import type { PageReadingStatus, ReadingOutcome } from "@/lib/transcription";
 import type { Actor } from "@/server/access/actor";
@@ -141,12 +142,35 @@ export type PageReadResult = { run: ReadingRunRecord; reading: { hasWriting: boo
 /**
  * A page's read, or why it did not happen: the page is not the student's
  * (null), already being read ("busy": a double tap is one billed call), or
- * already read ("read", nothing sent); "dropped" when the result came after
- * the page left the draft (a confirmation won): the run is still recorded.
+ * already read ("read", nothing sent), or a read cap reached (AC-8, nothing
+ * sent); "dropped" when the result came after the page left the draft (a
+ * confirmation won): the run is still recorded.
  */
 export type ReadDraftPageResult =
   | { ok: true; status: PageReadingStatus; reading: { hasWriting: boolean; text: string } | null }
-  | { ok: false; reason: "busy" | "already_read" | "dropped" };
+  | { ok: false; reason: "busy" | "already_read" | "dropped" | "draft_cap" | "daily_cap" };
+
+/**
+ * AC-8: the interactive reads so far, of this draft and of this student over
+ * the current day in DEADLINE_TIME_ZONE. Counted on reading_runs, which
+ * outlive a deleted page or draft: deleting a draft resets neither count of
+ * the day. Two pages read at the same moment may each pass the last free
+ * read: the overshoot is bounded by the pages in flight.
+ */
+async function readCapReached(tx: Tx, draftId: string, userId: string): Promise<"draft_cap" | "daily_cap" | null> {
+  const dayStart = sql`date_trunc('day', now() at time zone ${DEADLINE_TIME_ZONE}) at time zone ${DEADLINE_TIME_ZONE}`;
+  const [counts] = await tx
+    .select({
+      draft: sql<number>`count(*) filter (where ${readingRuns.draftId} = ${draftId})::int`,
+      day: sql<number>`count(*) filter (where ${readingRuns.createdAt} >= ${dayStart})::int`,
+    })
+    .from(readingRuns)
+    // Interactive reads only: a pipeline read carries the submission, not a draft.
+    .where(and(eq(readingRuns.studentId, userId), isNotNull(readingRuns.draftId)));
+  if (counts.draft >= DRAFT_READS_MAX) return "draft_cap";
+  if (counts.day >= STUDENT_DAILY_READS_MAX) return "daily_cap";
+  return null;
+}
 
 /** The advisory lock of a page's read: per page, so two pages read at once. */
 const pageReadLock = (pageId: string) => sql`hashtextextended(${`page-read:${pageId}`}, 0)`;
@@ -183,6 +207,8 @@ export async function readDraftPage(
       .where(eq(submissionPages.id, pageId));
     if (!page?.draftId) return null;
     if (page.status === "read") return { ok: false, reason: "already_read" } as const;
+    const capped = await readCapReached(tx, page.draftId, userId);
+    if (capped) return { ok: false, reason: capped } as const;
 
     const result = await read(page.image);
     if (result === "closed") return "closed";
@@ -211,6 +237,88 @@ export async function readDraftPage(
     if (!written) return { ok: false, reason: "dropped" } as const;
     await tx.update(submissionDrafts).set({ updatedAt: sql`now()` }).where(eq(submissionDrafts.id, draft.id));
     return { ok: true, status: written.status, reading } as const;
+  });
+}
+
+/** The student's own draft, locked (FOR UPDATE) and its updated_at bumped; null when it is not theirs or is gone. */
+async function lockDraftById(tx: Tx, draftId: string, userId: string): Promise<string | null> {
+  const [draft] = await tx
+    .select({ id: submissionDrafts.id })
+    .from(submissionDrafts)
+    .where(and(eq(submissionDrafts.id, draftId), eq(submissionDrafts.studentId, userId)))
+    .for("update");
+  if (!draft) return null;
+  await tx.update(submissionDrafts).set({ updatedAt: sql`now()` }).where(eq(submissionDrafts.id, draft.id));
+  return draft.id;
+}
+
+/**
+ * Gives the pages of the draft the positions 1, 2, … in the order of
+ * `pageIds`, in one statement each, under the draft's lock; the unique
+ * position is checked at the commit (deferrable, 0022), so pages swap.
+ */
+async function placePages(tx: Tx, draftId: string, pageIds: readonly string[]) {
+  for (const [index, id] of pageIds.entries()) {
+    await tx
+      .update(submissionPages)
+      .set({ position: index + 1 })
+      .where(and(eq(submissionPages.id, id), eq(submissionPages.draftId, draftId)));
+  }
+}
+
+/**
+ * AC-3: the pages of the student's draft in the order chosen. `pageIds` must
+ * be exactly the draft's pages, each once ("mismatch" otherwise: a page added
+ * or deleted in another tab). Null when the draft is not theirs or is gone.
+ */
+export async function reorderDraftPages(
+  actor: Actor,
+  draftId: string,
+  pageIds: readonly string[],
+): Promise<{ ok: true } | { ok: false; reason: "mismatch" } | null> {
+  const { userId } = authorize(actor, "draft", "write");
+  return db.transaction(async (tx) => {
+    const draft = await lockDraftById(tx, draftId, userId);
+    if (!draft) return null;
+    const pages = await tx.select({ id: submissionPages.id }).from(submissionPages).where(eq(submissionPages.draftId, draft));
+    const wanted = new Set(pageIds);
+    if (wanted.size !== pageIds.length || pages.length !== pageIds.length || pages.some((page) => !wanted.has(page.id))) {
+      return { ok: false, reason: "mismatch" } as const;
+    }
+    await placePages(tx, draft, pageIds);
+    return { ok: true } as const;
+  });
+}
+
+/**
+ * A page out of the student's draft; the pages after it move up one place,
+ * so positions stay 1, 2, … and the next page goes last. A page being read
+ * goes too: its run stays, without it. Null when the page is not in a draft
+ * of theirs.
+ */
+export async function deleteDraftPage(actor: Actor, pageId: string): Promise<{ ok: true } | null> {
+  const { userId } = authorize(actor, "draft", "write");
+  return db.transaction(async (tx) => {
+    const [owned] = await tx
+      .select({ draftId: submissionPages.draftId })
+      .from(submissionPages)
+      .innerJoin(submissionDrafts, eq(submissionDrafts.id, submissionPages.draftId))
+      .where(and(eq(submissionPages.id, pageId), eq(submissionDrafts.studentId, userId)));
+    if (!owned?.draftId) return null;
+    const draft = await lockDraftById(tx, owned.draftId, userId);
+    if (!draft) return null;
+    const [deleted] = await tx
+      .delete(submissionPages)
+      .where(and(eq(submissionPages.id, pageId), eq(submissionPages.draftId, draft)))
+      .returning({ id: submissionPages.id });
+    if (!deleted) return null;
+    const left = await tx
+      .select({ id: submissionPages.id })
+      .from(submissionPages)
+      .where(eq(submissionPages.draftId, draft))
+      .orderBy(asc(submissionPages.position));
+    await placePages(tx, draft, left.map((page) => page.id));
+    return { ok: true } as const;
   });
 }
 

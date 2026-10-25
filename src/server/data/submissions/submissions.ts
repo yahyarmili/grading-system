@@ -233,7 +233,10 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
       if (!page || !page.hasWriting || page.changes.some((c) => c.wordIndex === change.wordIndex)) {
         return { ok: false, reason: "bad_change" } as const;
       }
-      if (wordsOf(page.text!)[change.wordIndex] !== change.engineWord) return { ok: false, reason: "stale_change" } as const;
+      const words = wordsOf(page.text!);
+      // AC-8: an existing word of a read page; no word inserted.
+      if (change.wordIndex >= words.length) return { ok: false, reason: "bad_change" } as const;
+      if (words[change.wordIndex] !== change.engineWord) return { ok: false, reason: "stale_change" } as const;
       page.changes.push({ wordIndex: change.wordIndex, engineWord: change.engineWord, studentWord: change.studentWord });
     }
     const text = assembleText([...byPage.values()].map((page) => ({ ...page, hasWriting: page.hasWriting!, text: page.text! })));

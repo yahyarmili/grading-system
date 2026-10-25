@@ -62,11 +62,17 @@ export const TO_BE_DEFINED = "To be defined.";
  * with feedback off (Console); inputs and outputs deleted within 30 days
  * (Console: "On · 30 days", no zero retention), content flagged by the safety
  * systems kept up to 2 years. Said as Anthropic's word, which the app cannot
- * check. Nothing on images (E9). A change of provider, of these pages or of
- * the Console: change the sentence, raise the version.
+ * check. A change of provider, of these pages or of the Console: change the
+ * sentence, raise the version.
+ * Version 5 (E9, spec 0011, drafted by /develop on 2026-10-25, to be
+ * validated by the engineer): photos of pages. They go to the same provider,
+ * under the same terms, to be read; the app strips their hidden details
+ * (EXIF: place, date, device) by encoding them again, and keeps the photos and
+ * the reading for the teacher. Read before the next first submission of any
+ * mode and before the first page is uploaded (AC-17).
  */
 export const STUDENT_NOTICE = {
-  version: 4,
+  version: 5,
   title: "Before your first submission: your data",
   demonstration:
     "This is a demonstration with fictitious data. Do not submit real personal information or a real student's work.",
@@ -80,14 +86,18 @@ export const STUDENT_NOTICE = {
       heading: "What is sent to an AI",
       body: [
         "Your text, the assignment's subject, instructions and language, and the marking rubric are sent to Anthropic, a company based in the United States, which runs the AI model. They are processed and stored in the United States.",
-        "The app does not add your name, email or class. But everything written in your text is sent as it is: if you write your name in it, your name is sent too.",
+        "If you send photos of your pages, each photo is sent to Anthropic too, so that the AI reads what you wrote. The app first removes the hidden details a photo carries, such as where and when it was taken and the phone used. Everything visible in the photo is sent.",
+        "The app does not add your name, email or class. But everything written in your text or visible in your photos is sent as it is: if you write your name in it, your name is sent too.",
         "Anthropic says it does not use them to train its models, unless the account agrees to it or sends feedback; the app's account does neither.",
-        "Anthropic says it deletes them within 30 days. A text that its safety systems flag may be kept for up to 2 years. The app cannot check this itself.",
+        "Anthropic says it deletes them within 30 days. A text or photo that its safety systems flag may be kept for up to 2 years. The app cannot check this itself.",
       ],
     },
     {
       heading: "What your teacher sees",
-      body: ["Your first name, last name, email and class, your text, when you submitted it and whether it was late."],
+      body: [
+        "Your first name, last name, email and class, your text, when you submitted it and whether it was late.",
+        "If you sent photos: your photos, what the AI read on them, and each word you changed in that reading.",
+      ],
     },
     { heading: "How long it is kept", body: [TO_BE_DEFINED] },
     {

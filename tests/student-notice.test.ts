@@ -10,6 +10,8 @@ import { STUDENT_NOTICE } from "@/lib/texts";
 const PUBLISHED: Record<number, string> = {
   // E5.15, approved on 2026-10-19 (Anthropic).
   4: "49794fb3c3700ea53062eac6173aa7503518c793c6949ba753faf5230ea07860",
+  // E9 (spec 0011), photos of pages; drafted on 2026-10-25, to be validated by the engineer.
+  5: "0746b2db2e2820bc6411596c7beb8854d302c84d6c5c622ad22593817892ab99",
 };
 
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");

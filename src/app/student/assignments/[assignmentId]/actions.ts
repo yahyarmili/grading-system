@@ -13,8 +13,11 @@ import {
 } from "@/server/submissions/submissions";
 import {
   confirmStudentImages,
+  deleteStudentPage,
   readStudentPage,
+  reorderStudentPages,
   type ConfirmImagesState,
+  type DraftEditState,
   type ReadPageState,
 } from "@/server/submissions/images";
 import { acknowledgeNoticeReading, type AcknowledgeNoticeState } from "@/server/notices/notices";
@@ -69,6 +72,16 @@ export async function checkAssignmentFreshnessAction(assignmentId: string, token
 /** SUB-03, TRX-01 (E9): one page of the student's draft read by the AI, for their check. */
 export async function readPageAction(pageId: string): Promise<ReadPageState> {
   return readStudentPage(await getActor(), pageId);
+}
+
+/** SUB-03 CA3 (E9): the pages of the student's draft in the order they chose. */
+export async function reorderPagesAction(draftId: string, pageIds: string[]): Promise<DraftEditState> {
+  return reorderStudentPages(await getActor(), { draftId, pageIds });
+}
+
+/** SUB-03 (E9): a page out of the student's draft. */
+export async function deletePageAction(pageId: string): Promise<DraftEditState> {
+  return deleteStudentPage(await getActor(), pageId);
 }
 
 /**

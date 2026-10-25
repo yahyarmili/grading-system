@@ -152,6 +152,8 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
   // E9 (spec 0011): the pages of the student's draft, read by the AI for their check, then confirmed.
   "src/app/student/assignments/[assignmentId]/actions.ts#readPageAction": { resource: "draft", action: "write" },
+  "src/app/student/assignments/[assignmentId]/actions.ts#reorderPagesAction": { resource: "draft", action: "write" },
+  "src/app/student/assignments/[assignmentId]/actions.ts#deletePageAction": { resource: "draft", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#confirmImagesAction": {
     resource: "submission",
     action: "write",
