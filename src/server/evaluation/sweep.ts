@@ -1,7 +1,9 @@
 import "server-only";
+import { DRAFT_TTL_MS } from "@/config/decisions";
 import { SWEEP_RESTART_LIMIT, TRIGGER_GRACE_MS } from "@/config/provisional";
 import type { EvaluationRef } from "@/lib/evaluation";
 import { takeStaleReceived } from "@/server/data/evaluation/system";
+import { deleteStaleDrafts } from "@/server/data/submissions/drafts";
 import { releaseStuckSubmissions } from "@/server/evaluation/evaluate";
 
 // The recovery of the automatic evaluation (PRC-01 CA4, PRC-02 R1): nothing
@@ -9,7 +11,7 @@ import { releaseStuckSubmissions } from "@/server/evaluation/evaluate";
 // Run at each trigger (trigger.ts) and by the cron route
 // (src/app/api/cron/evaluation-sweep/route.ts).
 
-export type SweepResult = { released: string[]; restarted: EvaluationRef[] };
+export type SweepResult = { released: string[]; restarted: EvaluationRef[]; draftsDeleted: string[] };
 
 /**
  * 1. Releases to evaluation_failed what is evaluating for longer than any
@@ -21,10 +23,13 @@ export type SweepResult = { released: string[]; restarted: EvaluationRef[] };
  * is taken (E6.6): the sweeps of the next submissions leave it to its new run
  * instead of starting one more each time. A start of one already started is
  * harmless: the claim lets one run evaluate.
+ * 3. Deletes the students' drafts with no write for DRAFT_TTL_MS, with their
+ * pages (E9, AC-18); their reading runs stay.
  */
 export async function sweepEvaluations(start: (ref: EvaluationRef) => Promise<void>): Promise<SweepResult> {
   const released = await releaseStuckSubmissions();
   const restarted = await takeStaleReceived(TRIGGER_GRACE_MS, SWEEP_RESTART_LIMIT);
   for (const ref of restarted) await start(ref);
-  return { released, restarted };
+  const draftsDeleted = await deleteStaleDrafts(DRAFT_TTL_MS);
+  return { released, restarted, draftsDeleted };
 }

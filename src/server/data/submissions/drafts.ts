@@ -364,3 +364,27 @@ export async function getOwnDraft(actor: Actor, assignmentId: string): Promise<O
     .orderBy(asc(submissionPages.position));
   return { id: draft.id, pages };
 }
+
+/**
+ * AC-18, the sweep (no Actor, called only by src/server/evaluation/sweep.ts):
+ * deletes the drafts with no write for `ttlMs` (DRAFT_TTL_MS), their pages
+ * with them (cascade); their reading runs stay, without the page. A draft
+ * locked by a write in progress (an upload, a read's result, a confirmation)
+ * is skipped, not waited for: that write bumps its updated_at, and a
+ * confirmation deletes it anyway. Identifiers of the deleted drafts.
+ */
+export async function deleteStaleDrafts(ttlMs: number): Promise<string[]> {
+  return db.transaction(async (tx) => {
+    const stale = await tx
+      .select({ id: submissionDrafts.id })
+      .from(submissionDrafts)
+      .where(sql`${submissionDrafts.updatedAt} < now() - make_interval(secs => ${ttlMs / 1000})`)
+      .for("update", { skipLocked: true });
+    if (stale.length === 0) return [];
+    const deleted = await tx
+      .delete(submissionDrafts)
+      .where(inArray(submissionDrafts.id, stale.map((draft) => draft.id)))
+      .returning({ id: submissionDrafts.id });
+    return deleted.map((draft) => draft.id);
+  });
+}

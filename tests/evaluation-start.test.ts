@@ -18,7 +18,7 @@ const REF = { submissionId: "00000000-0000-4000-8000-000000000001", versionNumbe
 
 beforeEach(() => {
   start.mockReset();
-  sweep.mockReset().mockResolvedValue({ released: ["a"], restarted: [REF, REF] });
+  sweep.mockReset().mockResolvedValue({ released: ["a"], restarted: [REF, REF], draftsDeleted: ["d"] });
 });
 
 afterEach(() => {
@@ -67,7 +67,7 @@ describe("the sweep's route (E6, PRC-01 CA4): Vercel's cron and its secret only"
     expect(sweep).not.toHaveBeenCalled();
     const response = await call("Bearer test-cron-secret");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ released: 1, restarted: 2 });
+    expect(await response.json()).toEqual({ released: 1, restarted: 2, draftsDeleted: 1 });
     expect(sweep).toHaveBeenCalledTimes(1);
   });
 });

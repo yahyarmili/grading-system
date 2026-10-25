@@ -178,7 +178,7 @@ describe("the list of an assignment's submissions", { timeout: 120_000 }, () => 
 });
 
 describe("opening the list (E7 plan §1.7)", { timeout: 120_000 }, () => {
-  const NOTHING: SweepResult = { released: [], restarted: [] };
+  const NOTHING: SweepResult = { released: [], restarted: [], draftsDeleted: [] };
   const listOpened = (assignmentId: string) =>
     db
       .select({ actorId: reviewJournalEntries.actorId, submissionId: reviewJournalEntries.submissionId })
