@@ -434,7 +434,8 @@ async function readStored(tx: Tx, row: LockedCopy, submissionId: string): Promis
  *   never To review without a proposal or an evaluation. teacher_started_at
  *   is set: no retry or relaunch any more (PRC-02 R4).
  * Q8 [D, 2026-10-22]: a real change of a Validated or Published copy first
- * sends it back To review (transition 10, logged sent_back_to_review): the
+ * sends it back To review (transition 10, logged sent_back_to_review, after
+ * "unpublished" with the cause "change" for a Published one, E8.7): the
  * database never lets an evaluation change outside To review (0019), and a
  * published one leaves the student's view. A change of a Published copy
  * also needs the right to write the published evaluation. `create` writes
@@ -488,7 +489,11 @@ export async function editLocked(
     if (row.status === "published") authorize(actor, "publishedEvaluation", "write");
     const moved = await applyTransition(tx, seen.submissionId, 10, "to_review", { where: eq(submissions.currentVersion, row.versionNumber) });
     if (!moved) throw new Error("editLocked: the copy left its state under the row lock");
-    await appendJournal(tx, [{ ...entry, event: "sent_back_to_review", newValue: { from: row.status } }]);
+    await appendJournal(tx, [
+      // E8.7 (review R2): a Published copy changed leaves the student's view: said as a withdrawal of its own.
+      ...(row.status === "published" ? [{ ...entry, event: "unpublished" as const, newValue: { revision: saved.revision, cause: "change" } }] : []),
+      { ...entry, event: "sent_back_to_review", newValue: { from: row.status } },
+    ]);
   }
   if (manualFrom) {
     const moved = await applyTransition(tx, seen.submissionId, manualFrom, "to_review", { where: eq(submissions.currentVersion, row.versionNumber) });

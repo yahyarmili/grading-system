@@ -505,13 +505,21 @@ export function EvaluationForm({
                             <Tag tone="warning" icon={Eye}>
                               To re-read
                             </Tag>
+                            {/* E8.7 (review R3): marking alone would send a decided copy back To review (Q8). */}
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm"
+                              disabled={decided}
+                              aria-describedby={decided ? `${remarkId}-reread-closed` : undefined}
                               onClick={() => change({ rereadDone: [...draft.rereadDone, criterion.id] })}
                             >
                               Mark as re-read
                             </button>
+                            {decided && (
+                              <span id={`${remarkId}-reread-closed`} className="text-xs text-fg-muted">
+                                Only while To review
+                              </span>
+                            )}
                           </span>
                         )}
                       </div>

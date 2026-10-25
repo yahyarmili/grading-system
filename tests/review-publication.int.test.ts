@@ -307,7 +307,11 @@ describe("a change of a Validated or Published copy (REV-03 R5, Q8)", { timeout:
       status: "saved", sentBack: true,
     });
     expect((await statusOf(copy.submissionId)).status).toBe("to_review");
-    expect((await acts(copy.submissionId)).find((a) => a.event === "sent_back_to_review")?.newValue).toEqual({ from: "published" });
+    // E8.7 (review R2): withdrawn by the change, then sent back, in this order.
+    const log = await acts(copy.submissionId);
+    expect(log.map((a) => a.event)).toEqual(["evaluation_created", "validated", "published", "unpublished", "sent_back_to_review", "evaluation_changed"]);
+    expect(log[3].newValue).toEqual({ revision: 1, cause: "change" });
+    expect(log[4].newValue).toEqual({ from: "published" });
     // Republished explicitly only: validate, then publish (Q8).
     expect(await publishEvaluation(copy.teacher, decision(copy, 2))).toEqual({ ok: false, reason: "not_validated" });
   });

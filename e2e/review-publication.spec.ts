@@ -86,6 +86,7 @@ test("REV-05, PUB-01: validate, publish, change back to review, validate and pub
     "evaluation_created",
     "validated:unchanged",
     "published",
+    "unpublished",
     "sent_back_to_review",
     "evaluation_changed",
     "validated:changed",
@@ -97,6 +98,7 @@ test("REV-05, PUB-01: validate, publish, change back to review, validate and pub
   // REV-04 R3: the history says each act and its nature.
   const history = page.getByRole("region", { name: "History" });
   await expect(history).toContainText("Withdrew the publication");
+  await expect(history).toContainText("Withdrew the publication by a change");
   await expect(history).toContainText("Validated after changes");
   await expect(history).toContainText("Sent back to review by a change");
   await expect(history).toContainText("Validated without changes");

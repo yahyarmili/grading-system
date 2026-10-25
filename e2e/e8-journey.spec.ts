@@ -73,6 +73,11 @@ test("E8 journey: class, assignment, submission, To review; a level changed, val
   await bar.getByRole("button", { name: "Validate", exact: true }).click();
   await expect(bar.getByRole("status")).toHaveText("Validated. The student sees nothing until you publish it.");
   await expect(header).toContainText("Validated by Sarah Bennett");
+  // E8.7 (review R3): the remark of the changed level stays to re-read; marking it waits for To review.
+  const task = teacher.getByRole("region", { name: /^1/ });
+  await expect(task.getByText("To re-read")).toBeVisible();
+  await expect(task.getByRole("button", { name: "Mark as re-read" })).toBeDisabled();
+  await expect(task.getByText("Only while To review")).toBeVisible();
   await lina.page.goto("/student/assignments");
   await expect(lina.page.getByText("Submitted, being marked").first()).toBeVisible();
   await expect(lina.page.getByRole("link", { name: "See your result" })).toHaveCount(0);

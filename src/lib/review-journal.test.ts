@@ -65,6 +65,7 @@ describe("historyOf", () => {
   it("E8.1: a validation says its nature; a publication, its withdrawal and a change sending a copy back are acts of their own", () => {
     const items = historyOf([
       entry({ event: "sent_back_to_review", newValue: { from: "published" } }),
+      entry({ event: "unpublished", newValue: { revision: 2, cause: "change" } }),
       entry({ event: "unpublished", newValue: { revision: 2 } }),
       entry({ event: "published", newValue: { revision: 2 } }),
       entry({ event: "validated", newValue: { nature: "changed", revision: 2, finalGrade: 12 } }),
@@ -73,6 +74,7 @@ describe("historyOf", () => {
     ]);
     expect(items.map((i) => i.label)).toEqual([
       "Sent back to review by a change",
+      "Withdrew the publication by a change",
       "Withdrew the publication",
       "Published the evaluation",
       "Validated after changes",

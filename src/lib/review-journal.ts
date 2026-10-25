@@ -55,6 +55,10 @@ const VALIDATED_LABELS: Record<string, string> = {
 };
 
 function eventLabel(entry: JournalEntryLike): string {
+  // E8.7: a Published copy changed is withdrawn by the change itself (Q8).
+  if (entry.event === "unpublished" && (entry.newValue as { cause?: string } | null)?.cause === "change") {
+    return "Withdrew the publication by a change";
+  }
   // REV-06: a manual evaluation's first save starts from nothing, not from the proposal.
   if (entry.event === "evaluation_created" && (entry.newValue as { origin?: string } | null)?.origin === "manual") {
     return "Entered the first values of their evaluation";
