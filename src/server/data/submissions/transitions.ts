@@ -133,6 +133,22 @@ export async function markTeacherStarted(tx: Tx, submissionId: string, where: SQ
 }
 
 /**
+ * E9 (spec 0011): dates a transcribing submission again (updated_at, on the
+ * database clock) after each page the pipeline read, so the release of stuck
+ * runs counts from the last page, not from the claim. No transition. Guarded
+ * by the caller's `where` (the claim's version and token). False when the
+ * guard is not met.
+ */
+export async function markTranscribing(tx: Tx, submissionId: string, where: SQL): Promise<boolean> {
+  const [updated] = await tx
+    .update(submissions)
+    .set({ updatedAt: sql`now()` })
+    .where(and(eq(submissions.id, submissionId), eq(submissions.status, "transcribing"), where))
+    .returning({ id: submissions.id });
+  return !!updated;
+}
+
+/**
  * E6.6, the sweep: dates the restart of received submissions (updated_at, on
  * the database clock), so that the next sweeps leave them to their run for
  * another grace, and start the others first. No transition: they stay received.

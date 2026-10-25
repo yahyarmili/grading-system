@@ -1,8 +1,9 @@
 import { FatalError } from "workflow";
 import { EVALUATION_CONCURRENCY, EVALUATION_STUCK_AFTER_MS } from "@/config/provisional";
 import type { EvaluationRef } from "@/lib/evaluation";
-import { abandonEvaluationRequest, releaseEvaluation } from "@/server/data/evaluation/system";
+import { abandonEvaluationRequest, releaseEvaluation, type TranscriptionEnd } from "@/server/data/evaluation/system";
 import { defaultDeps, errorKind, evaluateSubmission, type EvaluationOutcome } from "@/server/evaluation/evaluate";
+import { endTranscription, startTranscription, transcribePage, type PageStepOutcome, type TranscriptionStart } from "@/server/evaluation/transcribe";
 
 // The steps of the automatic evaluation (PRC-01, E6). Workflows keeps each
 // step's arguments, result and error for a day, outside the database: they
@@ -24,7 +25,7 @@ const STEP_SLOTS = { concurrency: EVALUATION_CONCURRENCY, stuckAfterMs: EVALUATI
  * quote values. The workflow then runs releaseStep; if the process dies
  * during the step, the sweep releases it (EVALUATION_STUCK_AFTER_MS).
  */
-export async function evaluateStep(ref: EvaluationRef, claimToken: string): Promise<EvaluationOutcome> {
+export async function evaluateStep(ref: EvaluationRef, claimToken: string, transcribed = false): Promise<EvaluationOutcome> {
   "use step";
   try {
     // The dependencies are made after the claim (E6.6): an AI that cannot be
@@ -35,6 +36,8 @@ export async function evaluateStep(ref: EvaluationRef, claimToken: string): Prom
       claimToken,
       origin: ref.origin,
       request: ref.request,
+      // E9: the version this run transcribed, handed over under its claim (transition 3).
+      transcribed,
     });
   } catch (error) {
     throw new FatalError(`evaluation step failed: ${errorKind(error)}`);
@@ -43,7 +46,57 @@ export async function evaluateStep(ref: EvaluationRef, claimToken: string): Prom
 evaluateStep.maxRetries = 0;
 
 /**
- * After evaluateStep failed: ends evaluation_failed the claim of this run,
+ * E9 (spec 0011): claims an image version sent without the student's check
+ * for transcription (transition 2, or 4 for the teacher's relaunch), under
+ * the run's token and the shared places; "skipped" for any other version,
+ * which evaluateStep takes. Not retried by Workflows: a claim delivered
+ * twice would find its own claim and skip the copy. An error by its kind only.
+ */
+export async function startTranscriptionStep(ref: EvaluationRef, claimToken: string): Promise<TranscriptionStart> {
+  "use step";
+  try {
+    return await startTranscription(ref, claimToken, STEP_SLOTS);
+  } catch (error) {
+    throw new FatalError(`transcription claim failed: ${errorKind(error)}`);
+  }
+}
+startTranscriptionStep.maxRetries = 0;
+
+/**
+ * E9: reads one page of the claimed version (transcribe.ts), the claim
+ * checked before the call and before the write. Not retried by Workflows: a
+ * retry would call the AI again, billed; the attempts are the reading's own,
+ * within EVALUATION_STEP_MAX_MS. The page id is all the step carries (rule 4).
+ */
+export async function transcribePageStep(ref: EvaluationRef, claimToken: string, pageId: string): Promise<PageStepOutcome> {
+  "use step";
+  try {
+    return await transcribePage(ref, claimToken, pageId);
+  } catch (error) {
+    throw new FatalError(`transcription step failed: ${errorKind(error)}`);
+  }
+}
+transcribePageStep.maxRetries = 0;
+
+/**
+ * E9: after the pages, the text assembled and written once, or the
+ * transcription ended (transcription_failed, not_assessable). Not retried
+ * by Workflows; an error ends the run, whose release frees the claim to
+ * transcription_failed.
+ */
+export async function endTranscriptionStep(ref: EvaluationRef, claimToken: string): Promise<TranscriptionEnd> {
+  "use step";
+  try {
+    return await endTranscription(ref, claimToken);
+  } catch (error) {
+    throw new FatalError(`transcription end failed: ${errorKind(error)}`);
+  }
+}
+endTranscriptionStep.maxRetries = 0;
+
+/**
+ * After a step failed: ends evaluation_failed (transcription_failed while
+ * transcribing, E9) the claim of this run,
  * and only it (its token): when another run holds the submission, or this
  * one never claimed it, nothing changes (false). Retried by Workflows (no AI
  * call, and doing it twice changes nothing); an error by its kind only.

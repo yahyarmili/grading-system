@@ -24,6 +24,7 @@ import { formatGrade } from "@/lib/grade";
 import { applyChanges, calculatedGrade, emptyFields, fieldsFromProposal, readTypedGrade, reconcileSaved, type EvaluationFields } from "@/lib/review";
 import { levelLabel, rubric, type CriterionId, type Level } from "@/lib/rubric";
 import { MANUAL_RUBRIC_SUBSTITUTE_NOTICE } from "@/lib/texts";
+import { isOneOf, manualStartStatuses } from "@/lib/submission-status";
 import type { CurrentProposal } from "@/server/data/evaluation/proposals";
 import type { CopySeen, SavedEvaluation, SeenEvaluation } from "@/server/data/review/copy";
 import type { EvaluationField } from "@/server/review/evaluation";
@@ -164,7 +165,7 @@ export function EvaluationForm({
   /** To review, or failed or not assessable and entered by hand (REV-06): save, validate, or validate and publish. */
   const open = !decided;
   /** REV-06: a manual evaluation of a copy failed or not assessable, nothing saved yet. */
-  const manualStart = seen.status === "evaluation_failed" || seen.status === "not_assessable";
+  const manualStart = isOneOf(manualStartStatuses, seen.status);
   /** The draft the pending save sent: typing resumed meanwhile is kept when it answers. */
   const [sent, setSent] = useState<Draft | null>(null);
   const [conflict, setConflict] = useState<Conflict | null>(null);

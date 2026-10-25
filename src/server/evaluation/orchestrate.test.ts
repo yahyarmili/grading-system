@@ -10,7 +10,7 @@ import {
 } from "@/config/provisional";
 import type { EvaluationRef } from "@/lib/evaluation";
 import type { EvaluationOutcome } from "./evaluate";
-import { orchestrate } from "./orchestrate";
+import { orchestrate, type OrchestrateDeps } from "./orchestrate";
 
 // The workflow's body (E6, PRC-01 R3), with fake steps and a fake sleep;
 // and the bounds that keep a step within one function.
@@ -20,7 +20,11 @@ const TOKEN = "wrun_test";
 const done: EvaluationOutcome = { status: "to_review", attempts: 1, durationMs: 5, errors: [] };
 
 const fakes = (evaluate: (r: EvaluationRef, t: string) => Promise<EvaluationOutcome>) => ({
-  evaluate: vi.fn(evaluate),
+  // A text or a checked version: never claimed for transcription.
+  startTranscription: vi.fn<OrchestrateDeps["startTranscription"]>(async () => ({ status: "skipped" })),
+  transcribePage: vi.fn<OrchestrateDeps["transcribePage"]>(async () => "read"),
+  endTranscription: vi.fn<OrchestrateDeps["endTranscription"]>(async () => "assembled"),
+  evaluate: vi.fn<OrchestrateDeps["evaluate"]>((r, t) => evaluate(r, t)),
   release: vi.fn<(r: EvaluationRef, t: string) => Promise<boolean>>(async () => true),
   abandon: vi.fn<(r: EvaluationRef) => Promise<boolean>>(async () => true),
   sleep: vi.fn<(ms: number) => Promise<void>>(async () => {}),
@@ -31,7 +35,7 @@ describe("orchestrate", () => {
     const outcomes: EvaluationOutcome[] = [{ status: "busy" }, { status: "busy" }, done];
     const deps = fakes(async () => outcomes.shift()!);
     expect(await orchestrate(ref, TOKEN, deps)).toEqual(done);
-    expect(deps.evaluate.mock.calls).toEqual([[ref, TOKEN], [ref, TOKEN], [ref, TOKEN]]);
+    expect(deps.evaluate.mock.calls).toEqual([[ref, TOKEN, false], [ref, TOKEN, false], [ref, TOKEN, false]]);
     expect(deps.sleep.mock.calls).toEqual([[EVALUATION_BUSY_WAIT_MS], [EVALUATION_BUSY_WAIT_MS]]);
     expect(deps.release).not.toHaveBeenCalled();
     // Never as a method: Workflows serializes the step's `this` with its arguments (E2E, E6.2).

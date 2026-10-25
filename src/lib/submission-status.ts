@@ -83,6 +83,19 @@ export const TRANSITIONS: readonly Transition[] = [
   ),
 ];
 
+/**
+ * PRC-02 R3: the failed states the teacher's "Retry" starts from:
+ * evaluation_failed (transition 6), transcription_failed (transition 4, E9,
+ * the pages read again, then evaluated).
+ */
+export const retriedStatuses = ["evaluation_failed", "transcription_failed"] as const satisfies readonly StoredSubmissionStatus[];
+
+/** REV-06: the states a manual evaluation starts from (transitions 6, 7 and, E9, 4). */
+export const manualStartStatuses = ["evaluation_failed", "not_assessable", "transcription_failed"] as const satisfies readonly StoredSubmissionStatus[];
+
+/** Whether `status` is one of `statuses`, for the lists above. */
+export const isOneOf = (statuses: readonly SubmissionStatus[], status: SubmissionStatus): boolean => statuses.includes(status);
+
 /** A call naming a move the table does not have: a bug, never a user's doing. */
 export class InvalidTransitionError extends Error {
   constructor(id: TransitionId, to: StoredSubmissionStatus) {

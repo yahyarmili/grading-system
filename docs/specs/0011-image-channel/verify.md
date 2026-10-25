@@ -33,3 +33,37 @@ Build step 5, the student draft screen (commit 04945ea).
 - AC-8 … UI steps 5, 6, 7; value sourcing steps 1, 2, 3
 - AC-17 … UI step 9; commands step 2
 - The other ACs are verified with their build steps (6 to 10).
+
+## Build step 6: failure branches and pipeline wiring
+_Added 2026-10-25. Run under the simulator reader (its `failed` and `no_writing` faults)._
+
+### UI / manual
+- [ ] As a student, make a page read fail (simulator fault) → the page shows "Not read" with "Read this page", and the screen offers "Send without checking the reading" → AC-7
+- [ ] Send without checking, after changing a word on a read page → the dialog says the changed words are not sent; the submission is created with `checked_by_student = false`, no `transcription_changes`, `text` null → AC-7
+- [ ] The student page after sending shows "Submitted, being marked", never "Transcribing" nor a reading failure → AC-7, AC-14
+- [ ] Read every page with the `no_writing` fault → the "No writing found" warning shows, sending still works; the copy ends `not_assessable` / `no_writing`, without a proposal → AC-6
+- [ ] As the teacher, open a `transcription_failed` copy → "Retry" and "Evaluate manually" are offered; Retry reads the pages left, then evaluates; "Evaluate manually" moves it to To review (transition 4), logged `manual_started` → AC-7
+- [ ] In the list, a `transcription_failed` copy shows the "Failed" filter's Retry button, and "Retry requested" once asked → AC-7
+
+### Pipeline (integration, ask first: shared test database)
+- [ ] Unchecked version, reader succeeds → `received` → `transcribing` → `evaluating` → `to_review`; one `reading_runs` row per page left, with `submission_id` and no `draft_id`; the evaluated text is the pages assembled in order → AC-7, AC-5
+- [ ] Unchecked version, reader fails on every attempt → `transcription_failed`; the run has `AI_MAX_ATTEMPTS` attempts; a teacher Retry claims it once (transition 4) → AC-7
+- [ ] Guard closed during the pipeline read (cost cap reached in the simulator) → `transcription_failed`, not `ai_unavailable`, nothing sent → AC-7
+- [ ] Unchecked version with every page `no_writing` → `not_assessable` / `no_writing` by transition 3, text `''` → AC-6
+- [ ] A transcribing run older than `EVALUATION_STUCK_AFTER_MS` → the sweep releases it to `transcription_failed` → AC-16
+- [ ] A text and an unchecked image copy, one read failing, triggered together → each reaches a final state, the failure blocks neither → AC-16
+- [ ] French assignment, unchecked images → transcribed, then `not_assessable` / `rubric_unavailable`, relaunchable → AC-16
+- [ ] Replace the submission while its pages are being read → the next page step stops, no `text` is written for the old version → AC-10
+
+### Value sourcing
+- [ ] Interactive reads alone push the month to the cost cap → the next evaluation gets `ai_unavailable`; source: `reading_runs` tokens summed with `evaluation_runs` in `readAiGuardCounts` → AC-16
+- [ ] Three drafts fail on `configuration` → the breaker opens; source: distinct `draft_id` / `submission_id` of `reading_runs` with the evaluations' → AC-16
+- [ ] Unchecked text → source: pages read by the pipeline, assembled without changes, written once in `submission_transcriptions.text` → AC-7
+- [ ] `checked_by_student` → source: the confirmation's `mode` (`unchecked` refused when every page is read: "allRead") → AC-7
+- [ ] Places → transcribing and evaluating runs count together in `EVALUATION_CONCURRENCY` → AC-16
+
+### Acceptance-criteria coverage (step 6)
+- AC-6 … UI step 4; pipeline step 4
+- AC-7 … UI steps 1, 2, 3, 5, 6; pipeline steps 1, 2, 3; value sourcing steps 3, 4
+- AC-16 … pipeline steps 5, 6, 7; value sourcing steps 1, 2, 5
+- AC-10 (pipeline part) … pipeline step 8; the rest comes with step 8

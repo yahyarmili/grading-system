@@ -232,7 +232,7 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
     cause: submission?.cause ?? null,
     lastError: submission ? row.lastError : null,
     request:
-      submission?.status !== "evaluation_failed" && submission?.status !== "not_assessable"
+      submission?.status !== "evaluation_failed" && submission?.status !== "not_assessable" && submission?.status !== "transcription_failed"
         ? null
         : row.requested
           ? "pending"
@@ -411,8 +411,8 @@ export type EditOutcome =
   | { ok: false; reason: "conflict"; saved: SavedEvaluation };
 
 const DECIDED: readonly SubmissionStatus[] = ["validated", "published"];
-/** REV-06: the states a manual evaluation starts from (transitions 6 and 7). */
-const MANUAL_FROM = { evaluation_failed: 6, not_assessable: 7 } as const satisfies Partial<Record<SubmissionStatus, 6 | 7>>;
+/** REV-06: the states a manual evaluation starts from (transitions 6 and 7; 4 for a transcription that failed, E9). */
+const MANUAL_FROM = { evaluation_failed: 6, not_assessable: 7, transcription_failed: 4 } as const satisfies Partial<Record<SubmissionStatus, 4 | 6 | 7>>;
 
 /** What a locked copy's evaluation starts from, read under the lock by a statement of its own. */
 type Stored = {
@@ -463,7 +463,7 @@ async function readStored(tx: Tx, row: LockedCopy, submissionId: string): Promis
  * - the teacher's evaluation, once it exists (from a proposal or by hand);
  * - the proposal in force, for the first write on a copy To review;
  * - nothing, for a manual evaluation (REV-06) of a copy failed (a refusal
- *   included) or not assessable: its first write is transition 6 or 7 to To
+ *   included) or not assessable: its first write is transition 6 or 7 (4 for a failed transcription, E9) to To
  *   review, logged manual_started, then the evaluation born "manual" with its
  *   rubric version (manualRubricFor, Q6), in this one transaction; a copy is
  *   never To review without a proposal or an evaluation. teacher_started_at

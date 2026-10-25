@@ -151,19 +151,26 @@ export type ConfirmImagesInput = FirstSubmissionInput & {
   draftId: string;
   /** Already normalised and checked one by one (src/server/submissions/images.ts). */
   changes: readonly ConfirmedChange[];
+  /**
+   * "checked": every page read and checked by the student. "unchecked"
+   * (AC-7): a reading failed or the AI was closed; sent as it is, without
+   * changes, the pipeline reads the pages left (transition 2 to transcribing).
+   */
+  mode: "checked" | "unchecked";
 };
 
 /**
  * Confirmed (again, for the same request: idempotent, although the draft is
- * gone), or refused as a text is, or: a page not read yet, a change that no
- * longer matches the reading ("stale_change"), two changes of one word or a
- * change on a page without writing ("bad_change"), a draft without pages.
- * Null when the draft is not the student's, or the assignment not theirs to
- * submit.
+ * gone), or refused as a text is, or: a page not read yet (checked), every
+ * page read ("all_read": unchecked, which is for a page left to read), a
+ * change that no longer matches the reading ("stale_change"), two changes of
+ * one word, a change on a page without writing, or any change sent unchecked
+ * ("bad_change"), a draft without pages. Null when the draft is not the
+ * student's, or the assignment not theirs to submit.
  */
 export type ConfirmImagesResult =
   | SubmitTextResult
-  | { ok: false; reason: "no_pages" | "page_not_read" | "stale_change" | "bad_change" };
+  | { ok: false; reason: "no_pages" | "page_not_read" | "all_read" | "stale_change" | "bad_change" };
 
 /**
  * One transaction. The request is looked up first among the student's
@@ -173,7 +180,8 @@ export type ConfirmImagesResult =
  * assembled from the readings and the changes (never from the browser), and
  * the shared core creates the submission and version 1 in mode images; the
  * pages are attached in one statement, the transcription and the changes
- * added, the draft deleted.
+ * added, the draft deleted. Unchecked (AC-7): the same, without changes nor
+ * text, checked_by_student false for the whole version.
  */
 export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Promise<ConfirmImagesResult | null> {
   const { userId } = authorize(actor, "submission", "write");
@@ -225,6 +233,18 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
       .from(submissionPages)
       .where(eq(submissionPages.draftId, draft.id));
     if (pages.length === 0) return { ok: false, reason: "no_pages" } as const;
+    if (input.mode === "unchecked") {
+      // AC-7: the pages as they are, read ones keeping their reading; no change, no text yet.
+      if (input.changes.length > 0) return { ok: false, reason: "bad_change" } as const;
+      if (pages.every((page) => page.status === "read")) return { ok: false, reason: "all_read" } as const;
+      return submitFirst(tx, userId, input, async (submissionId) => {
+        const [version] = await tx
+          .insert(submissionVersions)
+          .values({ submissionId, number: 1, mode: "images", text: null, requestId: input.requestId })
+          .returning({ id: submissionVersions.id });
+        await attachDraft(tx, draft.id, version.id, null, []);
+      });
+    }
     if (pages.some((page) => page.status !== "read")) return { ok: false, reason: "page_not_read" } as const;
 
     const byPage = new Map(pages.map((page) => [page.id, { ...page, changes: [] as WordChange[] }]));
@@ -253,12 +273,13 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
 
 /**
  * The draft becomes the pages of a version (the attach, once, 0022), with
- * its transcription checked by the student and the changes; then the draft
- * goes. Inside a confirmation's transaction, the draft row locked.
+ * its transcription and the changes; then the draft goes. A text means
+ * checked by the student; null, sent unchecked (the pipeline writes it once
+ * it has read the pages). Inside a confirmation's transaction, the draft row locked.
  */
-async function attachDraft(tx: Tx, draftId: string, versionId: string, text: string, changes: readonly ConfirmedChange[]) {
+async function attachDraft(tx: Tx, draftId: string, versionId: string, text: string | null, changes: readonly ConfirmedChange[]) {
   await tx.update(submissionPages).set({ draftId: null, versionId }).where(eq(submissionPages.draftId, draftId));
-  await tx.insert(submissionTranscriptions).values({ versionId, text, checkedByStudent: true });
+  await tx.insert(submissionTranscriptions).values({ versionId, text, checkedByStudent: text !== null });
   if (changes.length > 0) await tx.insert(transcriptionChanges).values(changes.map((change) => ({ ...change, versionId })));
   await tx.delete(submissionDrafts).where(eq(submissionDrafts.id, draftId));
 }

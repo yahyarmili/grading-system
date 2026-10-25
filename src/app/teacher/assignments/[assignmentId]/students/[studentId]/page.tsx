@@ -16,6 +16,7 @@ import { evaluationFailureLabel, notAssessableCauseLabels } from "@/lib/evaluati
 import { mayOfferRelaunch } from "@/lib/relaunch-offer";
 import { parseReviewListQuery, reviewListSearch } from "@/lib/review-list";
 import { manualRubricFor, RUBRIC_VERSIONS } from "@/lib/rubric";
+import { isOneOf, manualStartStatuses, retriedStatuses } from "@/lib/submission-status";
 import { getActor } from "@/server/auth/session";
 import { listRelaunchable } from "@/server/data/evaluation/teacher";
 import { getCopy, getStudentIdentity, type StudentIdentity, type TeacherCopy } from "@/server/data/review/copy";
@@ -71,7 +72,7 @@ export default async function Page({ params, searchParams }: Props) {
   const evaluable = ["to_review", "validated", "published"].includes(copy.status);
   // REV-06 (E8.2): entered by hand, on a copy the AI did not evaluate (?manual=1, nothing written before
   // the first save), or once its manual evaluation exists. Its rubric: the language's, or the English one (Q6).
-  const manualStart = (copy.status === "evaluation_failed" || copy.status === "not_assessable") && search.manual === "1";
+  const manualStart = isOneOf(manualStartStatuses, copy.status) && search.manual === "1";
   const manual = manualStart || (evaluable && copy.evaluation?.origin === "manual");
   const reviewable = manual || (copy.proposal !== null && evaluable);
   const recorded = RUBRIC_VERSIONS.find((v) => v.id === copy.evaluation?.rubricVersion);
@@ -136,7 +137,7 @@ export default async function Page({ params, searchParams }: Props) {
 
 /**
  * REV-02 R4: a copy without a proposal to review shows why, without a form.
- * PRC-02 (E7.6): a failed copy offers "Retry"; a not assessable one,
+ * PRC-02 (E7.6): a failed copy (evaluation or, E9, transcription) offers "Retry"; a not assessable one,
  * "Relaunch" when listRelaunchable offers it. A request waiting for its run,
  * or dropped for want of a place, is said. Both offer "Evaluate manually"
  * (REV-06, E8.2): the form, on the same page (?manual=1).
@@ -145,12 +146,12 @@ function StatusCard({ copy, relaunchable, manualHref }: { copy: TeacherCopy; rel
   const { icon, title, description } = statusPage(copy, relaunchable);
   const seen = copy.seen;
   const refused = copy.status === "evaluation_failed" && copy.lastError === "refused";
-  const retry = copy.status === "evaluation_failed" && seen;
+  const retry = isOneOf(retriedStatuses, copy.status) && seen;
   const relaunch = copy.status === "not_assessable" && relaunchable && seen;
-  const waiting = copy.request === "pending" || ["received", "evaluating"].includes(copy.status);
-  const asked = copy.status === "evaluation_failed" ? "Retry" : "Relaunch";
-  // REV-06: a failed copy (a refusal included) or a not assessable one (any cause) is evaluated by hand.
-  const manual = (copy.status === "evaluation_failed" || copy.status === "not_assessable") && seen;
+  const waiting = copy.request === "pending" || ["received", "transcribing", "evaluating"].includes(copy.status);
+  const asked = isOneOf(retriedStatuses, copy.status) ? "Retry" : "Relaunch";
+  // REV-06: a failed copy (a refusal included, or a failed transcription) or a not assessable one (any cause) is evaluated by hand.
+  const manual = isOneOf(manualStartStatuses, copy.status) && seen;
 
   return (
     <div className="card">
@@ -228,7 +229,11 @@ function statusPage(copy: TeacherCopy, relaunchable = false): { icon: LucideIcon
     case "evaluating":
       return { icon: Hourglass, title: "Being evaluated", description: "The AI proposal appears here once the evaluation ends." };
     case "transcription_failed":
-      return { icon: TriangleAlert, title: "Transcription failed", description: "The pages could not be transcribed." };
+      return {
+        icon: TriangleAlert,
+        title: "Transcription failed",
+        description: "The AI could not read the student's pages. Retry the reading, or evaluate the copy by hand.",
+      };
     case "evaluation_failed":
       return { icon: TriangleAlert, title: "Evaluation failed", description: evaluationFailureLabel(copy.lastError) };
     case "not_assessable":

@@ -17,7 +17,7 @@ import { getCaptureSender } from "@/server/email";
 import { createAiGuard, type AiGuardState } from "@/server/evaluation/budget";
 import { evaluateSubmission, type EvaluationDeps, type EvaluationOutcome } from "@/server/evaluation/evaluate";
 import { orchestrate } from "@/server/evaluation/orchestrate";
-import { abandonStep, evaluateStep, releaseStep } from "@/server/evaluation/steps";
+import { abandonStep, endTranscriptionStep, evaluateStep, releaseStep, startTranscriptionStep, transcribePageStep } from "@/server/evaluation/steps";
 import { sweepEvaluations } from "@/server/evaluation/sweep";
 import { submitStudentText } from "@/server/submissions/submissions";
 import { recordTriggers } from "./helpers/triggers";
@@ -89,12 +89,15 @@ const deps = (evaluator: Evaluator, over: Partial<EvaluationDeps> = {}): Evaluat
   evaluator, registry: RUBRIC_VERSIONS, sleep: async () => {}, callTimeoutMs: 5_000, ...over,
 });
 
-type Step = (ref: EvaluationRef, claimToken: string) => Promise<EvaluationOutcome>;
+type Step = (ref: EvaluationRef, claimToken: string, transcribed?: boolean) => Promise<EvaluationOutcome>;
 
 /** The workflow's body around the step, one token per run, waiting 50 ms instead of 15 s for a place. */
 const run = (ref: EvaluationRef, step: Step = evaluateStep) =>
   orchestrate(ref, randomUUID(), {
-    evaluate: step,
+    startTranscription: startTranscriptionStep,
+    transcribePage: transcribePageStep,
+    endTranscription: endTranscriptionStep,
+    evaluate: (r, token, transcribed) => step(r, token, transcribed),
     release: releaseStep,
     abandon: abandonStep,
     sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 50))),

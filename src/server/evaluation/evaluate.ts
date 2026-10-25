@@ -132,7 +132,7 @@ async function attempt(claim: EvaluationClaim, deps: EvaluationDeps, started: nu
   });
 
   try {
-    const blocking = checkBlockingAlerts(claim.input, deps.registry);
+    const blocking = checkBlockingAlerts(claim.input, deps.registry, claim.noWriting);
     if ("cause" in blocking) {
       // Blocking alert (EVL-04 R1): no request, no proposal, no grade 0, no retry.
       return {

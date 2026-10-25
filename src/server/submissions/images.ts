@@ -1,19 +1,15 @@
 import "server-only";
 import { z } from "zod";
 import { SUBMISSION_PAGES_MAX } from "@/config/decisions";
-import { AI_CALL_TIMEOUT_MS, DRAFT_READS_MAX, PAGE_INPUT_MAX_PIXELS, PAGE_UPLOAD_MAX_BYTES, READ_REQUEST_MAX_MS, STUDENT_DAILY_READS_MAX } from "@/config/provisional";
-import type { EvaluationError } from "@/lib/evaluation";
+import { DRAFT_READS_MAX, PAGE_INPUT_MAX_PIXELS, PAGE_UPLOAD_MAX_BYTES, STUDENT_DAILY_READS_MAX } from "@/config/provisional";
 import { normalizeStudentWord } from "@/lib/submission-text";
 import { wordsOf } from "@/lib/transcription";
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
-import { EvaluatorError, getReader, type Reader, type Usage } from "@/server/ai";
-import { buildReadingRequest, parseReading, PROMPT_VERSION } from "@/server/ai/reading";
 import { recordSecurityEvent } from "@/server/data/auth/security-events";
-import { addDraftPage, deleteDraftPage, readDraftPage, reorderDraftPages, type PageReadResult } from "@/server/data/submissions/drafts";
+import { addDraftPage, deleteDraftPage, readDraftPage, reorderDraftPages } from "@/server/data/submissions/drafts";
 import { confirmImages, type ConfirmedChange } from "@/server/data/submissions/submissions";
-import { aiGuard, type AiGuard } from "@/server/evaluation/budget";
-import { addUsage } from "@/server/evaluation/evaluate";
+import { readPageWith, type ReadingDeps } from "@/server/evaluation/read-page";
 import { PageImageError, preparePage } from "./page-image";
 import { SUBMISSION_MESSAGES, type SubmissionContext } from "./submissions";
 
@@ -99,67 +95,6 @@ export type ReadPageState =
   | { status: "read"; text: string; words: string[]; hasWriting: boolean }
   | { status: "error"; reason: keyof typeof READING_MESSAGES; message: string };
 
-/** Failures worth one more try within the student's wait: the provider late, busy or down, or an answer off the schema. */
-const RETRIED = new Set<EvaluationError>(["timeout", "rate_limited", "unavailable", "schema"]);
-
-/** One attempt and one retry, both within READ_REQUEST_MAX_MS: the student waits for it. */
-const READ_ATTEMPTS = 2;
-
-export type ReadingDeps = { reader?: Reader; guard?: AiGuard };
-
-/**
- * The page read by the reader, its run recorded (reading_runs), its result
- * written to the draft. The guard of the AI is asked first (cost cap,
- * breaker): closed, nothing is sent and no run is written. A page id is the
- * subject of the security log line, never sent to the AI.
- */
-export function readPageWith(pageId: string, deps: ReadingDeps = {}) {
-  return async (jpeg: Buffer): Promise<PageReadResult | "closed"> => {
-    const reader = deps.reader ?? getReader();
-    if ((await (deps.guard ?? aiGuard)(reader.provider)) !== "open") return "closed";
-    const started = performance.now();
-    const deadline = AbortSignal.timeout(READ_REQUEST_MAX_MS);
-    const request = buildReadingRequest(jpeg);
-    const errors: EvaluationError[] = [];
-    let usage: Usage | null = null;
-    let modelAnswered: string | null = null;
-    let reading: PageReadResult["reading"] = null;
-
-    while (errors.length < READ_ATTEMPTS && !reading && !deadline.aborted) {
-      try {
-        const response = await reader.read(request, {
-          signal: AbortSignal.any([deadline, AbortSignal.timeout(AI_CALL_TIMEOUT_MS)]),
-          subjectId: pageId,
-        });
-        usage = addUsage(usage, response.usage);
-        modelAnswered = response.modelAnswered;
-        reading = parseReading(response.content);
-        if (!reading) errors.push("schema");
-      } catch (error) {
-        if (!(error instanceof EvaluatorError)) throw error;
-        usage = addUsage(usage, error.usage ?? null);
-        errors.push(error.kind);
-      }
-      if (!reading && !RETRIED.has(errors.at(-1)!)) break;
-    }
-    return {
-      reading,
-      run: {
-        outcome: reading ? (reading.hasWriting ? "read" : "no_writing") : "failed",
-        provider: reader.provider,
-        modelRequested: reader.model,
-        modelAnswered,
-        promptVersion: PROMPT_VERSION,
-        attempts: errors.length + (reading ? 1 : 0),
-        attemptErrors: errors,
-        durationMs: Math.round(performance.now() - started),
-        promptTokens: usage?.promptTokens ?? null,
-        completionTokens: usage?.completionTokens ?? null,
-      },
-    };
-  };
-}
-
 const readFailed = (reason: keyof typeof READING_MESSAGES) => ({ status: "error", reason, message: READING_MESSAGES[reason] }) as const;
 
 /** A page of the student's draft read for their check: its words, in order, and whether it has writing. */
@@ -231,6 +166,7 @@ export const CONFIRM_MESSAGES = {
   pageNotRead: "Every page must be read before you send. Read the pages left, then send.",
   staleChange: "A page was read again since you changed it. Check your changes, then send.",
   badChange: "One of your changes is not valid. Check them, then send.",
+  allRead: "Every page is read now. Check the reading, then send.",
 } as const;
 
 export type ConfirmImagesState =
@@ -246,6 +182,7 @@ const confirmFields = z.object({
   changes: z
     .array(z.object({ pageId: z.uuid(), wordIndex: z.number().int().nonnegative(), engineWord: z.string(), studentWord: z.string() }))
     .max(10_000),
+  mode: z.enum(["checked", "unchecked"]),
 });
 
 const notConfirmed = (reason: keyof typeof CONFIRM_MESSAGES) => ({ status: "error", reason, message: CONFIRM_MESSAGES[reason] }) as const;
@@ -256,6 +193,8 @@ const notConfirmed = (reason: keyof typeof CONFIRM_MESSAGES) => ({ status: "erro
  * student's changes; the dated confirmation comes back. The same request
  * again gives the same confirmation. Confirmed: the version is handed to
  * `ctx.onReceived` and evaluated on the confirmed text, as a pasted one.
+ * AC-7, sent "unchecked" after a failed reading: the pipeline reads the
+ * pages left first, and the teacher sees the text "not checked by the student".
  */
 export async function confirmStudentImages(actor: Actor, raw: unknown, ctx: SubmissionContext): Promise<ConfirmImagesState> {
   const fields = confirmFields.safeParse(raw);
@@ -277,6 +216,7 @@ export async function confirmStudentImages(actor: Actor, raw: unknown, ctx: Subm
         notice_not_read: "noticeNotRead",
         no_pages: "noPages",
         page_not_read: "pageNotRead",
+        all_read: "allRead",
         stale_change: "staleChange",
         bad_change: "badChange",
       } as const;

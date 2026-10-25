@@ -22,7 +22,7 @@ import {
   type ReviewSort,
   type StatusFilter,
 } from "@/lib/review-list";
-import { statusLabels, submissionStatuses } from "@/lib/submission-status";
+import { isOneOf, retriedStatuses, statusLabels, submissionStatuses } from "@/lib/submission-status";
 import { RequestButton } from "./request-button";
 
 // REV-01: the submissions of one assignment. The state (sort, filters, page)
@@ -166,16 +166,16 @@ export function SubmissionsList({
           {r.cause && <span className="text-xs text-fg-muted">{notAssessableCauseLabels[r.cause]}</span>}
           {r.refused && <span className="text-xs text-fg-muted">The AI declined the text</span>}
           {r.requested ? (
-            <Tag icon={Hourglass}>{r.status === "evaluation_failed" ? "Retry requested" : "Relaunch requested"}</Tag>
+            <Tag icon={Hourglass}>{isOneOf(retriedStatuses, r.status) ? "Retry requested" : "Relaunch requested"}</Tag>
           ) : (
             r.submission &&
             // PRC-02 from the list (E7.8): a failure is retried here; a
             // refusal from the copy, where its warning is.
-            ((r.status === "evaluation_failed" && !r.refused) || offered.has(r.submission.id)) && (
+            ((isOneOf(retriedStatuses, r.status) && !r.refused) || offered.has(r.submission.id)) && (
               <RequestButton
-                kind={r.status === "evaluation_failed" ? "retry" : "relaunch"}
+                kind={isOneOf(retriedStatuses, r.status) ? "retry" : "relaunch"}
                 seen={{ submissionId: r.submission.id, versionNumber: r.submission.versionNumber }}
-                label={r.status === "evaluation_failed" ? "Retry" : "Relaunch"}
+                label={isOneOf(retriedStatuses, r.status) ? "Retry" : "Relaunch"}
                 small
                 context={`${r.firstName} ${r.lastName}`}
               />

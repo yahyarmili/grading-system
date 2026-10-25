@@ -8,16 +8,20 @@ import { publishedRubric, type RubricVersion } from "@/lib/rubric";
 // topic, addressed to the marker) are best effort and come with its answer.
 
 /**
- * The blocking alerts, before any request, in this order: no letter at all
- * (no_content, a defensive case: SUB-02 already refuses an empty text), then
- * no published rubric for the language (rubric_unavailable: French, Q6 [D]).
- * A French text without content gets no_content, so that it is not offered a
- * new evaluation when French is activated. Otherwise, the rubric in force.
+ * The blocking alerts, before any request, in this order: pages of an image
+ * copy all read without writing (no_writing, E9, AC-6; `noWriting` comes
+ * from the pages, beside the text), no letter at all (no_content, a
+ * defensive case: SUB-02 already refuses an empty text), then no published
+ * rubric for the language (rubric_unavailable: French, Q6 [D]). A French
+ * text without content gets no_content, so that it is not offered a new
+ * evaluation when French is activated. Otherwise, the rubric in force.
  */
 export function checkBlockingAlerts(
   input: { text: string; language: AssignmentLanguage },
   registry: readonly RubricVersion[],
+  noWriting = false,
 ): { cause: NotAssessableCause } | { rubric: RubricVersion } {
+  if (noWriting) return { cause: "no_writing" };
   if (!/\p{L}/u.test(input.text)) return { cause: "no_content" };
   const rubric = publishedRubric(input.language, registry);
   return rubric ? { rubric } : { cause: "rubric_unavailable" };

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, Camera, CircleCheck, PencilLine, RotateCw, ScanText, Trash2, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, CircleCheck, PencilLine, RotateCw, ScanText, Send, Trash2, Undo2 } from "lucide-react";
 import { Alert } from "@/components/alert";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Spinner } from "@/components/loading";
@@ -24,7 +24,8 @@ import { NoNameInstruction } from "./text-field";
 // They order, retake or delete pages, fix a misread word once, word by word
 // (Q4), then send. Only then is the submission created, on the text the
 // server rebuilds from the readings and the changes. Unsaved word changes
-// live in this state only: a reload loses them, by design.
+// live in this state only: a reload loses them, by design. When a reading
+// fails, they may send the pages unchecked: the pipeline reads them (AC-7).
 
 type Page = {
   id: string;
@@ -202,15 +203,21 @@ export function ImagesSection({
     });
 
   const allRead = pages.length > 0 && pages.every((p) => p.status === "read");
+  // AC-6: every page read, none with writing: the student is warned, and may still send.
+  const noWriting = allRead && pages.every((p) => !p.hasWriting);
+  // AC-7: a reading failed (or the AI is closed): the pages may go as they are, read after sending.
+  const someFailed = pages.some((p) => p.status === "failed") && !pages.some((p) => p.status === "reading");
   const changeList = pages.flatMap((page) =>
     Object.entries(changes[page.id] ?? {}).map(([wordIndex, change]) => ({ pageId: page.id, wordIndex: Number(wordIndex), ...change })),
   );
   const busy = uploading || editing || sending;
 
-  function send() {
+  function send(mode: "checked" | "unchecked") {
     if (!draftId) return;
     startSending(async () => {
-      setConfirm(await confirmImagesAction({ assignmentId, draftId, contentVersion, requestId, changes: changeList }));
+      // Unchecked: no change goes, the pages left are read after sending (AC-7).
+      const sent = mode === "checked" ? changeList : [];
+      setConfirm(await confirmImagesAction({ assignmentId, draftId, contentVersion, requestId, changes: sent, mode }));
     });
   }
 
@@ -314,16 +321,42 @@ export function ImagesSection({
 
       {pages.length > 0 && (
         <div className="flex flex-col gap-2">
-          {!allRead && <p className="text-sm text-fg-muted">Every page must be read before you send.</p>}
+          {!allRead && !someFailed && <p className="text-sm text-fg-muted">Every page must be read before you send.</p>}
+          {noWriting && (
+            <Alert tone="warning" title="No writing found" live>
+              The AI found no writing on your pages. Check that you photographed the right pages. If you send them as they are, the
+              AI cannot propose a mark: your teacher looks at your pages instead.
+            </Alert>
+          )}
           {changeList.length > 0 && (
             <p className="text-sm text-fg-muted">
               You changed {changeList.length} {changeList.length === 1 ? "word" : "words"}. Your teacher sees each change next to what the AI read.
             </p>
           )}
-          <Button onClick={send} disabled={!allRead || busy || draftId === null} className="w-full sm:w-auto sm:self-start">
-            {sending ? <Spinner /> : <CircleCheck aria-hidden="true" />}
-            {sending ? "Sending…" : "I checked the reading: send my pages"}
-          </Button>
+          {someFailed ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-fg-muted">
+                A page could not be read. Try reading it again, or send your pages without checking the reading.
+              </p>
+              <ConfirmDialog
+                trigger={
+                  <Button variant="outline" disabled={busy || draftId === null} className="w-full sm:w-auto sm:self-start">
+                    {sending ? <Spinner /> : <Send aria-hidden="true" />}
+                    {sending ? "Sending…" : "Send without checking the reading"}
+                  </Button>
+                }
+                title="Send your pages without checking the reading?"
+                description={`The pages not read yet are read after you send them, and you cannot check that reading. Your teacher sees that you did not check it.${changeList.length > 0 ? " The words you changed are not sent." : ""}`}
+                confirmLabel="Send my pages"
+                onConfirm={async () => send("unchecked")}
+              />
+            </div>
+          ) : (
+            <Button onClick={() => send("checked")} disabled={!allRead || busy || draftId === null} className="w-full sm:w-auto sm:self-start">
+              {sending ? <Spinner /> : <CircleCheck aria-hidden="true" />}
+              {sending ? "Sending…" : "I checked the reading: send my pages"}
+            </Button>
+          )}
         </div>
       )}
     </section>

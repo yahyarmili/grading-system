@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import type { EvaluationRef, RelaunchableCause } from "@/lib/evaluation";
+import { isOneOf, retriedStatuses } from "@/lib/submission-status";
 import type { Actor } from "@/server/access/actor";
 import { authorize, type Grant } from "@/server/access/policy";
 import { db } from "@/server/db/client";
@@ -145,7 +146,8 @@ const requestEntry = (
  * claim happens in the step, checks the state again and takes the request:
  * one request evaluates once, and of two requests in a row only the last one
  * (E6.6). Null when the copy is absent or another teacher's. Never a copy to
- * review (R3): "not_failed".
+ * review (R3): "not_failed". A transcription_failed copy (E9, transition 4)
+ * the same way: its run claims it for transcription (system.ts).
  */
 export async function retryEvaluation(actor: Actor, seen: SeenVersion, ctx: EvaluationStartContext): Promise<RetryResult | null> {
   const grant = authorize(actor, "unpublishedEvaluation", "write");
@@ -163,8 +165,8 @@ export async function retryEvaluation(actor: Actor, seen: SeenVersion, ctx: Eval
       .for("update");
     if (!row) return null;
     if (row.versionNumber !== seen.versionNumber) return { ok: false, reason: "changed" };
-    if (row.status !== "evaluation_failed" || row.started) return { ok: false, reason: "not_failed" };
-    await recordEvaluationRequest(tx, seen.submissionId, request, eq(submissions.status, "evaluation_failed"));
+    if (!isOneOf(retriedStatuses, row.status) || row.started) return { ok: false, reason: "not_failed" };
+    await recordEvaluationRequest(tx, seen.submissionId, request, inArray(submissions.status, [...retriedStatuses]));
     await appendJournal(tx, [requestEntry(grant, row.assignmentId, seen, "retry_requested")]);
     return { ok: true };
   });

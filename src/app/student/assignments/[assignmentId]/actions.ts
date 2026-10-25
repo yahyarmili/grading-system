@@ -87,6 +87,7 @@ export async function deletePageAction(pageId: string): Promise<DraftEditState> 
 /**
  * SUB-03 CA1 (E9): the pages read and checked become the submission. The
  * changes are the student's word changes; the server rebuilds the text.
+ * `mode` "unchecked" (AC-7): sent after a failed reading, without changes.
  */
 export async function confirmImagesAction(input: {
   assignmentId: string;
@@ -94,6 +95,7 @@ export async function confirmImagesAction(input: {
   contentVersion: number;
   requestId: string;
   changes: { pageId: string; wordIndex: number; engineWord: string; studentWord: string }[];
+  mode: "checked" | "unchecked";
 }): Promise<ConfirmImagesState> {
   const state = await confirmStudentImages(await getActor(), input, evaluateLater);
   if (state.status === "done" || (state.status === "error" && state.reason !== "notAllowed")) refresh();
