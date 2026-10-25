@@ -67,3 +67,9 @@ _Added 2026-10-25. Run under the simulator reader (its `failed` and `no_writing`
 - AC-7 … UI steps 1, 2, 3, 5, 6; pipeline steps 1, 2, 3; value sourcing steps 3, 4
 - AC-16 … pipeline steps 5, 6, 7; value sourcing steps 1, 2, 5
 - AC-10 (pipeline part) … pipeline step 8; the rest comes with step 8
+
+### Tests left behind, for `/test image channel` (integration run of 2026-10-25, after 8a5b106)
+- [ ] `tests/access-matrix.int.test.ts`: add the `draft` and `transcription` resources to `REAL`, and replay `addDraftPage`, `readDraftPage`, `reorderDraftPages`, `deleteDraftPage`, `getOwnDraft`, `getPageImage`, `confirmImages` → AC-12
+- [ ] `tests/notice.int.test.ts`: expect notice version 5 and its text on photos (approved in d2a14f7), instead of version 4 without images → AC-17
+- [ ] `tests/e4-replays.int.test.ts`, `tests/student-result.int.test.ts`: the student reread now also carries `mode` and `pages` → AC-14
+- [ ] `tests/evaluation-relaunch.int.test.ts:254`: give the test an explicit timeout (15.4 s against the 15 s default; Neon latency, no step 6 query on that path)
