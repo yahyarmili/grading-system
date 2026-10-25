@@ -1,4 +1,5 @@
-import { READER_EFFORT, READER_MAX_OUTPUT_TOKENS, READER_THINKING } from "@/config/provisional";
+import { READER_EFFORT, READER_THINKING } from "@/config/decisions";
+import { READER_MAX_OUTPUT_TOKENS } from "@/config/provisional";
 import type { JsonSchema, ReadingRequest } from "./types";
 
 // The one place a page reading request is built (spec 0011, rule 5, EVL-02):

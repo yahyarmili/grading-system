@@ -57,3 +57,17 @@ export const AI_MODEL = "claude-haiku-5-5";
  * price is 1.1 times the global one.
  */
 export const AI_INFERENCE_GEO = "us";
+
+/**
+ * [D, 2026-10-25] Effort of a page reading (spec 0011): low. Chosen by the
+ * engineer at the E9.0 checkpoint: medium read no better on the trial photos
+ * (conception/annexe-essais-lecture.md).
+ */
+export const READER_EFFORT = "low" as const;
+
+/**
+ * [D, 2026-10-25] No thinking for a page reading (spec 0011): adaptive did
+ * not think on the trial photos, at the same cost (E9.0 checkpoint,
+ * conception/annexe-essais-lecture.md).
+ */
+export const READER_THINKING = "disabled" as const;

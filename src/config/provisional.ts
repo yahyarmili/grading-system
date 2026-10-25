@@ -307,9 +307,9 @@ export const EVALUATION_REFRESH_MAX_MS = 10 * 60_000;
 
 // ---------------------------------------------------------------------------
 // Image channel (E9, spec 0011). PROVISIONAL, proposed by the spec on
-// 2026-10-25; the READER_* values are set by the handwriting trial (E9.0,
-// `npm run ai:read`). Decided values (pages, formats, draft lifetime) go to
-// decisions.ts with the migration.
+// 2026-10-25. The reader's effort and thinking were decided at the E9.0
+// checkpoint (decisions.ts); the other decided values (pages, formats, draft
+// lifetime) go there with the migration.
 
 /**
  * [PROVISIONAL, [P] vision high resolution bound] Longest side of a page sent
@@ -328,25 +328,14 @@ export const PAGE_TOKENS_MAX = 4_784;
 export const PAGE_JPEG_QUALITY = 0.85;
 
 /**
- * [PROVISIONAL, [P] to be set by E9.0] Effort of a page reading: low, copying
- * needs no deliberation.
- */
-export const READER_EFFORT = "low" as const;
-
-/**
- * [PROVISIONAL, [P] to be set by E9.0] No thinking for a copy: to be compared
- * with adaptive on the trial photos (fidelity, `[illisible]` kept, cost).
- */
-export const READER_THINKING = "disabled" as const;
-
-/**
- * [PROVISIONAL, [P] to be set by E9.0] Most tokens of a reading answer: a full
+ * [PROVISIONAL, [P] arbitrary] Most tokens of a reading answer: a full
  * handwritten page is about 400 words, some 600 tokens of text in the JSON.
+ * E9.0 measured 16 to 119 tokens on pages of 17 to 53 words.
  */
 export const READER_MAX_OUTPUT_TOKENS = 2_000;
 
 /**
- * [PROVISIONAL, [P] arbitrary, checked by E9.0] Longest wait for a page read
+ * [PROVISIONAL, [P] arbitrary] Longest wait for a page read
  * by the student, its one retry included: a student should not wait longer.
  */
-export const READ_REQUEST_MAX_MS = 45_000;
+export const READ_REQUEST_MAX_MS = 45_000; // E9.0: 4.8 s at most over 85 calls
