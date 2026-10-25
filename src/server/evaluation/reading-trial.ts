@@ -51,7 +51,11 @@ export function alignWords(reference: string[], output: string[]): Edit[] {
   return edits.reverse();
 }
 
-/** Reference lines found out of order in the output: n minus the longest increasing run of their positions. */
+/**
+ * Reference lines found out of order in the output: n minus the longest run of
+ * their positions that never goes back. Two lines the reader joined into one
+ * share a position: in order, not moved.
+ */
 export function linesOutOfOrder(reference: string, output: string): { lines: number; matched: number; outOfOrder: number } {
   const refLines = reference.split("\n").map((l) => new Set(tokens(l).map(bare))).filter((s) => s.size > 0);
   const outLines = output.split("\n").map((l) => new Set(tokens(l).map(bare))).filter((s) => s.size > 0);
@@ -67,7 +71,7 @@ export function linesOutOfOrder(reference: string, output: string): { lines: num
   }
   const lis: number[] = [];
   for (const p of positions) {
-    const k = lis.findIndex((x) => x >= p);
+    const k = lis.findIndex((x) => x > p);
     if (k === -1) lis.push(p);
     else lis[k] = p;
   }

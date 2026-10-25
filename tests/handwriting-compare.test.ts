@@ -23,6 +23,12 @@ describe("compare", () => {
     expect(r.differences).toContain("litle → little");
   });
 
+  it("keeps in order two lines the reader joined into one (a line wrapped by the page)", () => {
+    expect(linesOutOfOrder("one two three\nfour five six\nseven eight nine", "one two three four five six\nseven eight nine")).toEqual({
+      lines: 3, matched: 3, outOfOrder: 0,
+    });
+  });
+
   it("counts the lines put out of order", () => {
     expect(linesOutOfOrder("one two three\nfour five six\nseven eight nine", "seven eight nine\none two three\nfour five six")).toEqual({
       lines: 3, matched: 3, outOfOrder: 1,
