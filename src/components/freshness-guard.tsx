@@ -38,16 +38,25 @@ export function FreshnessGuard({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  // When this instance first rendered: a route left before its page ran any effect (not hydrated yet)
+  // is rendered hidden later, without effects; shown again, its first effect is not a fresh rendering (E8.7).
+  // A later rendering from the server reaches the same instance with a new renderId: fresh.
+  const [first] = useState(() => ({ renderId, at: Date.now() }));
   // The render being checked: a new rendering from the server is never in check.
   const [checking, setChecking] = useState<string | null>(null);
 
   // Layout effects run before paint, when the page mounts and each time a hidden route is shown again.
   useLayoutEffect(() => {
     const now = Date.now();
-    const last = checkedAt.get(renderId);
+    let last = checkedAt.get(renderId);
     if (last === undefined) {
-      checkedAt.set(renderId, now);
-      return;
+      // Rendered just now: the server's rendering, fresh. Rendered long ago: a page shown again.
+      const rendered = renderId === first.renderId ? first.at : now;
+      if (now - rendered < FRESHNESS_GRACE_MS) {
+        checkedAt.set(renderId, now);
+        return;
+      }
+      last = rendered;
     }
     // React's double mount in development, not a page shown again.
     if (now - last < FRESHNESS_GRACE_MS) return;
@@ -68,7 +77,7 @@ export function FreshnessGuard({
     return () => {
       live = false;
     };
-  }, [renderId, check, router]);
+  }, [renderId, check, router, first]);
 
   // A document restored from the browser's back-forward cache runs no effect: reload it.
   useEffect(() => {

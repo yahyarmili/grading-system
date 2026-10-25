@@ -104,3 +104,27 @@ test("PUB-01 CA3: withdrawn, My assignments and the assignment no longer say Mar
   await expect(lena.getByText("Submitted, being marked").first()).toBeVisible({ timeout: 15_000 });
   await expect(marked()).toHaveCount(0);
 });
+
+test("PUB-01 CA3 (E8.7, M1): withdrawn, a result left before its page ran, shown again later, is checked", async ({ page, browser }) => {
+  const { assignmentId, lenaId, submissionId } = await published(page);
+  const resultUrl = `/student/assignments/${assignmentId}/result`;
+  const lena = await signedInStudent(browser, lenaId);
+  // The result as the server sent it, left at once: the router renders its page later, hidden, without effects.
+  await lena.goto(resultUrl);
+  await expect(lena.getByText("15 / 20")).toBeVisible();
+  for (const n of [1, 2, 3]) {
+    await lena.evaluate((url) => (window as unknown as { next: { router: { push(u: string): void } } }).next.router.push(url), `/student/assignments?visit=${n}`);
+    await expect(lena).toHaveURL(new RegExp(`visit=${n}$`));
+    await expect(lena.getByRole("heading", { name: "My assignments", level: 1 })).toBeVisible();
+  }
+
+  // Withdrawn; one jump back to the result, past the lists (none of them shown again): its first effect ever.
+  await sql(`UPDATE submissions SET status = 'validated' WHERE id = $1`, [submissionId]);
+  await lena.waitForTimeout(1_200); // beyond FRESHNESS_GRACE_MS [P]
+  await lena.evaluate(() => history.go(-3));
+  await expect(lena).toHaveURL(new RegExp(`${resultUrl}$`));
+  await expect(lena.getByText(/15 \/ 20|could not be found/).first()).toBeVisible({ timeout: 15_000 });
+  await lena.waitForTimeout(1_000);
+  await expect(lena.getByText("15 / 20")).toHaveCount(0);
+  await expect(lena.getByText("could not be found")).toBeVisible();
+});
