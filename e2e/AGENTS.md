@@ -25,5 +25,6 @@ Measure specs run only on demand, with `E2E_MEASURE=1`: `e6-batch-measure.spec.t
 - The first test after a change can exceed 15 s: run again before hunting a bug.
 - `review-list.spec.ts` was written against `next dev` (no prefetch there).
 - Simulator faults live in the server's memory, so a failed copy in a journey is written in the database.
+- `sharp` is importable only by `src/server/submissions/page-image.ts` and `tests/**` (ESLint), not `e2e/`: a journey draws its photos in the browser with a canvas (`e9-journey.spec.ts`).
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

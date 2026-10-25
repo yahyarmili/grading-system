@@ -20,7 +20,7 @@ docker compose exec web npm run test:ui -- <files>
 - Stop the Vitest UI watch mode before an E2E run. `vitest` and `@vitest/ui` keep the same exact version.
 - ESLint import rules are derived from the `IMPORT_RESTRICTIONS` table (`eslint-restrictions.test.ts`).
 - Static guard tests keep single writers and imports: `submission-writes`, `evaluation-writes`, `review-writes`, `ai-send-point`, `eslint-restrictions`, `access-inventory`, `route-resources`.
-- The matrix is replayed by `access-matrix.int.test.ts` (`REAL`, checked function by function; `REAL` lines wait up to 60 s); the design's table 8.3 by `e4-replays`, `e7-replays`, `e8-replays`.
+- The matrix is replayed by `access-matrix.int.test.ts` (`REAL`, checked function by function; `REAL` lines wait up to 60 s); the design's table 8.3 by `e4-replays`, `e7-replays`, `e8-replays`; the image channel's replays (§8.2 E9) by `e9-replays`, each with a `SimulatorReader` of its own, keyed on the JPEG as stored.
 - Helpers: `helpers/triggers.ts` (`noTrigger`, `recordTriggers`), `helpers/review.ts` (review teachers read the notice; `giveCompleteEvaluation`, `enterByHand`), `helpers/leak.ts`.
 - **Leak sweep** (EXP-04, blocking): `helpers/leak.ts` puts per run markers (`PROP-`, `EVAL-`) and internal words in the simulated proposal and the evaluation (`SimulatorEvaluator.setTexts`), and `findLeak` names the first one found in anything a student receives (`student-leak.int.test.ts`, 7 situations). A new student entry point joins `studentReceives` (here) or `studentVisits` (E2E).
 - Fixtures: `fixtures/rubric-fr-test.ts` is named by no file outside `tests/`; neither `src/` nor `scripts/` import `tests/`.

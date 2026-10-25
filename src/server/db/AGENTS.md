@@ -10,7 +10,7 @@ PostgreSQL on Neon (`us-east-2`) through Drizzle and `pg`. One schema file per d
 |---|---|
 | `client.ts` | The database client (import allowed from `src/server/data/**` only) |
 | `schema/*.ts` | One schema file per domain |
-| `../../../drizzle/NNNN_*.sql` | Migrations, `0000` to `0020` today |
+| `../../../drizzle/NNNN_*.sql` | Migrations, `0000` to `0023` today |
 
 ## Commands
 
