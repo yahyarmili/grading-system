@@ -136,10 +136,11 @@ _Added 2026-10-25. One replacement core for text and pages (`replaceWith` in `sr
 _Added 2026-10-25. `deleteStaleDrafts` (`src/server/data/submissions/drafts.ts`), run as the third part of `sweepEvaluations`: at each trigger, at the opening of the copy list or a copy, and by the daily cron in production._
 
 ### Integration (ask first: shared test database)
-- [ ] A draft whose `updated_at` is `DRAFT_TTL_MS` + 1 s old, with 2 pages and a reading run → `deleteStaleDrafts(DRAFT_TTL_MS)` returns its id; the draft and its pages are gone; the `reading_runs` row stays, `page_id` null → AC-18
-- [ ] A draft 6 days old, or one whose last write is a read result (`updated_at` bumped) → kept → AC-18
-- [ ] A stale draft locked by a transaction in progress (a confirmation) → skipped, no wait, no error; the confirmation completes → AC-18
-- [ ] The student's daily read cap after a purge → unchanged (the runs still count) → AC-8, AC-18
+_Locked by `tests/draft-purge.int.test.ts`, passed 2026-10-25._
+- [x] A draft whose `updated_at` is `DRAFT_TTL_MS` + 1 s old, with 2 pages and a reading run → `deleteStaleDrafts(DRAFT_TTL_MS)` returns its id; the draft and its pages are gone; the `reading_runs` row stays, `page_id` null → AC-18
+- [x] A draft 6 days old, or one whose last write is a read result (`updated_at` bumped) → kept → AC-18
+- [x] A stale draft locked by a transaction in progress (a confirmation) → skipped, no wait, no error; the confirmation completes → AC-18
+- [x] The student's daily read cap after a purge → unchanged (the runs still count) → AC-8, AC-18
 
 ### Commands
 - [ ] `docker compose exec -T web npx vitest run --project unit tests/evaluation-start.test.ts` → the cron route answers `{ released, restarted, draftsDeleted }` with the secret only → AC-18
