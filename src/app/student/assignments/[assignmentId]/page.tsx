@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/dates";
 import { getActor } from "@/server/auth/session";
 import { getStudentAssignment } from "@/server/data/assignments/assignments";
 import { getNoticeAcknowledgement } from "@/server/data/notices/notices";
+import { getOwnDraft } from "@/server/data/submissions/drafts";
 import { getOwnSubmission, type OwnSubmission } from "@/server/data/submissions/student";
 import { viewToken } from "@/server/results/freshness";
 import { checkAssignmentFreshnessAction } from "./actions";
@@ -31,9 +32,11 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
   const assignment = await getStudentAssignment(actor, assignmentId);
   if (!assignment) notFound();
   // NFR-DON-04: before the first submission only.
-  const [noticeRead, submission] = await Promise.all([
+  const [noticeRead, submission, draft] = await Promise.all([
     !assignment.canSubmit || getNoticeAcknowledgement(actor).then((read) => read !== null),
     assignment.submittedAt ? getOwnSubmission(actor, assignment.id) : null,
+    // E9: the pages not sent yet, before the first submission.
+    assignment.canSubmit && !assignment.submittedAt ? getOwnDraft(actor, assignment.id) : null,
   ]);
 
   return (
@@ -78,8 +81,11 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
           contentVersion={assignment.contentVersion}
           // One per page shown: a double click or a resend after a network cut is the same submission.
           requestId={randomUUID()}
+          imagesRequestId={randomUUID()}
           replaceRequestId={randomUUID()}
           status={assignment.status}
+          mode={submission?.mode ?? null}
+          draft={draft}
           submittedAt={assignment.submittedAt}
           late={assignment.late}
           lastVersionAt={assignment.lastVersionAt}
@@ -94,7 +100,11 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
   );
 }
 
-/** SUB-01 R2: the text of the active version, as sent; nothing of its processing. */
+/**
+ * SUB-01 R2: the text of the active version, as sent; nothing of its
+ * processing. Images (E9, AC-14): the pages, through the image route, and the
+ * transcription the student confirmed.
+ */
 function ReadBack({ submission, language }: { submission: OwnSubmission; language: AssignmentLanguage }) {
   return (
     <section aria-labelledby="your-submission-title" className="card flex flex-col gap-3 p-4">
@@ -105,12 +115,29 @@ function ReadBack({ submission, language }: { submission: OwnSubmission; languag
         <p className="text-sm text-fg-muted">
           {submission.lastVersionAt === submission.submittedAt
             ? `As you sent it on ${formatDateTime(submission.submittedAt)}.`
-            : `The text you sent last, on ${formatDateTime(submission.lastVersionAt)}.`}
+            : `The ${submission.mode === "images" ? "pages" : "text"} you sent last, on ${formatDateTime(submission.lastVersionAt)}.`}
         </p>
       </div>
-      <p lang={language} className="rounded-md border border-border-subtle bg-surface-muted p-3 break-words whitespace-pre-wrap">
-        {submission.text}
-      </p>
+      {submission.mode === "images" && (
+        <ol aria-label="Your pages" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {submission.pages.map((page) => (
+            <li key={page.id}>
+              <a href={`/api/pages/${page.id}`} target="_blank" rel="noopener" className="block rounded-md focus-visible:outline-2">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a private page, never optimized nor cached */}
+                <img src={`/api/pages/${page.id}`} alt={`Page ${page.position}`} className="aspect-[3/4] w-full rounded-md border border-border-subtle object-cover" />
+              </a>
+            </li>
+          ))}
+        </ol>
+      )}
+      {submission.text !== null && (
+        <div className="flex flex-col gap-1">
+          {submission.mode === "images" && <h3 className="text-sm font-semibold text-fg-muted">The reading you checked</h3>}
+          <p lang={language} className="rounded-md border border-border-subtle bg-surface-muted p-3 break-words whitespace-pre-wrap">
+            {submission.text}
+          </p>
+        </div>
+      )}
     </section>
   );
 }

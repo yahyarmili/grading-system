@@ -148,6 +148,20 @@
       "when": 1792699466875,
       "tag": "0020_date_review_entries_in_order",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792946445889,
+      "tag": "0021_create_image_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792946459561,
+      "tag": "0022_protect_image_rows",
+      "breakpoints": true
     }
   ]
 }

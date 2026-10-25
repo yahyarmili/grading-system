@@ -120,7 +120,11 @@ export const submissions = pgTable(
       "submissions_not_assessable_cause",
       sql`(${t.status} = 'not_assessable') = (${t.notAssessableCause} is not null)`,
     ),
-    check("submissions_claim_token_iff_evaluating", sql`(${t.status} = 'evaluating') = (${t.claimToken} is not null)`),
+    // E9 (spec 0011): the pipeline reading an unchecked image version holds a claim too.
+    check(
+      "submissions_claim_token_iff_evaluating",
+      sql`(${t.status} in ('evaluating', 'transcribing')) = (${t.claimToken} is not null)`,
+    ),
     check(
       "submissions_evaluation_request_status",
       sql`${t.evaluationRequest} is null or ${t.status} in ('evaluation_failed', 'not_assessable')`,

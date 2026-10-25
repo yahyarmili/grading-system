@@ -308,8 +308,31 @@ export const EVALUATION_REFRESH_MAX_MS = 10 * 60_000;
 // ---------------------------------------------------------------------------
 // Image channel (E9, spec 0011). PROVISIONAL, proposed by the spec on
 // 2026-10-25. The reader's effort and thinking were decided at the E9.0
-// checkpoint (decisions.ts); the other decided values (pages, formats, draft
-// lifetime) go there with the migration.
+// checkpoint (decisions.ts), as were the pages, formats and draft lifetime.
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Largest body of one page upload, once shrunk
+ * by the browser: under Vercel's 4.5 MB per request.
+ */
+export const PAGE_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Largest image the server decodes at all, in
+ * pixels: a page within the bounds below, with room for the browser's rounding.
+ */
+export const PAGE_INPUT_MAX_PIXELS = 4 * 2_576 * 2_576;
+
+/**
+ * [PROVISIONAL, [P] arbitrary] Longest word a student types in place of a
+ * misread one, in graphemes, after trimming and NFC normalisation.
+ */
+export const TRANSCRIPTION_CHANGE_MAX_GRAPHEMES = 60;
+
+/** [PROVISIONAL, [P] arbitrary] Interactive reads of one draft: 5 pages × 3. */
+export const DRAFT_READS_MAX = 15;
+
+/** [PROVISIONAL, [P] arbitrary] Interactive reads of one student per day, in Africa/Casablanca. */
+export const STUDENT_DAILY_READS_MAX = 30;
 
 /**
  * [PROVISIONAL, [P] vision high resolution bound] Longest side of a page sent

@@ -55,7 +55,8 @@ export async function insertReceived(tx: Tx, values: NewSubmission) {
  * (wrong state, guard not met): the row lock makes the first writer win.
  * Leaving not_assessable empties its cause; reaching it needs one in `set`
  * (check constraint). Likewise the claim token (E6): leaving evaluating
- * empties it; reaching evaluating needs one in `set`. Every transition
+ * empties it; reaching evaluating needs one in `set`, and so does reaching
+ * transcribing (E9, the pipeline reading an image version). Every transition
  * empties the teacher's request of a retry or relaunch (E6.6): the claim
  * takes it, a replacement or a manual evaluation drops it.
  */
@@ -75,7 +76,7 @@ export async function applyTransition(
     .set({
       ...guard.set,
       ...(to === "not_assessable" ? {} : { notAssessableCause: null }),
-      ...(to === "evaluating" ? {} : { claimToken: null }),
+      ...(to === "evaluating" || to === "transcribing" ? {} : { claimToken: null }),
       evaluationRequest: null,
       status: to,
     })

@@ -105,9 +105,18 @@ export const ACCESS_MATRIX = {
     // offered for a relaunch (listRelaunchable, PRC-02 R4, E6.3).
     concernedStudent: LW, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
   },
+  draft: {
+    // E9 (spec 0011): the student's pages before sending, read by the AI one
+    // at a time and checked. The teacher never sees a draft.
+    label: "Draft of a submission by images (pages before sending)",
+    concernedStudent: LW, otherStudent: NO, ownerTeacher: NO, otherTeacher: NO, admin: NO, visitor: NO,
+  },
   transcription: {
+    // E9: the student reads and writes their own (word changes) before
+    // sending, through "draft", and reads the confirmed one after; written
+    // once, at confirmation. The pages of every version follow "submission".
     label: "Transcription",
-    concernedStudent: NO, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
+    concernedStudent: LW, otherStudent: NO, ownerTeacher: L, otherTeacher: NO, admin: NO, visitor: NO,
   },
   aiProposal: {
     label: "AI proposal and alerts",

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import {
   relaunchableCauses,
   type AiProvider,
@@ -13,7 +13,7 @@ import type { CriterionId, Level } from "@/lib/rubric";
 import type { TransitionId } from "@/lib/submission-status";
 import type { EvaluationInput } from "@/server/ai/request";
 import { db } from "@/server/db/client";
-import { aiProposals, assignments, evaluationRuns, securityEvents, submissions, submissionVersions, users } from "@/server/db/schema";
+import { aiProposals, assignments, evaluationRuns, securityEvents, submissions, submissionTranscriptions, submissionVersions, users } from "@/server/db/schema";
 import { appendJournal } from "../review/record";
 import { applyTransition, clearEvaluationRequest, markRestarted } from "../submissions/transitions";
 
@@ -27,10 +27,12 @@ type Executor = Pick<typeof db, "select">;
 /**
  * The whitelist of a submission for the AI (EVL-02), column by column: the
  * active version's text and the assignment's subject, instructions and
- * language. Nothing else is read: no title, level, deadline, lateness, name or
- * identifier. Null when the submission does not exist or its active version
- * is not a text (images: E9). The version number comes back beside the
- * input, never in it: it guards the result.
+ * language. Nothing else is read: no title, level, deadline, lateness, name,
+ * mode or identifier. An image version (E9, spec 0011) gives its
+ * transcription: the text the student confirmed, or the one the pipeline
+ * read. Null when the submission does not exist, or its active version has
+ * no text yet (an image version not read): never evaluated. The version
+ * number comes back beside the input, never in it: it guards the result.
  */
 export async function readEvaluationInput(
   executor: Executor,
@@ -39,7 +41,7 @@ export async function readEvaluationInput(
   const [row] = await executor
     .select({
       versionNumber: submissionVersions.number,
-      text: submissionVersions.text,
+      text: sql<string | null>`coalesce(${submissionVersions.text}, ${submissionTranscriptions.text})`,
       subject: assignments.subject,
       instructions: assignments.instructions,
       language: assignments.language,
@@ -49,8 +51,9 @@ export async function readEvaluationInput(
       submissionVersions,
       and(eq(submissionVersions.submissionId, submissions.id), eq(submissionVersions.number, submissions.currentVersion)),
     )
+    .leftJoin(submissionTranscriptions, eq(submissionTranscriptions.versionId, submissionVersions.id))
     .innerJoin(assignments, eq(assignments.id, submissions.assignmentId))
-    .where(and(eq(submissions.id, submissionId), eq(submissionVersions.mode, "text")));
+    .where(eq(submissions.id, submissionId));
   if (!row || row.text === null) return null;
   const { versionNumber, ...input } = row;
   return { versionNumber, input: { ...input, text: row.text } };
@@ -114,12 +117,12 @@ function claimFrom(origin: EvaluationOrigin, request: string | undefined): { tra
 }
 
 /**
- * Transition 2, received → evaluating, for a text (or 6 and 7 for the
+ * Transition 2, received → evaluating, for a text or a checked image version (or 6 and 7 for the
  * teacher's retry and relaunch, `origin`, E6.3). One transaction: the row
  * is locked first, then the whitelist is read in a later statement (a fresh
  * snapshot), then the transition is guarded by the version read. Null when
  * the submission is not in the state of its origin (received by default) or
- * its active version is not a text. Two
+ * its active version has no text yet (images not read, E9). Two
  * claims at once give one evaluation; a replacement at the same time is
  * waited for, never missed. With `expectedVersion`, null as well when another
  * version is active: a trigger of a replaced text evaluates nothing (SUB-05
@@ -385,7 +388,7 @@ export async function releaseStuckEvaluations(afterMs: number): Promise<string[]
 }
 
 /**
- * The text submissions still received `graceMs` after they were submitted,
+ * The submissions with a text still received `graceMs` after they were submitted,
  * replaced or last started again (E6, the sweep): their trigger failed, their
  * run gave up waiting for a place, or the process stopped. The oldest first,
  * `limit` at most; identifiers and the active version only. Taken, they are
@@ -404,10 +407,12 @@ export async function takeStaleReceived(graceMs: number, limit: number): Promise
         submissionVersions,
         and(eq(submissionVersions.submissionId, submissions.id), eq(submissionVersions.number, submissions.currentVersion)),
       )
+      .leftJoin(submissionTranscriptions, eq(submissionTranscriptions.versionId, submissionVersions.id))
       .where(
         and(
           eq(submissions.status, "received"),
-          eq(submissionVersions.mode, "text"),
+          // A text, or images the student checked (E9): an unchecked version goes through transcription (step 6).
+          or(eq(submissionVersions.mode, "text"), isNotNull(submissionTranscriptions.text)),
           sql`${submissions.updatedAt} < now() - make_interval(secs => ${graceMs / 1000})`,
         ),
       )

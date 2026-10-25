@@ -11,6 +11,12 @@ import {
   type SubmissionContext,
   type SubmitTextState,
 } from "@/server/submissions/submissions";
+import {
+  confirmStudentImages,
+  readStudentPage,
+  type ConfirmImagesState,
+  type ReadPageState,
+} from "@/server/submissions/images";
 import { acknowledgeNoticeReading, type AcknowledgeNoticeState } from "@/server/notices/notices";
 import { checkAssignmentFreshness } from "@/server/results/freshness";
 
@@ -58,4 +64,25 @@ export async function replaceTextAction(_previous: ReplaceTextState, form: FormD
 /** PUB-01 CA3, PUB-02 R2 (E8.7): the assignment shown again is checked first. A boolean only. */
 export async function checkAssignmentFreshnessAction(assignmentId: string, token: string): Promise<boolean> {
   return checkAssignmentFreshness(await getActor(), { assignmentId, token });
+}
+
+/** SUB-03, TRX-01 (E9): one page of the student's draft read by the AI, for their check. */
+export async function readPageAction(pageId: string): Promise<ReadPageState> {
+  return readStudentPage(await getActor(), pageId);
+}
+
+/**
+ * SUB-03 CA1 (E9): the pages read and checked become the submission. The
+ * changes are the student's word changes; the server rebuilds the text.
+ */
+export async function confirmImagesAction(input: {
+  assignmentId: string;
+  draftId: string;
+  contentVersion: number;
+  requestId: string;
+  changes: { pageId: string; wordIndex: number; engineWord: string; studentWord: string }[];
+}): Promise<ConfirmImagesState> {
+  const state = await confirmStudentImages(await getActor(), input, evaluateLater);
+  if (state.status === "done" || (state.status === "error" && state.reason !== "notAllowed")) refresh();
+  return state;
 }

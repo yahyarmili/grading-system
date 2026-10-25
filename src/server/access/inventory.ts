@@ -37,6 +37,15 @@ export const TABLES: Record<string, readonly Resource[] | { internal: string }> 
   // E8: once published, the same row is the published evaluation (frozen outside To review, 0019).
   teacher_evaluations: ["unpublishedEvaluation", "publishedEvaluation"],
   review_journal_entries: ["reviewLog"],
+  // E9 (spec 0011): the student's draft and its pages before sending; once
+  // confirmed, the pages of a version follow "Submission and images", read by
+  // the image route alone (rule 2). The reading runs hold no student data:
+  // written by the reading service, read by no screen (the guards count them).
+  submission_drafts: ["draft"],
+  submission_pages: ["draft", "submission"],
+  reading_runs: { internal: "reading runs (QUA-02), no content: written by the reading service, counted by the read caps and the AI guard, read by no screen" },
+  submission_transcriptions: ["transcription"],
+  transcription_changes: ["transcription"],
 };
 
 /**
@@ -141,6 +150,19 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/student/assignments/[assignmentId]/actions.ts#submitTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#replaceTextAction": { resource: "submission", action: "write" },
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
+  // E9 (spec 0011): the pages of the student's draft, read by the AI for their check, then confirmed.
+  "src/app/student/assignments/[assignmentId]/actions.ts#readPageAction": { resource: "draft", action: "write" },
+  "src/app/student/assignments/[assignmentId]/actions.ts#confirmImagesAction": {
+    resource: "submission",
+    action: "write",
+    also: [
+      { resource: "draft", action: "write" },
+      { resource: "transcription", action: "write" },
+    ],
+  },
+  "src/app/api/drafts/[assignmentId]/pages/route.ts#POST": { resource: "draft", action: "write" },
+  // Rule 2: the one route that serves a page's JPEG; a student also reads their draft's pages through it.
+  "src/app/api/pages/[pageId]/route.ts#GET": { resource: "submission", action: "read", also: [{ resource: "draft", action: "read" }] },
   // PUB-01 CA3 (E8.3): the result shown again is checked first; a boolean only.
   "src/app/student/assignments/[assignmentId]/result/actions.ts#checkFreshnessAction": { resource: "publishedEvaluation", action: "read" },
   // E8.7: My assignments and an assignment shown again are checked first too; a boolean only.

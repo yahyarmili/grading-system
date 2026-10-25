@@ -33,10 +33,11 @@ export type EvaluationOutcome = (typeof evaluationOutcomes)[number];
 /**
  * Why a submission is not assessable: a blocking alert, raised before any
  * request (EVL-04), or the AI unavailable (E6, EXP-02): the monthly cost cap
- * reached, or the provider's budget (spending limit, credit) [P]. E9 will add
- * its own causes.
+ * reached, or the provider's budget (spending limit, credit) [P]. E9 (spec
+ * 0011): no_writing, every page of an image copy read without writing; never
+ * relaunchable, like no_content.
  */
-export const notAssessableCauses = ["no_content", "rubric_unavailable", "ai_unavailable"] as const;
+export const notAssessableCauses = ["no_content", "rubric_unavailable", "ai_unavailable", "no_writing"] as const;
 export type NotAssessableCause = (typeof notAssessableCauses)[number];
 
 /**
@@ -53,6 +54,7 @@ export const notAssessableCauseLabels: Record<NotAssessableCause, string> = {
   no_content: "No content to assess",
   rubric_unavailable: "Rubric not validated for this language",
   ai_unavailable: "AI unavailable",
+  no_writing: "No writing on the pages",
 };
 
 /**

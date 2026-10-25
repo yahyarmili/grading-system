@@ -1,7 +1,8 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { PAGE_LONG_SIDE_MAX_PX, PAGE_TOKENS_MAX } from "@/config/provisional";
-import { fitWithin, PageImageError, preparePage } from "@/server/submissions/page-image";
+import { fitWithin } from "@/lib/page-bounds";
+import { PageImageError, preparePage } from "@/server/submissions/page-image";
 
 // Spec 0011: a page as the AI reads it, upright, within the vision bounds,
 // a JPEG without metadata; anything that is not a whole image of an accepted

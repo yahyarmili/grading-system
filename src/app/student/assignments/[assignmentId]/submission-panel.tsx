@@ -7,26 +7,33 @@ import { Alert } from "@/components/alert";
 import { Spinner } from "@/components/loading";
 import { LateTag, StudentStatusTag } from "@/components/status-tag";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AssignmentLanguage } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
-import type { StudentStatus } from "@/lib/submission-status";
+import type { StudentStatus, SubmissionMode } from "@/lib/submission-status";
 import { READ_BACK_NOTICE, TEXT_KEPT_AS_WRITTEN_NOTICE } from "@/lib/texts";
+import type { OwnDraft } from "@/server/data/submissions/drafts";
 import type { SubmitTextState } from "@/server/submissions/submissions";
 import { submitTextAction } from "./actions";
+import { ImagesSection } from "./images-section";
 import { ReplaceSection } from "./replace-section";
 import { StudentNotice } from "./student-notice";
 import { NoNameInstruction, TextField } from "./text-field";
 
-// SUB-02: the text box before the first submission, the dated confirmation
-// after it, the text as sent (SUB-01 R2, E8.3), then the replacement (SUB-05).
+// SUB-02: the text box before the first submission, or the photos of the
+// pages (SUB-03, E9), the dated confirmation after it, the text or pages as
+// sent (SUB-01 R2, E8.3), then the replacement (SUB-05).
 
 export function SubmissionPanel({
   assignmentId,
   language,
   contentVersion,
   requestId,
+  imagesRequestId,
   replaceRequestId,
   status,
+  mode,
+  draft,
   submittedAt,
   late,
   lastVersionAt,
@@ -40,8 +47,14 @@ export function SubmissionPanel({
   language: AssignmentLanguage;
   contentVersion: number;
   requestId: string;
+  /** One per page shown, for the confirmation of the pages (E9). */
+  imagesRequestId: string;
   replaceRequestId: string;
   status: StudentStatus;
+  /** The active version's mode, once submitted. */
+  mode: SubmissionMode | null;
+  /** E9: the student's pages not sent yet. */
+  draft: OwnDraft | null;
   submittedAt: string | null;
   /** SUB-04: the first submission came after the deadline. */
   late: boolean;
@@ -79,6 +92,7 @@ export function SubmissionPanel({
           status={status === "to_submit" ? "being_marked" : status}
           announce={state.status === "done"}
           assignmentId={assignmentId}
+          mode={state.status === "done" ? "text" : (mode ?? "text")}
         />
         {readBack}
         {/* Once the page knows the submission (after its refresh). */}
@@ -119,38 +133,56 @@ export function SubmissionPanel({
   }
 
   return (
-    <section aria-labelledby="your-text-title" className="card flex flex-col gap-4 p-4">
-      <h2 id="your-text-title" className="text-base font-semibold">
-        Submit your text
-      </h2>
+    // E9: the text typed, or photos of handwritten pages; a draft with pages opens on the photos.
+    <Tabs defaultValue={draft && draft.pages.length > 0 ? "images" : "text"} className="flex flex-col gap-4">
+      <TabsList aria-label="How to submit">
+        <TabsTrigger value="text">Type my text</TabsTrigger>
+        <TabsTrigger value="images">Photograph my pages</TabsTrigger>
+      </TabsList>
+      <TabsContent value="text">
+        <section aria-labelledby="your-text-title" className="card flex flex-col gap-4 p-4">
+          <h2 id="your-text-title" className="text-base font-semibold">
+            Submit your text
+          </h2>
 
-      <NoNameInstruction />
+          <NoNameInstruction />
 
-      {refusal}
+          {refusal}
 
-      <form action={formAction} noValidate className="flex flex-col gap-4">
-        <input type="hidden" name="assignmentId" value={assignmentId} />
-        <input type="hidden" name="contentVersion" value={contentVersion} />
-        <input type="hidden" name="requestId" value={requestId} />
-        <TextField
-          id="submission-text"
-          label="Your text"
-          text={text}
-          onText={setText}
-          textRef={textRef}
+          <form action={formAction} noValidate className="flex flex-col gap-4">
+            <input type="hidden" name="assignmentId" value={assignmentId} />
+            <input type="hidden" name="contentVersion" value={contentVersion} />
+            <input type="hidden" name="requestId" value={requestId} />
+            <TextField
+              id="submission-text"
+              label="Your text"
+              text={text}
+              onText={setText}
+              textRef={textRef}
+              language={language}
+              error={state.status === "invalid" ? state.error : undefined}
+            />
+            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-fg-muted">
+              <li>{TEXT_KEPT_AS_WRITTEN_NOTICE}</li>
+              <li>{READ_BACK_NOTICE}</li>
+            </ul>
+            <Button type="submit" disabled={pending} aria-disabled={pending} className="w-full sm:w-auto sm:self-start">
+              {pending && <Spinner />}
+              {pending ? "Submitting…" : "Submit my text"}
+            </Button>
+          </form>
+        </section>
+      </TabsContent>
+      <TabsContent value="images">
+        <ImagesSection
+          assignmentId={assignmentId}
+          contentVersion={contentVersion}
+          requestId={imagesRequestId}
           language={language}
-          error={state.status === "invalid" ? state.error : undefined}
+          draft={draft}
         />
-        <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-fg-muted">
-          <li>{TEXT_KEPT_AS_WRITTEN_NOTICE}</li>
-          <li>{READ_BACK_NOTICE}</li>
-        </ul>
-        <Button type="submit" disabled={pending} aria-disabled={pending} className="w-full sm:w-auto sm:self-start">
-          {pending && <Spinner />}
-          {pending ? "Submitting…" : "Submit my text"}
-        </Button>
-      </form>
-    </section>
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -163,9 +195,11 @@ function Submitted({
   status,
   announce,
   assignmentId,
+  mode,
 }: {
   ref: React.Ref<HTMLDivElement>;
   assignmentId: string;
+  mode: SubmissionMode;
   submittedAt: string;
   /** The active version, when a replacement made it differ from the first. */
   lastVersionAt: string | null;
@@ -184,7 +218,7 @@ function Submitted({
         <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success-fg" />
         <div className="flex flex-col gap-1">
           <h2 id="submitted-title" className="text-base font-semibold">
-            Text submitted
+            {mode === "images" ? "Pages submitted" : "Text submitted"}
           </h2>
           <p>Submitted on {formatDateTime(submittedAt)}.</p>
           {lastVersionAt && lastVersionAt !== submittedAt && (

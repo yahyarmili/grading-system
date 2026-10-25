@@ -18,6 +18,7 @@ import {
   classMemberships,
   evaluationRuns,
   submissions,
+  submissionTranscriptions,
   submissionVersions,
   teacherEvaluations,
   users,
@@ -63,8 +64,19 @@ export type TeacherCopy = {
   late: boolean;
   /** The first submission (SUB-04 R2); null when not submitted. */
   submittedAt: string | null;
-  /** The active version: its text exactly as submitted (null for images, E9). */
-  version: { number: number; mode: SubmissionMode; text: string | null; createdAt: string } | null;
+  /**
+   * The active version: its text exactly as submitted. Images (E9, spec
+   * 0011): the transcription confirmed by the student (or read by the
+   * pipeline; null until then), whether the student checked it, and its pages
+   * in order, by id only (the image route serves them, on demand).
+   */
+  version: {
+    number: number;
+    mode: SubmissionMode;
+    text: string | null;
+    createdAt: string;
+    transcription: { checkedByStudent: boolean; pages: { id: string; position: number }[] } | null;
+  } | null;
   cause: NotAssessableCause | null;
   /** The last attempt's error of the active version's last run: why it failed. */
   lastError: EvaluationError | null;
@@ -119,6 +131,8 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
   authorize(actor, "publishedEvaluation", "read");
   // Whether the last request was dropped is read from the log (E7.6).
   authorize(actor, "reviewLog", "read");
+  // An image copy shows its transcription (E9).
+  authorize(actor, "transcription", "read");
   const [row] = await db
     .select({
       assignment: {
@@ -143,7 +157,18 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
         cause: submissions.notAssessableCause,
         proposalId: submissions.currentProposalId,
       },
-      version: { mode: submissionVersions.mode, text: submissionVersions.text, createdAt: submissionVersions.createdAt },
+      version: {
+        mode: submissionVersions.mode,
+        text: sql<string | null>`coalesce(${submissionVersions.text}, ${submissionTranscriptions.text})`,
+        createdAt: submissionVersions.createdAt,
+      },
+      transcription: {
+        checkedByStudent: submissionTranscriptions.checkedByStudent,
+        pages: sql<{ id: string; position: number }[]>`coalesce((
+          select json_agg(json_build_object('id', p.id, 'position', p.position) order by p.position)
+          from submission_pages p where p.version_id = ${submissionVersions.id}
+        ), '[]')`,
+      },
       lastError: sql<EvaluationError | null>`(
         select r.attempt_errors[cardinality(r.attempt_errors)] from evaluation_runs r
         where r.submission_id = ${submissions.id} and r.version_number = ${submissions.currentVersion}
@@ -175,6 +200,7 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
       submissionVersions,
       and(eq(submissionVersions.submissionId, submissions.id), eq(submissionVersions.number, submissions.currentVersion)),
     )
+    .leftJoin(submissionTranscriptions, eq(submissionTranscriptions.versionId, submissionVersions.id))
     .leftJoin(aiProposals, eq(aiProposals.id, submissions.currentProposalId))
     .leftJoin(evaluationRuns, eq(evaluationRuns.id, aiProposals.runId))
     .leftJoin(teacherEvaluations, activeEvaluation)
@@ -183,7 +209,7 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
   // NFR-DON-04 (E7.7): nothing of the copy before the teacher notice is read.
   if (!row.noticeRead) return "notice_required";
 
-  const { submission, version, proposal, run, evaluation } = row;
+  const { submission, version, transcription, proposal, run, evaluation } = row;
   return {
     assignment: row.assignment,
     classes: [...row.classes].sort((a, b) => compareText(a.name, b.name)),
@@ -192,7 +218,16 @@ export async function getCopy(actor: Actor, assignmentId: string, studentId: str
     submittedAt: submission?.submittedAt.toISOString() ?? null,
     version:
       submission && version
-        ? { number: submission.currentVersion, mode: version.mode, text: version.text, createdAt: version.createdAt.toISOString() }
+        ? {
+            number: submission.currentVersion,
+            mode: version.mode,
+            text: version.text,
+            createdAt: version.createdAt.toISOString(),
+            transcription:
+              version.mode === "images" && transcription
+                ? { checkedByStudent: transcription.checkedByStudent, pages: transcription.pages }
+                : null,
+          }
         : null,
     cause: submission?.cause ?? null,
     lastError: submission ? row.lastError : null,

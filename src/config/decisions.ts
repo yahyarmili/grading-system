@@ -59,6 +59,31 @@ export const AI_MODEL = "claude-haiku-5-5";
 export const AI_INFERENCE_GEO = "us";
 
 /**
+ * [D, 2026-10-25, spec 0011] Most pages of one image version (SUB-03): a 6th
+ * is refused; retaking a page at 5 replaces it.
+ */
+export const SUBMISSION_PAGES_MAX = 5;
+
+/**
+ * [D, 2026-10-25, spec 0011] Largest photo the student may choose, before the
+ * browser shrinks it: 20 MB. Larger is refused in the browser (SUB-03 CA2).
+ */
+export const IMAGE_ORIGINAL_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * [D, 2026-10-25, spec 0011] Formats of a photo the student may choose; the
+ * browser turns each into a JPEG, the only format the server stores. A PDF is
+ * refused with its own message.
+ */
+export const IMAGE_ACCEPTED_FORMATS = ["jpeg", "png", "webp", "heic"] as const;
+
+/**
+ * [D, 2026-10-25, spec 0011] A draft with no write for this long is deleted
+ * with its pages by the sweep; its reading runs stay.
+ */
+export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * [D, 2026-10-25] Effort of a page reading (spec 0011): low. Chosen by the
  * engineer at the E9.0 checkpoint: medium read no better on the trial photos
  * (conception/annexe-essais-lecture.md).

@@ -1,0 +1,253 @@
+import "server-only";
+import { z } from "zod";
+import { AI_CALL_TIMEOUT_MS, PAGE_INPUT_MAX_PIXELS, PAGE_UPLOAD_MAX_BYTES, READ_REQUEST_MAX_MS, TRANSCRIPTION_CHANGE_MAX_GRAPHEMES } from "@/config/provisional";
+import type { EvaluationError } from "@/lib/evaluation";
+import { countCharacters } from "@/lib/submission-text";
+import { wordsOf } from "@/lib/transcription";
+import type { Actor } from "@/server/access/actor";
+import { AccessDeniedError } from "@/server/access/errors";
+import { EvaluatorError, getReader, type Reader, type Usage } from "@/server/ai";
+import { buildReadingRequest, parseReading, PROMPT_VERSION } from "@/server/ai/reading";
+import { recordSecurityEvent } from "@/server/data/auth/security-events";
+import { addDraftPage, readDraftPage, type PageReadResult } from "@/server/data/submissions/drafts";
+import { confirmImages, type ConfirmedChange } from "@/server/data/submissions/submissions";
+import { aiGuard, type AiGuard } from "@/server/evaluation/budget";
+import { addUsage } from "@/server/evaluation/evaluate";
+import { PageImageError, preparePage } from "./page-image";
+import { SUBMISSION_MESSAGES, type SubmissionContext } from "./submissions";
+
+// SUB-03, TRX-01 (E9, spec 0011): a submission by photographed pages, without
+// Next request APIs so integration tests can call it. The student uploads
+// each page to their draft, has it read by the AI one at a time, checks the
+// reading, then confirms: only then is the submission created.
+
+const accessDenied = async (actor: Actor) =>
+  recordSecurityEvent("access_denied", { actorUserId: actor.kind === "user" ? actor.userId : null });
+
+// Upload (the route /api/drafts/[assignmentId]/pages).
+
+/** What the upload route answers: a status and a JSON body, never the image. */
+export type UploadPageAnswer =
+  | { status: 200; body: { draftId: string; pageId: string; position: number } }
+  | { status: 409; body: { reason: "noticeNotRead" } }
+  | { status: 413 | 422; body: { reason: "tooLarge" | "notJpeg" | "tooManyPages" | "badPosition" } }
+  | { status: 404; body: null };
+
+const notFound = { status: 404, body: null } as const;
+
+const uploadHeaders = z.object({
+  uploadRequestId: z.uuid(),
+  position: z.coerce.number().int().positive().optional(),
+  replacesPageId: z.uuid().optional(),
+});
+
+/**
+ * One page into the student's draft. The body must be a decodable JPEG within
+ * the byte and pixel bounds: it is decoded strictly, turned upright, shrunk if
+ * slightly over the bounds, and encoded again without any metadata
+ * (page-image.ts); a refused body stores nothing. The only refusal that is
+ * not a 404 besides the body's own: the notice in force not read (409).
+ */
+export async function uploadDraftPage(
+  actor: Actor,
+  assignmentId: string,
+  headers: { uploadRequestId?: string | null; position?: string | null; replacesPageId?: string | null },
+  body: Uint8Array,
+): Promise<UploadPageAnswer> {
+  const fields = uploadHeaders.safeParse({
+    uploadRequestId: headers.uploadRequestId ?? undefined,
+    position: headers.position || undefined,
+    replacesPageId: headers.replacesPageId || undefined,
+  });
+  if (!z.uuid().safeParse(assignmentId).success || !fields.success) return notFound;
+  if (body.length > PAGE_UPLOAD_MAX_BYTES) return { status: 413, body: { reason: "tooLarge" } };
+
+  let page;
+  try {
+    page = await preparePage(body, { formats: ["jpeg"], maxInputPixels: PAGE_INPUT_MAX_PIXELS });
+  } catch (error) {
+    if (error instanceof PageImageError) return { status: 422, body: { reason: "notJpeg" } };
+    throw error;
+  }
+  try {
+    const result = await addDraftPage(actor, { assignmentId, ...fields.data, page });
+    if (!result) return notFound;
+    if (result.ok) return { status: 200, body: { draftId: result.draftId, pageId: result.pageId, position: result.position } };
+    if (result.reason === "notice_not_read") return { status: 409, body: { reason: "noticeNotRead" } };
+    return { status: 422, body: { reason: result.reason === "too_many_pages" ? "tooManyPages" : "badPosition" } };
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+    await accessDenied(actor);
+    return notFound;
+  }
+}
+
+// Reading (readPageAction).
+
+export const READING_MESSAGES = {
+  notAllowed: SUBMISSION_MESSAGES.notAllowed,
+  unavailable: "This page is no longer in your draft. Reload the page.",
+  busy: "This page is already being read. Wait a few seconds.",
+  failed: "The page could not be read. Try again.",
+  closed: "Reading is not available right now. Try again later.",
+} as const;
+
+export type ReadPageState =
+  | { status: "read"; text: string; words: string[]; hasWriting: boolean }
+  | { status: "error"; reason: keyof typeof READING_MESSAGES; message: string };
+
+/** Failures worth one more try within the student's wait: the provider late, busy or down, or an answer off the schema. */
+const RETRIED = new Set<EvaluationError>(["timeout", "rate_limited", "unavailable", "schema"]);
+
+/** One attempt and one retry, both within READ_REQUEST_MAX_MS: the student waits for it. */
+const READ_ATTEMPTS = 2;
+
+export type ReadingDeps = { reader?: Reader; guard?: AiGuard };
+
+/**
+ * The page read by the reader, its run recorded (reading_runs), its result
+ * written to the draft. The guard of the AI is asked first (cost cap,
+ * breaker): closed, nothing is sent and no run is written. A page id is the
+ * subject of the security log line, never sent to the AI.
+ */
+export function readPageWith(pageId: string, deps: ReadingDeps = {}) {
+  return async (jpeg: Buffer): Promise<PageReadResult | "closed"> => {
+    const reader = deps.reader ?? getReader();
+    if ((await (deps.guard ?? aiGuard)(reader.provider)) !== "open") return "closed";
+    const started = performance.now();
+    const deadline = AbortSignal.timeout(READ_REQUEST_MAX_MS);
+    const request = buildReadingRequest(jpeg);
+    const errors: EvaluationError[] = [];
+    let usage: Usage | null = null;
+    let modelAnswered: string | null = null;
+    let reading: PageReadResult["reading"] = null;
+
+    while (errors.length < READ_ATTEMPTS && !reading && !deadline.aborted) {
+      try {
+        const response = await reader.read(request, {
+          signal: AbortSignal.any([deadline, AbortSignal.timeout(AI_CALL_TIMEOUT_MS)]),
+          subjectId: pageId,
+        });
+        usage = addUsage(usage, response.usage);
+        modelAnswered = response.modelAnswered;
+        reading = parseReading(response.content);
+        if (!reading) errors.push("schema");
+      } catch (error) {
+        if (!(error instanceof EvaluatorError)) throw error;
+        usage = addUsage(usage, error.usage ?? null);
+        errors.push(error.kind);
+      }
+      if (!reading && !RETRIED.has(errors.at(-1)!)) break;
+    }
+    return {
+      reading,
+      run: {
+        outcome: reading ? (reading.hasWriting ? "read" : "no_writing") : "failed",
+        provider: reader.provider,
+        modelRequested: reader.model,
+        modelAnswered,
+        promptVersion: PROMPT_VERSION,
+        attempts: errors.length + (reading ? 1 : 0),
+        attemptErrors: errors,
+        durationMs: Math.round(performance.now() - started),
+        promptTokens: usage?.promptTokens ?? null,
+        completionTokens: usage?.completionTokens ?? null,
+      },
+    };
+  };
+}
+
+const readFailed = (reason: keyof typeof READING_MESSAGES) => ({ status: "error", reason, message: READING_MESSAGES[reason] }) as const;
+
+/** A page of the student's draft read for their check: its words, in order, and whether it has writing. */
+export async function readStudentPage(actor: Actor, rawPageId: unknown, deps: ReadingDeps = {}): Promise<ReadPageState> {
+  const pageId = z.uuid().safeParse(rawPageId);
+  if (!pageId.success) return readFailed("unavailable");
+  try {
+    const result = await readDraftPage(actor, pageId.data, readPageWith(pageId.data, deps));
+    if (result === null) return readFailed("unavailable");
+    if (result === "closed") return readFailed("closed");
+    if (!result.ok) return readFailed(result.reason === "busy" ? "busy" : "unavailable");
+    if (!result.reading) return readFailed("failed");
+    return { status: "read", text: result.reading.text, words: wordsOf(result.reading.text), hasWriting: result.reading.hasWriting };
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+    await accessDenied(actor);
+    return readFailed("notAllowed");
+  }
+}
+
+// Confirmation (confirmImagesAction).
+
+export const CONFIRM_MESSAGES = {
+  ...SUBMISSION_MESSAGES,
+  noPages: "Add at least one page before you send.",
+  pageNotRead: "Every page must be read before you send. Read the pages left, then send.",
+  staleChange: "A page was read again since you changed it. Check your changes, then send.",
+  badChange: "One of your changes is not valid. Check them, then send.",
+} as const;
+
+export type ConfirmImagesState =
+  | { status: "idle" }
+  | { status: "error"; reason: keyof typeof CONFIRM_MESSAGES; message: string }
+  | { status: "done"; submittedAt: string; late: boolean };
+
+const confirmFields = z.object({
+  assignmentId: z.uuid(),
+  draftId: z.uuid(),
+  contentVersion: z.coerce.number().int().positive(),
+  requestId: z.uuid(),
+  changes: z
+    .array(z.object({ pageId: z.uuid(), wordIndex: z.number().int().nonnegative(), engineWord: z.string(), studentWord: z.string() }))
+    .max(10_000),
+});
+
+/** A student's word: trimmed, NFC, 1 to TRANSCRIPTION_CHANGE_MAX_GRAPHEMES graphemes, no line break; null when refused. */
+export function normalizeStudentWord(word: string): string | null {
+  const normalized = word.normalize("NFC").trim();
+  if (normalized === "" || /[\r\n]/.test(normalized)) return null;
+  return countCharacters(normalized) <= TRANSCRIPTION_CHANGE_MAX_GRAPHEMES ? normalized : null;
+}
+
+const notConfirmed = (reason: keyof typeof CONFIRM_MESSAGES) => ({ status: "error", reason, message: CONFIRM_MESSAGES[reason] }) as const;
+
+/**
+ * AC-1: the pages read and checked become one submission (mode images), its
+ * pages in the chosen order, its transcription the readings with the
+ * student's changes; the dated confirmation comes back. The same request
+ * again gives the same confirmation. Confirmed: the version is handed to
+ * `ctx.onReceived` and evaluated on the confirmed text, as a pasted one.
+ */
+export async function confirmStudentImages(actor: Actor, raw: unknown, ctx: SubmissionContext): Promise<ConfirmImagesState> {
+  const fields = confirmFields.safeParse(raw);
+  if (!fields.success) return notConfirmed("unavailable");
+  const changes: ConfirmedChange[] = [];
+  for (const change of fields.data.changes) {
+    const studentWord = normalizeStudentWord(change.studentWord);
+    if (studentWord === null) return notConfirmed("badChange");
+    changes.push({ ...change, studentWord });
+  }
+
+  try {
+    const result = await confirmImages(actor, { ...fields.data, changes });
+    if (!result) return notConfirmed("unavailable");
+    if (!result.ok) {
+      const reasons = {
+        changed: "changed",
+        already_submitted: "alreadySubmitted",
+        notice_not_read: "noticeNotRead",
+        no_pages: "noPages",
+        page_not_read: "pageNotRead",
+        stale_change: "staleChange",
+        bad_change: "badChange",
+      } as const;
+      return notConfirmed(reasons[result.reason]);
+    }
+    ctx.onReceived(result.ref);
+    return { status: "done", submittedAt: result.submittedAt, late: result.late };
+  } catch (error) {
+    if (!(error instanceof AccessDeniedError)) throw error;
+    await accessDenied(actor);
+    return notConfirmed("notAllowed");
+  }
+}

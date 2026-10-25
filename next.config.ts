@@ -9,6 +9,8 @@ const watchPollMs = Number(process.env.NEXT_WATCH_POLL_MS) || undefined;
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // E9 (spec 0011): a native module, loaded from node_modules at run time, never bundled.
+  serverExternalPackages: ["sharp"],
   watchOptions: watchPollMs ? { pollIntervalMs: watchPollMs } : undefined,
   partialPrefetching: true,
   redirects() {

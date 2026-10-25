@@ -101,6 +101,7 @@ export default async function Page({ params, searchParams }: Props) {
               <CopyPanel
                 text={copy.version.text}
                 mode={copy.version.mode}
+                transcription={copy.version.transcription}
                 subject={copy.assignment.subject}
                 language={copy.assignment.language}
               />

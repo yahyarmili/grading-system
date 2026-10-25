@@ -84,8 +84,8 @@ function flagAlerts(flags: ProposalOutput["flags"]): ProposalAlert[] {
   return alerts;
 }
 
-/** A sum over the attempts of what the provider counted; null when it never said. */
-function addUsage(total: Usage | null, usage: Usage | null): Usage | null {
+/** A sum over the attempts of what the provider counted; null when it never said. Also the page reading's (E9). */
+export function addUsage(total: Usage | null, usage: Usage | null): Usage | null {
   if (!usage) return total;
   const add = (a: number | null | undefined, b: number | null) => (a == null ? b : b == null ? a : a + b);
   return {

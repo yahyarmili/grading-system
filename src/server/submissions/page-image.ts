@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import sharp, { type Metadata } from "sharp";
-import { PAGE_JPEG_QUALITY, PAGE_LONG_SIDE_MAX_PX, PAGE_TOKENS_MAX } from "@/config/provisional";
+import { PAGE_JPEG_QUALITY } from "@/config/provisional";
+import { fitWithin } from "@/lib/page-bounds";
 
 // A page as the AI reads it (spec 0011): decoded strictly, turned upright,
 // shrunk within the vision bounds, flattened on white, encoded again as a
@@ -9,27 +10,6 @@ import { PAGE_JPEG_QUALITY, PAGE_LONG_SIDE_MAX_PX, PAGE_TOKENS_MAX } from "@/con
 // The browser shrinks each page the same way before it uploads it; the
 // server shrinks a page slightly over the bounds instead of refusing it, and
 // the handwriting trial (ai:read) prepares its photos here.
-
-/** The side of an image tile the vision bound counts in. */
-const TILE_PX = 28;
-
-const tiles = (width: number, height: number) => Math.ceil(width / TILE_PX) * Math.ceil(height / TILE_PX);
-
-/**
- * The largest size of the same shape within the bounds: long side at most
- * PAGE_LONG_SIDE_MAX_PX, at most PAGE_TOKENS_MAX tiles. Never larger than the
- * image itself.
- */
-export function fitWithin(width: number, height: number): { width: number; height: number } {
-  const scale = Math.min(1, PAGE_LONG_SIDE_MAX_PX / Math.max(width, height), Math.sqrt((PAGE_TOKENS_MAX * TILE_PX * TILE_PX) / (width * height)));
-  let fitted = { width: Math.max(1, Math.floor(width * scale)), height: Math.max(1, Math.floor(height * scale)) };
-  // The tile count rounds up: step down until it fits.
-  while (tiles(fitted.width, fitted.height) > PAGE_TOKENS_MAX) {
-    const ratio = (fitted.width - 1) / fitted.width;
-    fitted = { width: fitted.width - 1, height: Math.max(1, Math.floor(fitted.height * ratio)) };
-  }
-  return fitted;
-}
 
 export type PageFormat = "jpeg" | "png" | "webp" | "heif";
 
