@@ -11,7 +11,8 @@
 
 | Sujet | Décision |
 |---|---|
-| Découpage | Une étape = un `/plan`, puis une sous-fonctionnalité par prompt (logique serveur, écran, tests), puis une vérification contre le plan. |
+| Découpage | Une étape = un `/plan`, puis une sous-fonctionnalité par prompt (logique serveur, écran, tests), puis une vérification contre le plan. *Remplacé le 2026-10-25 pour E9 et la suite : voir la ligne suivante.* |
+| Cycle de travail [D, 2026-10-25] | À partir d'E9, chaque étape suit le cycle des skills globaux, chacun appelé à l'étape où il sert : `/scope` (portée, `docs/scope/scope.md`), `/architect` (spec dans `docs/specs/`, remplace `/plan`), `/develop` (un jalon par prompt), `/check verify`, `/test`, `/check review` (autre modèle), `/document`, `/debug` pour un défaut confirmé, `/sync` en fin de changement ; `find-skills` pour chercher un skill. Niveau de rigueur GA, approche Tracer Bullet, intégration git désactivée (commit à la fin de chaque prompt sur `preview`, sans pousser). Contexte durable dans `AGENTS.md` (racine et par zone), `CLAUDE.md` n'est qu'un renvoi ; `docs/` et `AGENTS.md` en anglais, `conception/` reste en français et reste la source des critères d'acceptation. Plans approuvés d'E1 à E8 copiés dans `docs/specs/0002` à `0010` (`rationale.md`). |
 | Rédaction | Détail pour les deux prochaines étapes ; squelette au-delà, réécrit quand la conception évolue. |
 | Langue | Prompts en français ; **contenu de l'application en anglais** (interface, emails, messages) ; code en anglais. |
 | Design | Référence visuelle : [refine app-crm-minimal](https://github.com/refinedev/refine/tree/master/examples/app-crm-minimal) ([démo](https://example.minimal-crm.refine.dev)). Elle utilise Ant Design ; on en reprend les principes en Tailwind, sans Ant Design ni refine. |
@@ -23,9 +24,9 @@
 
 1. Un prompt à la fois. Ne passez au suivant qu'après avoir coché « Vous validez ».
 2. Après chaque validation : `git diff`, puis un commit. En cas d'échec, `git restore` revient à l'état validé.
-3. Les prompts marqués **Plan** se lancent après `/plan` : on relit le plan, on le simplifie s'il en fait trop (T2), puis on lance l'implémentation.
+3. Les prompts marqués **Plan** se lancent après `/plan` : on relit le plan, on le simplifie s'il en fait trop (T2), puis on lance l'implémentation. Depuis E9 [D, 2026-10-25] : `/architect` à la place de `/plan`, la spec allant dans `docs/specs/`.
 4. Une valeur non décidée (durée d'un lien, N essais, format de la note…) est codée comme **valeur provisoire** dans un fichier de configuration unique, marquée comme telle. Elle ne devient pas une décision.
-5. Quand un choix change en cours de route, utilisez T5 : la conception, ce document et CLAUDE.md sont mis à jour avant de continuer.
+5. Quand un choix change en cours de route, utilisez T5 : la conception, ce document et le bon `AGENTS.md` sont mis à jour avant de continuer (`/sync` met ensuite à jour `AGENTS.md`, la portée et le statut des specs).
 6. Vous créez vous-même les comptes et les secrets (Neon, Gmail, Anthropic dans sa Console, Vercel ; OpenRouter jusqu'au 2026-10-19). Claude lit les variables par `process.env`, jamais le fichier `.env.local`.
 
 ## 3. Prompts transverses (réutilisés à chaque étape)
@@ -59,7 +60,7 @@ Ne corrige rien pour l'instant.
 **T5 — Synchroniser après un changement de décision**
 ```
 Nous changeons la décision suivante : <décision>.
-Mets à jour, en restant bref : la section concernée de conception/ (marquée [D] avec la date), les prompts encore à venir de conception/prompts-implementation.md, et CLAUDE.md si la règle est durable.
+Mets à jour, en restant bref : la section concernée de conception/ (marquée [D] avec la date), les prompts encore à venir de conception/prompts-implementation.md, et l'AGENTS.md concerné (racine ou zone) si la règle est durable.
 Liste le code déjà écrit qui contredit la nouvelle décision, sans le modifier.
 ```
 
@@ -1068,14 +1069,14 @@ Revue faite le 2026-10-25 (`feature-reviewer`) : aucun critique, 1 majeur suppos
 
 ## E9 à E11 — Squelette
 
-À rédiger en détail à l'approche de chaque étape, à partir de la conception à jour. Chaque étape commence par un **Plan** et se termine par **T1**, puis T5 si une décision a changé.
+À rédiger en détail à l'approche de chaque étape, à partir de la conception à jour, selon le cycle des skills [D, 2026-10-25] (§1) : chaque étape commence par `/architect` et se termine par `/check verify`, `/test`, `/check review`, `/document` et `/sync`, puis T5 si une décision a changé. État de chaque étape : `docs/scope/scope.md`.
 
 | Étape | Prompts prévus | Outils du guide introduits |
 |---|---|---|
 | **E9** Canal image | Q4 [D, 2026-10-22] : images seules (pas de PDF) ; transcription avant l'envoi, montrée à l'élève qui reprend la photo ou corrige une fois les mots mal lus, puis confirme ; version du moteur conservée, changements enregistrés et surlignés pour le professeur ; l'élève relit images et transcription après l'envoi ; échec de transcription avant l'envoi : à définir · E9.0 reprend E5.8 avec `claude-haiku-5-5` [D, 2026-10-19] (photos fictives, sans nom, avec `.txt` de référence, hors de git), puis enquête par sous-agents (limites de 4,5 Mo par requête Vercel et de 1 Go ; 1 Mo par défaut pour une Server Action, à vérifier) ; confirme ou non Haiku derrière `Reader` [P] · E9.1 plan · E9.2 dépôt multipage, réduction dans le navigateur (grand côté ≤ 2 576 px **et** ⌈l/28⌉×⌈h/28⌉ ≤ 4 784 tokens), type, métadonnées (SUB-03) · E9.3 table des images et route unique contrôlée · E9.4 `Reader` et `transcription-1` en sortie structurée, image en base64 avant le texte, jamais d'URL, contrat de fidélité (TRX-01) · E9.5 branchement aux états de traitement · E9.6 transcription et image dans l'écran de copie · E9.7 rejeux image · notice v5 et fiche DON-02 étendue à la lecture · revue | Sous-agents, revue |
 | **E10** Durcissement et mesure | A : matrice complète automatisée, balayage (journaux sans contenu ni clé), étanchéité (flux image compris), pannes, sessions et liens, accessibilité (USA-03), export de sauvegarde, procédure de montée de version du SDK (relire le diff, rejouer les tests de garanties, vérifier l'en-tête d'authentification) ; revue externe facultative (CodeRabbit s'il reste gratuit pour ce dépôt, sinon `/code-review`) ; tri des constats ; T3. B : scripts de mesure depuis le journal, selon le protocole validé par le client ; mesures pour quelques centimes (stabilité sur N exécutions, CA3, alertes, fidélité de lecture) ; vote k = 3 et variante de réflexion décidés là, chacun avec sa version (rejouer a03, seul texte adverse hors de l'écart en E5.16, accepté [D, 2026-10-19]) | Revue indépendante |
 | **E11** Démonstration | Déploiement final, à trancher en E11 (2026-10-20) : garder la preview, faire de `preview` la branche de production de Vercel (adresse courte, cron ; variables à recopier en Production), ou fusionner dans `main` et la déployer avec une base Neon à elle (E1.8 : aucune production sur la base dev) ; jeu de données fictif en anglais, scénarios scriptés, préchauffage de Neon, notice « demo, fictitious data », répétition sous la limite de l'espace de travail (répétition et séance). Avant : abonnement actif, crédit restant, fin du cycle, expiration de la clé ; repli : REV-06 ou le simulateur ; après : clé révoquée | — |
-| **Fin** | Revue de toute l'application ; vérification des parcours admin, teacher, student ; synchronisation finale de CLAUDE.md | — |
+| **Fin** | Revue de toute l'application ; vérification des parcours admin, teacher, student ; synchronisation finale des `AGENTS.md` (`/sync`) | — |
 
 ## 4. Points ouverts qui touchent ces prompts
 

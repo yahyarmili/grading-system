@@ -6,7 +6,7 @@ tools: Read, Grep, Glob
 
 Review the requested feature without modifying the code.
 
-Inspect the relevant implementation and surrounding code, against CLAUDE.md (architecture rules, invariants, access matrix, provisional values) and the feature IDs in conception/fonctionnalites.md.
+Inspect the relevant implementation and surrounding code, against AGENTS.md and the nested AGENTS.md of the area (architecture rules, invariants, access matrix, provisional values), the governing spec in docs/specs/ and the feature IDs in conception/fonctionnalites.md.
 
 Return:
 

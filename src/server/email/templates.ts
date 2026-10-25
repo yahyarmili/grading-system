@@ -1,6 +1,6 @@
 import type { EmailMessage } from "./types";
 
-// Application content is in English (CLAUDE.md). Plain text only for now.
+// Application content is in English (AGENTS.md). Plain text only for now.
 // Lifetimes are shown as text computed from src/config/provisional.ts by the caller.
 
 type Recipient = { to: string; firstName: string };
