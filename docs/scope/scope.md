@@ -83,7 +83,7 @@ Spec [0011](../specs/0011-image-channel/index.md)
   - [ ] Replays, mixed batch, security cases, E2E and final fidelity trial (AC-16, AC-19, AC-20)
 - [ ] Verify it: `/check verify image channel`
 - [ ] Test it: `/test image channel`
-- [ ] Review it (fresh model): `/check review image channel`
+- [x] Review it (fresh model): `/check review image channel`
 - [ ] Document it: `/document image channel`
 
 ## Slice 3: Hardening
