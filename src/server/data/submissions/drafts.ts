@@ -166,14 +166,22 @@ export async function readDraftPage(
 ): Promise<ReadDraftPageResult | "closed" | null> {
   const { userId } = authorize(actor, "draft", "write");
   return db.transaction(async (tx) => {
-    const [page] = await tx
-      .select({ draftId: submissionPages.draftId, status: submissionPages.readingStatus, image: submissionPages.image })
+    // Ownership before the lock: another student's page answers null, never "busy".
+    const [owned] = await tx
+      .select({ id: submissionPages.id })
       .from(submissionPages)
       .innerJoin(submissionDrafts, eq(submissionDrafts.id, submissionPages.draftId))
       .where(and(eq(submissionPages.id, pageId), eq(submissionDrafts.studentId, userId)));
-    if (!page?.draftId) return null;
+    if (!owned) return null;
     const [{ locked }] = await tx.execute<{ locked: boolean }>(sql`select pg_try_advisory_xact_lock(${pageReadLock(pageId)}) as locked`).then((r) => r.rows);
     if (!locked) return { ok: false, reason: "busy" } as const;
+    // Read again under the lock (read committed: a fresh snapshot): a read that
+    // committed between the first select and the lock is seen, not billed twice.
+    const [page] = await tx
+      .select({ draftId: submissionPages.draftId, status: submissionPages.readingStatus, image: submissionPages.image })
+      .from(submissionPages)
+      .where(eq(submissionPages.id, pageId));
+    if (!page?.draftId) return null;
     if (page.status === "read") return { ok: false, reason: "already_read" } as const;
 
     const result = await read(page.image);
