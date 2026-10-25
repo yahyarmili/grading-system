@@ -37,6 +37,7 @@ export const PUBLICATION_MESSAGES = {
   notFound: "This copy was not found. Nothing changed.",
   noticeRequired: "Read the teacher notice first. The page has been reloaded. Nothing changed.",
   failed: "The publication could not be completed. The copy stays Validated: publish it when ready.",
+  sentBackMeanwhile: "This copy was changed meanwhile (another tab or window) and is To review again. Nothing was published.",
 } as const;
 
 /** What a validation, with or without the publication, answers the form. */
@@ -44,8 +45,8 @@ export type DecisionState =
   | SaveEvaluationState
   /** published: the shortcut's second act succeeded too (or the copy was published already). */
   | { status: "decided"; published: boolean; evaluation: SavedEvaluation; message: string }
-  /** PUB-01 R3: validated, the publication refused or failed: the copy stays Validated. */
-  | { status: "publish_failed"; evaluation: SavedEvaluation; message: string };
+  /** PUB-01 R3: validated, the publication refused or failed; `validated`: the copy is still Validated (not when changed meanwhile, E8.7). */
+  | { status: "publish_failed"; validated: boolean; evaluation: SavedEvaluation; message: string };
 
 /** The validation's refusals, as the form shows them (the same as a save's, E7.4). */
 function refusedValidation(result: Exclude<ValidateResult, { ok: true }>, changes: EvaluationChanges): DecisionState {
@@ -121,10 +122,15 @@ export async function validateTeacherEvaluation(
   try {
     const published = await deps.publish(actor, { ...seen, revision: evaluation.revision });
     if (published?.ok) return { status: "decided", published: true, evaluation, message: PUBLICATION_MESSAGES.validatedAndPublished };
-    const why = published ? publishRefusals[published.reason] : PUBLICATION_MESSAGES.notFound;
-    return { status: "publish_failed", evaluation, message: why };
+    if (!published) return { status: "publish_failed", validated: false, evaluation, message: PUBLICATION_MESSAGES.notFound };
+    // Changed by another tab between the two acts: To review again (Q8), not Validated (E8.7, review m2).
+    if (published.reason === "not_validated" || published.reason === "changed") {
+      return { status: "publish_failed", validated: false, evaluation, message: PUBLICATION_MESSAGES.sentBackMeanwhile };
+    }
+    const validatedStill = published.reason === "notice_required";
+    return { status: "publish_failed", validated: validatedStill, evaluation, message: publishRefusals[published.reason] };
   } catch {
-    return { status: "publish_failed", evaluation, message: PUBLICATION_MESSAGES.failed };
+    return { status: "publish_failed", validated: true, evaluation, message: PUBLICATION_MESSAGES.failed };
   }
 }
 

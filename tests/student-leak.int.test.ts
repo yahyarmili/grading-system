@@ -17,7 +17,7 @@ import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { acknowledgeNoticeReading } from "@/server/notices/notices";
 import { saveTeacherEvaluation } from "@/server/review/evaluation";
 import { publishTeacherEvaluation, validateTeacherEvaluation, withdrawTeacherPublication } from "@/server/review/publication";
-import { checkResultFreshness, resultToken } from "@/server/results/freshness";
+import { checkAssignmentFreshness, checkListFreshness, checkResultFreshness, resultToken, viewToken } from "@/server/results/freshness";
 import { replaceStudentText, submitStudentText } from "@/server/submissions/submissions";
 import { findLeak, INTERNAL_CODES, INTERNAL_LABELS, leakMarkers, type Received } from "./helpers/leak";
 import { getCopy, readTeacherNotice } from "./helpers/review";
@@ -123,6 +123,11 @@ async function studentReceives(copy: Copy): Promise<Received[]> {
     await keep(received, `${who}: getPublishedResult`, () => getPublishedResult(actor, assignmentId));
     await keep(received, `${who}: getOwnSubmission`, () => getOwnSubmission(actor, assignmentId));
     await keep(received, `${who}: checkFreshnessAction`, () => checkResultFreshness(actor, { assignmentId, token }));
+    // E8.7: the checks of My assignments and of the assignment, with the token of the page as shown.
+    await keep(received, `${who}: checkListFreshnessAction`, async () =>
+      checkListFreshness(actor, { token: viewToken(await listStudentAssignments(actor)) }));
+    await keep(received, `${who}: checkAssignmentFreshnessAction`, async () =>
+      checkAssignmentFreshness(actor, { assignmentId, token: viewToken(await getStudentAssignment(actor, assignmentId)) }));
     await keep(received, `${who}: submitTextAction`, () =>
       submitStudentText(actor, { assignmentId, contentVersion: 1, requestId: randomUUID(), text: "A second text." }, noTrigger));
     const closed = (await getStudentAssignment(actor, assignmentId))?.canReplace !== true;

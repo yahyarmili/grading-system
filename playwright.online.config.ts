@@ -13,7 +13,7 @@ if (!url) throw new Error("E2E_ONLINE_URL is not set");
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: ["e7-journey.spec.ts", "e7-review-measure.spec.ts", "e8-journey.spec.ts", "route-statuses.spec.ts"],
+  testMatch: ["e7-journey.spec.ts", "e7-review-measure.spec.ts", "e8-journey.spec.ts", "route-statuses.spec.ts", "student-back.spec.ts"],
   workers: 1,
   fullyParallel: false,
   retries: 0,

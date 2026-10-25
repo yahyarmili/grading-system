@@ -251,9 +251,16 @@ describe("the shortcut 'Validate and publish' (D6, PUB-01 CA2)", { timeout: 120_
         throw new Error("boom");
       },
     });
-    expect(state).toMatchObject({ status: "publish_failed", message: PUBLICATION_MESSAGES.failed, evaluation: { revision: 1 } });
+    expect(state).toMatchObject({ status: "publish_failed", validated: true, message: PUBLICATION_MESSAGES.failed, evaluation: { revision: 1 } });
     expect((await statusOf(copy.submissionId)).status).toBe("validated");
     expect(await eventsOf(copy.submissionId)).toEqual(["evaluation_created", "validated"]);
+
+    // E8.7 (review m3): the teacher tries again, the form on the revision it adopted: published once, validated once.
+    expect(await validateTeacherEvaluation(copy.teacher, form(copy, {}, { revision: 1 }), { publish: true })).toMatchObject({
+      status: "decided", published: true, message: PUBLICATION_MESSAGES.validatedAndPublished, evaluation: { revision: 1 },
+    });
+    expect((await statusOf(copy.submissionId)).status).toBe("published");
+    expect(await eventsOf(copy.submissionId)).toEqual(["evaluation_created", "validated", "published"]);
   });
 
   it("R3: another tab changed the copy between the two acts: back To review, the publication refused, said", async () => {
@@ -265,7 +272,8 @@ describe("the shortcut 'Validate and publish' (D6, PUB-01 CA2)", { timeout: 120_
         return publishEvaluation(actor, seen);
       },
     });
-    expect(state).toMatchObject({ status: "publish_failed", message: PUBLICATION_MESSAGES.notValidated });
+    // E8.7 (review m2): said as not Validated any more.
+    expect(state).toMatchObject({ status: "publish_failed", validated: false, message: PUBLICATION_MESSAGES.sentBackMeanwhile });
     expect((await statusOf(copy.submissionId)).status).toBe("to_review");
     expect(await eventsOf(copy.submissionId)).toEqual(["evaluation_created", "validated", "sent_back_to_review", "evaluation_changed"]);
   });

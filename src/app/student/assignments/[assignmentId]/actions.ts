@@ -12,6 +12,7 @@ import {
   type SubmitTextState,
 } from "@/server/submissions/submissions";
 import { acknowledgeNoticeReading, type AcknowledgeNoticeState } from "@/server/notices/notices";
+import { checkAssignmentFreshness } from "@/server/results/freshness";
 
 // SUB-02: the student submits their own text; the data layer acts only on an
 // assignment they received, whatever the form sends.
@@ -52,4 +53,9 @@ export async function replaceTextAction(_previous: ReplaceTextState, form: FormD
   // The page shows the new date and what is left, or why it is closed.
   if (state.status === "done" || (state.status === "error" && state.reason !== "notAllowed")) refresh();
   return state;
+}
+
+/** PUB-01 CA3, PUB-02 R2 (E8.7): the assignment shown again is checked first. A boolean only. */
+export async function checkAssignmentFreshnessAction(assignmentId: string, token: string): Promise<boolean> {
+  return checkAssignmentFreshness(await getActor(), { assignmentId, token });
 }

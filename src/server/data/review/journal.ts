@@ -28,7 +28,8 @@ export type JournalEntryView = {
 
 /**
  * The log of one of the teacher's copies, newest first; the entries of one
- * save share its date and revision (the screen groups them). Null when the
+ * save share its revision (the screen groups them), each dated in order by
+ * the database (clock_timestamp(), 0020). Null when the
  * copy is absent, another teacher's, or before the teacher notice is read.
  */
 export async function listCopyJournal(actor: Actor, submissionId: string): Promise<JournalEntryView[] | null> {

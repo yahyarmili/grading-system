@@ -7,7 +7,7 @@ import { STUDENT_NOTICE } from "@/lib/texts";
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
 import { getSimulator } from "@/server/ai";
-import { createAssignment } from "@/server/data/assignments/assignments";
+import { createAssignment, getStudentAssignment, listStudentAssignments } from "@/server/data/assignments/assignments";
 import { createClass } from "@/server/data/classes/classes";
 import { acknowledgeNotice } from "@/server/data/notices/notices";
 import { withdrawPublication } from "@/server/data/review/publication";
@@ -19,7 +19,7 @@ import { aiProposals, classMemberships, submissions, users } from "@/server/db/s
 import { evaluateSubmission } from "@/server/evaluation/evaluate";
 import { saveTeacherEvaluation } from "@/server/review/evaluation";
 import { validateTeacherEvaluation } from "@/server/review/publication";
-import { checkResultFreshness, resultToken } from "@/server/results/freshness";
+import { checkAssignmentFreshness, checkListFreshness, checkResultFreshness, resultToken, viewToken } from "@/server/results/freshness";
 import { getCopy, listAssignmentCopies, readTeacherNotice } from "./helpers/review";
 
 // PUB-02 (E8.3): the student reads their published result through one closed
@@ -156,11 +156,22 @@ describe("the student's result (PUB-02)", { timeout: 180_000 }, () => {
     expect(await checkResultFreshness(copy.classmate, { assignmentId: copy.assignmentId, token })).toBe(false);
     expect(await checkResultFreshness(copy.teacher, { assignmentId: copy.assignmentId, token })).toBe(false);
 
-    // Withdrawn: nothing again, and the page shown before is no longer fresh (PUB-01 CA3).
+    // E8.7: My assignments and the assignment as shown are fresh too, for this student only.
+    const listToken = viewToken(await listStudentAssignments(copy.student));
+    const assignmentToken = viewToken(await getStudentAssignment(copy.student, copy.assignmentId));
+    expect(await checkListFreshness(copy.student, { token: listToken })).toBe(true);
+    expect(await checkAssignmentFreshness(copy.student, { assignmentId: copy.assignmentId, token: assignmentToken })).toBe(true);
+    expect(await checkListFreshness(copy.classmate, { token: listToken })).toBe(false);
+    expect(await checkAssignmentFreshness(copy.classmate, { assignmentId: copy.assignmentId, token: assignmentToken })).toBe(false);
+    expect(await checkAssignmentFreshness(copy.teacher, { assignmentId: copy.assignmentId, token: assignmentToken })).toBe(false);
+
+    // Withdrawn: nothing again, and the pages shown before are no longer fresh (PUB-01 CA3).
     const { seen: published } = await seenOf(copy.teacher, copy.assignmentId, copy.student.userId);
     expect(await withdrawPublication(copy.teacher, published)).toMatchObject({ ok: true });
     expect(await getPublishedResult(copy.student, copy.assignmentId)).toBeNull();
     expect(await checkResultFreshness(copy.student, { assignmentId: copy.assignmentId, token })).toBe(false);
+    expect(await checkListFreshness(copy.student, { token: listToken })).toBe(false);
+    expect(await checkAssignmentFreshness(copy.student, { assignmentId: copy.assignmentId, token: assignmentToken })).toBe(false);
   });
 
   it("a removed student still reads their published result (SUB-01 R4, CLS-04 CA3)", async () => {

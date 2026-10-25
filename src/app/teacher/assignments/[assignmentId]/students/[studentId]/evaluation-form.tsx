@@ -222,10 +222,10 @@ export function EvaluationForm({
     if (state.status === "saved" && state.sentBack) {
       showNotice({ title: "To review again", message: SENT_BACK });
     }
-    // PUB-01 R3: the shortcut's second act failed; the copy stays Validated.
+    // PUB-01 R3: the shortcut's second act failed; the copy stays Validated, unless changed meanwhile (E8.7).
     if (state.status === "publish_failed") {
       setStale(false);
-      showNotice({ title: "Validated, but not published", message: state.message });
+      showNotice({ title: state.validated ? "Validated, but not published" : "Not published", message: state.message });
       router.refresh();
     }
     // Replaced or closed meanwhile: the page shows the copy as it is now, the message above it (R5).

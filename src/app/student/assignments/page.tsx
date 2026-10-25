@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { CalendarClock, ClipboardList, Languages, School } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { FreshnessGuard } from "@/components/freshness-guard";
 import { LoadingState } from "@/components/loading";
 import { MetaList, PageHeader } from "@/components/shell/shell-parts";
 import { LateTag, StudentStatusTag } from "@/components/status-tag";
@@ -10,9 +12,12 @@ import { Button } from "@/components/ui/button";
 import { languageLabels } from "@/lib/assignment";
 import { formatDateTime } from "@/lib/dates";
 import { studentStatuses, studentStatusLabels, type StudentStatus } from "@/lib/submission-status";
+import type { Actor } from "@/server/access/actor";
 import { getActor } from "@/server/auth/session";
 import { listStudentAssignments, type StudentAssignment } from "@/server/data/assignments/assignments";
 import { listClasses } from "@/server/data/classes/classes";
+import { viewToken } from "@/server/results/freshness";
+import { checkListFreshnessAction } from "./actions";
 
 export const metadata: Metadata = { title: "My assignments" };
 
@@ -38,7 +43,19 @@ const order = (status: StudentStatus) => (a: StudentAssignment, b: StudentAssign
 async function AssignmentList() {
   const actor = await getActor();
   const assignments = await listStudentAssignments(actor);
+  // PUB-01 CA3 (E8.7): shown again by back or forward, the states are checked first.
+  return (
+    <FreshnessGuard
+      renderId={randomUUID()}
+      check={checkListFreshnessAction.bind(null, viewToken(assignments))}
+      label="Checking your assignments…"
+    >
+      <Assignments actor={actor} assignments={assignments} />
+    </FreshnessGuard>
+  );
+}
 
+async function Assignments({ actor, assignments }: { actor: Actor; assignments: StudentAssignment[] }) {
   if (assignments.length === 0) {
     // CA3: without a class, say how to get one; with classes, nothing was sent yet.
     const classes = await listClasses(actor);

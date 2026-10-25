@@ -143,6 +143,17 @@ export const ENTRY_POINTS: Record<string, EntryPoint> = {
   "src/app/student/assignments/[assignmentId]/actions.ts#acknowledgeNoticeAction": { resource: "noticeAcknowledgement", action: "write" },
   // PUB-01 CA3 (E8.3): the result shown again is checked first; a boolean only.
   "src/app/student/assignments/[assignmentId]/result/actions.ts#checkFreshnessAction": { resource: "publishedEvaluation", action: "read" },
+  // E8.7: My assignments and an assignment shown again are checked first too; a boolean only.
+  "src/app/student/assignments/actions.ts#checkListFreshnessAction": {
+    resource: "assignment",
+    action: "read",
+    also: [{ resource: "ownSubmissionStatus", action: "read" }],
+  },
+  "src/app/student/assignments/[assignmentId]/actions.ts#checkAssignmentFreshnessAction": {
+    resource: "assignment",
+    action: "read",
+    also: [{ resource: "ownSubmissionStatus", action: "read" }],
+  },
   "src/app/api/cron/evaluation-sweep/route.ts#GET": {
     system: "E6, PRC-01 CA4: Vercel's cron, with CRON_SECRET; releases stuck evaluations and starts again the stale received ones, answers counts only",
   },

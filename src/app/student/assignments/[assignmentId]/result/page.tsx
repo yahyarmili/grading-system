@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookOpen, Info, Sparkles, UserCheck } from "lucide-react";
 import { z } from "zod";
 import { Alert } from "@/components/alert";
+import { FreshnessGuard } from "@/components/freshness-guard";
 import { BackLink, PageHeader } from "@/components/shell/shell-parts";
 import { StudentStatusTag } from "@/components/status-tag";
 import { formatGrade } from "@/lib/grade";
@@ -18,7 +20,7 @@ import {
 import { getActor } from "@/server/auth/session";
 import { getPublishedResult } from "@/server/data/results/student";
 import { resultToken } from "@/server/results/freshness";
-import { ResultFreshness } from "./result-freshness";
+import { checkFreshnessAction } from "./actions";
 
 export const metadata: Metadata = { title: "Your result" };
 
@@ -28,7 +30,8 @@ export const metadata: Metadata = { title: "Your result" };
 // rubric they were given on. Not published, withdrawn, another student's or
 // missing: a real 404, checked before any streaming (instant = false), the
 // same for all. Server components only: the one client component receives
-// the assignment's id and an opaque token, never the result's data.
+// a render id and an action bound to the assignment's id and an opaque
+// token, never the result's data.
 export const instant = false;
 
 export default async function Page({ params }: PageProps<"/student/assignments/[assignmentId]/result">) {
@@ -43,7 +46,12 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
     <>
       <BackLink href={`/student/assignments/${result.assignmentId}`}>{result.title}</BackLink>
       <PageHeader title="Your result" />
-      <ResultFreshness assignmentId={result.assignmentId} token={resultToken(result)}>
+      <FreshnessGuard
+        renderId={randomUUID()}
+        check={checkFreshnessAction.bind(null, result.assignmentId, resultToken(result))}
+        label="Checking your result…"
+        unmount
+      >
         <div className="flex max-w-2xl flex-col gap-5">
           <GradeCard result={result} />
           {rubric.language !== result.language && <Alert tone="info">{RESULT_RUBRIC_SUBSTITUTE_NOTICE}</Alert>}
@@ -96,7 +104,7 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
             )}
           </section>
         </div>
-      </ResultFreshness>
+      </FreshnessGuard>
     </>
   );
 }

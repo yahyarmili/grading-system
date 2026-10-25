@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CalendarClock, Languages } from "lucide-react";
 import { z } from "zod";
+import { FreshnessGuard } from "@/components/freshness-guard";
 import { BackLink, PageHeader } from "@/components/shell/shell-parts";
 import { LateTag } from "@/components/status-tag";
 import { languageLabels, type AssignmentLanguage } from "@/lib/assignment";
@@ -11,6 +12,8 @@ import { getActor } from "@/server/auth/session";
 import { getStudentAssignment } from "@/server/data/assignments/assignments";
 import { getNoticeAcknowledgement } from "@/server/data/notices/notices";
 import { getOwnSubmission, type OwnSubmission } from "@/server/data/submissions/student";
+import { viewToken } from "@/server/results/freshness";
+import { checkAssignmentFreshnessAction } from "./actions";
 import { SubmissionPanel } from "./submission-panel";
 
 export const metadata: Metadata = { title: "Assignment" };
@@ -43,7 +46,13 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
           { icon: Languages, label: languageLabels[assignment.language] },
         ]}
       />
-      <div className="flex max-w-2xl flex-col gap-5">
+      {/* PUB-01 CA3 (E8.7): shown again by back or forward, the state is checked first; the text typed is kept. */}
+      <FreshnessGuard
+        renderId={randomUUID()}
+        check={checkAssignmentFreshnessAction.bind(null, assignment.id, viewToken(assignment))}
+        label="Checking the assignment…"
+        className="flex max-w-2xl flex-col gap-5"
+      >
         <section aria-labelledby="task-title" className="card flex flex-col gap-3 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 id="task-title" className="text-base font-semibold">
@@ -80,7 +89,7 @@ export default async function Page({ params }: PageProps<"/student/assignments/[
           noticeRead={noticeRead}
           readBack={submission && <ReadBack submission={submission} language={assignment.language} />}
         />
-      </div>
+      </FreshnessGuard>
     </>
   );
 }
