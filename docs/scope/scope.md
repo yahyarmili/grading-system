@@ -95,7 +95,7 @@ Spec [0011](../specs/0011-image-channel/index.md)
 Spec [0012](../specs/0012-production-deployment-main/index.md)
 - [x] Design it (spec): `/architect production deployment`
 - [ ] Build it: `/develop production deployment`
-  - [ ] Code before going public: `vercel.json`, demo notice, production email refusal, `prod` wrapper (AC-1, AC-5, AC-6, AC-7, AC-10)
+  - [x] Code before going public: `vercel.json`, demo notice, production email refusal, `prod` wrapper (AC-1, AC-5, AC-6, AC-7, AC-10)
   - [ ] Production set up: Neon project, Vercel Production variables, key, migration and first admin (AC-2, AC-4, AC-7)
   - [ ] Release procedure written and first release made, checked online (AC-1, AC-3, AC-4, AC-5, AC-8, AC-9)
 - [ ] Verify it: `/check verify production deployment`

@@ -28,6 +28,35 @@ describe("selectTransport", () => {
   });
 });
 
+describe("selectTransport in production (spec 0012, AC-6)", () => {
+  it("uses SMTP when both variables exist", () => {
+    expect(selectTransport({ VERCEL_ENV: "production", NODE_ENV: "production", SMTP_USER: "u", SMTP_PASSWORD: "p" })).toBe("smtp");
+  });
+
+  it("throws instead of capturing when an SMTP variable is missing", () => {
+    expect(() => selectTransport({ VERCEL_ENV: "production", NODE_ENV: "production" })).toThrow("Email is not configured");
+    expect(() => selectTransport({ VERCEL_ENV: "production", SMTP_USER: "u" })).toThrow("Email is not configured");
+    expect(() => selectTransport({ VERCEL_ENV: "production", SMTP_PASSWORD: "p" })).toThrow("Email is not configured");
+  });
+
+  it("checks production before EMAIL_TRANSPORT and NODE_ENV", () => {
+    expect(() => selectTransport({ VERCEL_ENV: "production", EMAIL_TRANSPORT: "capture" })).toThrow("Email is not configured");
+    expect(() => selectTransport({ VERCEL_ENV: "production", NODE_ENV: "test" })).toThrow("Email is not configured");
+    expect(selectTransport({ VERCEL_ENV: "production", EMAIL_TRANSPORT: "capture", SMTP_USER: "u", SMTP_PASSWORD: "p" })).toBe("smtp");
+  });
+
+  it("never names a value in its error", () => {
+    expect(() => selectTransport({ VERCEL_ENV: "production", SMTP_USER: "secret-user@example.test" })).toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining("secret-user") }),
+    );
+  });
+
+  it("leaves Preview unchanged", () => {
+    expect(selectTransport({ VERCEL_ENV: "preview", NODE_ENV: "production" })).toBe("capture");
+    expect(selectTransport({ VERCEL_ENV: "preview", SMTP_USER: "u", SMTP_PASSWORD: "p" })).toBe("smtp");
+  });
+});
+
 describe("SmtpEmailSender", () => {
   it("bounds each phase of the connection (E6.6): never minutes inside an evaluation step", () => {
     // Nothing is sent: the transport connects on the first sendMail only.

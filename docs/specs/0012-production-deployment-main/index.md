@@ -1,7 +1,7 @@
 # 0012. Production deployment from `main`, with the real AI (E9.5)
 
 **Date**: 2026-10-26
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

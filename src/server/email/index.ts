@@ -1,5 +1,6 @@
 import "server-only";
 import path from "node:path";
+import { isProductionDeployment } from "@/lib/deployment";
 import { CaptureEmailSender } from "./capture";
 import { SmtpEmailSender } from "./smtp";
 import type { EmailSender } from "./types";
@@ -9,6 +10,8 @@ export { CaptureEmailSender, type CapturedEmail } from "./capture";
 
 type EmailEnv = {
   NODE_ENV?: string;
+  /** "production" on the Vercel Production deployment (spec 0012): SMTP or nothing. */
+  VERCEL_ENV?: string;
   SMTP_USER?: string;
   SMTP_PASSWORD?: string;
   /** "capture" forces the capture transport (E2E server), even with SMTP variables. */
@@ -17,8 +20,17 @@ type EmailEnv = {
   MAIL_CAPTURE_DIR?: string;
 };
 
-/** Tests and the E2E server always capture; otherwise SMTP as soon as both SMTP variables exist. */
+/**
+ * Production sends by SMTP or throws, checked before anything else so that no
+ * variable can drop its mail (spec 0012, AC-6). Elsewhere, tests and the E2E
+ * server always capture; otherwise SMTP as soon as both SMTP variables exist.
+ * Called at the first send, never at import, so a build never fails on it.
+ */
 export function selectTransport(env: EmailEnv): "capture" | "smtp" {
+  if (isProductionDeployment(env)) {
+    if (env.SMTP_USER && env.SMTP_PASSWORD) return "smtp";
+    throw new Error("Email is not configured: SMTP_USER and SMTP_PASSWORD are required in production");
+  }
   if (env.NODE_ENV === "test" || env.EMAIL_TRANSPORT === "capture") return "capture";
   return env.SMTP_USER && env.SMTP_PASSWORD ? "smtp" : "capture";
 }
@@ -38,7 +50,13 @@ const globalForEmail = globalThis as unknown as { emailSender?: EmailSender };
 
 /** The only way the application sends an email. */
 export function getEmailSender(): EmailSender {
-  globalForEmail.emailSender ??= createSender(process.env);
+  try {
+    globalForEmail.emailSender ??= createSender(process.env);
+  } catch (error) {
+    // Callers swallow send errors as already logged: the missing configuration must show.
+    console.error(`[email] ${error instanceof Error ? error.message : "transport not configured"}`);
+    throw error;
+  }
   return globalForEmail.emailSender;
 }
 

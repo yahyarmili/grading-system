@@ -204,3 +204,6 @@ export const FRENCH_RUBRIC_PENDING_NOTICE = {
   title: "French version not validated yet",
   body: "French assignments use the same criteria, but their French wording is still to be validated. Until it is, the AI makes no proposal for a French assignment: the teacher marks it without one.",
 };
+
+/** Spec 0012 [D, 2026-10-26], conception C4: on every production page while Q12 is open. */
+export const DEMO_NOTICE = "Demo, fictitious data only. Do not submit real student work.";

@@ -280,4 +280,7 @@ export const SCRIPTS: Record<string, string> = {
     "npm run ai:trial: connection trial and trial sets (E5.7, E5.14) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
   "scripts/ai-read.ts":
     "npm run ai:read: the handwriting trial (E9.0, spec 0011) on fictitious photos through the product's Reader; stores nothing but the security log; the simulator unless --provider anthropic",
+  "scripts/prod-run.ts":
+    "npm run prod: runs one script of PROD_SCRIPTS against the production database (spec 0012, AC-7), its address passed through the environment only; adds no access of its own",
+  "scripts/prod-guard.ts": "the rules of npm run prod (allow list, production variables, guard against the dev and test databases); no database access",
 };

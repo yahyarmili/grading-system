@@ -21,7 +21,8 @@
     "ai:trial": "tsx --conditions=react-server scripts/ai-trial.ts",
     "ai:evaluate": "tsx --conditions=react-server scripts/evaluate.ts",
     "ai:report": "tsx --conditions=react-server scripts/evaluation-report.ts",
-    "ai:read": "tsx --conditions=react-server scripts/ai-read.ts"
+    "ai:read": "tsx --conditions=react-server scripts/ai-read.ts",
+    "prod": "tsx scripts/prod-run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",
