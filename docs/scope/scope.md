@@ -108,6 +108,7 @@ Spec [0012](../specs/0012-production-deployment-main/index.md)
 
 ### 14. Hardening & quality measurement (E10) · needs a decision
 A: full automated matrix, leak and AI isolation sweeps on text and image, faults, sessions and links, accessibility, backup export, SDK upgrade procedure, independent review. B: quality measures from the journal under a protocol the client validates (stability, CA3, alerts, reading fidelity); vote k = 3 and thinking variant decided there.
+Carried from E9.5 (2026-10-26): `e2e/e7-journey.spec.ts` fails now and then on 15 s waits (passed 1 of 3 on `preview`, 2 of 2 on `c9664ba`; a `next dev` request of 11 to 16 s on first compile or slow Neon, no wrong result); accepted for the first release as a known environment fragility, to make robust in part A.
 **Done when:** part A passes with no open exception the client has not accepted (blocking for E11); part B reports each measure as is, with a client decision per adjustment.
 - [ ] Design it (spec): `/architect hardening and quality measurement`
 
