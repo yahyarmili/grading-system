@@ -24,6 +24,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 11 | Teacher review (E7) | Slice 1: text cycle | existing |
 | 12 | Validation, publication & student result (E8) | Slice 1: text cycle | existing |
 | 13 | Image channel (E9) | Slice 2: image | done |
+| 13.5 | Production deployment (E9.5) | Slice 2.5: production | in-progress |
 | 14 | Hardening & quality measurement (E10) | Slice 3: hardening | planned |
 | 15 | Demonstration (E11) | Slice 4: demo | planned |
 | 16 | Final review | Slice 4: demo | planned |
@@ -85,6 +86,22 @@ Spec [0011](../specs/0011-image-channel/index.md)
 - [x] Test it: `/test image channel`
 - [x] Review it (fresh model): `/check review image channel`
 - [x] Document it: `/document image channel`
+
+## Slice 2.5: Production
+
+### 13.5. Production deployment (E9.5) · in-progress
+`main` becomes the production branch, deployed by Vercel on its own Neon project with the real AI (`claude-haiku-5-5`) always on behind the existing guards; work stays on `preview`, which moves into `main` by fast forward once a step passes the release gate. Demo notice on every production page.
+**Done when:** AC-1 to AC-10 of spec 0012 hold on production, and the first release was made with the written procedure.
+Spec [0012](../specs/0012-production-deployment-main/index.md)
+- [x] Design it (spec): `/architect production deployment`
+- [ ] Build it: `/develop production deployment`
+  - [ ] Code before going public: `vercel.json`, demo notice, production email refusal, `prod` wrapper (AC-1, AC-5, AC-6, AC-7, AC-10)
+  - [ ] Production set up: Neon project, Vercel Production variables, key, migration and first admin (AC-2, AC-4, AC-7)
+  - [ ] Release procedure written and first release made, checked online (AC-1, AC-3, AC-4, AC-5, AC-8, AC-9)
+- [ ] Verify it: `/check verify production deployment`
+- [ ] Test it: `/test production deployment`
+- [ ] Review it (fresh model): `/check review production deployment`
+- [ ] Document it: `/document production deployment`
 
 ## Slice 3: Hardening
 

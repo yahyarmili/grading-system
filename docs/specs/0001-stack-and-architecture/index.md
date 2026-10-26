@@ -39,7 +39,7 @@ The app is one TypeScript Next.js project hosted on Vercel, with PostgreSQL on N
 | Email | Nodemailer with Gmail SMTP (demo only), capture in tests | Zero cost |
 | Images | In PostgreSQL, separate table, one controlled route | No public storage link |
 | Tests | Vitest 5.0.4 (unit and integration projects), Playwright 1.64 | One runner per level |
-| Hosting | Vercel Hobby, region `cle1` | Zero cost; `main` is never deployed |
+| Hosting | Vercel Hobby, region `cle1` | Zero cost; `main` is production, moved by fast forward from `preview` ([spec 0012](../0012-production-deployment-main/index.md)) |
 | Local dev | Docker Desktop and Docker Compose, Node 24 in a container | No Node on the workstation |
 | Observability | Security events and evaluation journal in the database; `npm run ai:report` | No paid monitoring |
 
@@ -68,7 +68,7 @@ Shipped as phases 0 to 2 and steps E1 to E8 (see `docs/scope/scope.md`). No buil
 ## Follow-up
 
 - [ ] E9: confirm Haiku vision behind a separate `Reader` interface (trial E9.0).
-- [ ] E11: decide the final deployment (keep the preview, make `preview` the production branch, or deploy `main` with its own Neon database).
+- [x] Final deployment decided in E9.5: `main` deployed with its own Neon database ([spec 0012](../0012-production-deployment-main/index.md)).
 
 ## Rationale
 
