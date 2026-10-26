@@ -57,6 +57,7 @@ Fast forward on request (chosen) keeps one history and no merge commits; a GitHu
 - `vercel.app` domain: zero cost.
 - Start empty plus the admin: the fictitious demo data set stays in E11.
 - Rollback by Vercel Instant Rollback rather than `git revert`: immediate, no rebuild, and `main` keeps matching `preview`. It is safe only because migrations stay additive.
+- Reading production's AI results (updated 2026-10-26, during the build): the first draft named `ai:read` for it, but `ai:read` is the handwriting trial, which sends photos to the AI, and `ai:report` shows neither the model that answered, nor the request lines, nor the month cost against the cap. A new read only `ai:status` was chosen over extending `ai:report`: the report is a measures document copied into conception/, and a release check would blur it. `ai:read` leaves the `prod` allow list, because its calls would count in production's log and cap; trials stay on dev. The month cost reuses the guard's own computation, so what the agent reads is what the guard compares. A cross check on another model then found that AC-4 had claimed the daily limit protects production: it guards the commands only, so AC-4 now rests on the cap and the breaker, and `ai:status` shows the daily count as information.
 - Scope placement: a new step E9.5 rather than the head of E10, which would mix two unrelated subjects.
 
 ## Rationale

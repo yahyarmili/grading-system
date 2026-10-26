@@ -91,11 +91,12 @@ Spec [0011](../specs/0011-image-channel/index.md)
 
 ### 13.5. Production deployment (E9.5) · in-progress
 `main` becomes the production branch, deployed by Vercel on its own Neon project with the real AI (`claude-haiku-5-5`) always on behind the existing guards; work stays on `preview`, which moves into `main` by fast forward once a step passes the release gate. Demo notice on every production page.
-**Done when:** AC-1 to AC-10 of spec 0012 hold on production, and the first release was made with the written procedure.
+**Done when:** AC-1 to AC-11 of spec 0012 hold on production, and the first release was made with the written procedure.
 Spec [0012](../specs/0012-production-deployment-main/index.md)
 - [x] Design it (spec): `/architect production deployment`
 - [ ] Build it: `/develop production deployment`
   - [x] Code before going public: `vercel.json`, demo notice, production email refusal, `prod` wrapper (AC-1, AC-5, AC-6, AC-7, AC-10)
+  - [ ] `ai:status` to read production's AI results, and `ai:read` out of the `prod` allow list (AC-3, AC-4, AC-7, AC-11)
   - [ ] Production set up: Neon project, Vercel Production variables, key, migration and first admin (AC-2, AC-4, AC-7)
   - [ ] Release procedure written and first release made, checked online (AC-1, AC-3, AC-4, AC-5, AC-8, AC-9)
 - [ ] Verify it: `/check verify production deployment`
