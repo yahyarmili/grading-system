@@ -169,6 +169,13 @@
       "when": 1792960582463,
       "tag": "0023_allow_transcription_retry_request",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792972806544,
+      "tag": "0024_index_draft_updated_at",
+      "breakpoints": true
     }
   ]
 }

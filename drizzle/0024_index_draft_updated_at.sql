@@ -1,0 +1,1 @@
+CREATE INDEX "submission_drafts_updated_at_idx" ON "submission_drafts" USING btree ("updated_at");

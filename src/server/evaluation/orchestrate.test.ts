@@ -91,6 +91,77 @@ describe("orchestrate", () => {
   });
 });
 
+describe("orchestrate, an image version sent unchecked (E9, spec 0011)", () => {
+  const PAGES = ["p1", "p2", "p3"];
+  const claimed = (deps: ReturnType<typeof fakes>, pageIds = PAGES) => {
+    deps.startTranscription.mockResolvedValue({ status: "claimed", pageIds });
+    return deps;
+  };
+
+  it("reads every page in order, then evaluates the assembled text under the same token", async () => {
+    const deps = claimed(fakes(async () => done));
+    deps.transcribePage.mockResolvedValueOnce("read").mockResolvedValueOnce("no_writing").mockResolvedValueOnce("read");
+    expect(await orchestrate(ref, TOKEN, deps)).toEqual(done);
+    expect(deps.transcribePage.mock.calls).toEqual(PAGES.map((pageId) => [ref, TOKEN, pageId]));
+    expect(deps.endTranscription.mock.calls).toEqual([[ref, TOKEN]]);
+    expect(deps.evaluate.mock.calls).toEqual([[ref, TOKEN, true]]);
+    expect(deps.transcribePage.mock.contexts).toEqual([undefined, undefined, undefined]);
+  });
+
+  it.each(["failed", "closed", "stopped"] as const)("a page %s stops the pages; the last step still decides", async (page) => {
+    const deps = claimed(fakes(async () => done));
+    deps.transcribePage.mockResolvedValueOnce("read").mockResolvedValueOnce(page);
+    deps.endTranscription.mockResolvedValue("transcription_failed");
+    expect(await orchestrate(ref, TOKEN, deps)).toEqual({ status: "transcription_failed", pages: 1 });
+    expect(deps.transcribePage).toHaveBeenCalledTimes(2);
+    expect(deps.endTranscription).toHaveBeenCalledTimes(1);
+    expect(deps.evaluate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["not_assessable", "no_writing"],
+    ["stale", "stale"],
+  ] as const)("the last step's %s ends the run as %s, without an evaluation", async (end, status) => {
+    const deps = claimed(fakes(async () => done));
+    deps.endTranscription.mockResolvedValue(end);
+    expect(await orchestrate(ref, TOKEN, deps)).toEqual({ status, pages: PAGES.length });
+    expect(deps.evaluate).not.toHaveBeenCalled();
+    expect(deps.release).not.toHaveBeenCalled();
+  });
+
+  it("no page left to read goes to the last step at once", async () => {
+    const deps = claimed(fakes(async () => done), []);
+    expect(await orchestrate(ref, TOKEN, deps)).toEqual(done);
+    expect(deps.transcribePage).not.toHaveBeenCalled();
+    expect(deps.evaluate.mock.calls).toEqual([[ref, TOKEN, true]]);
+  });
+
+  it("a busy start waits for a place like an evaluation, then transcribes", async () => {
+    const deps = fakes(async () => done);
+    deps.startTranscription.mockResolvedValueOnce({ status: "busy" }).mockResolvedValue({ status: "claimed", pageIds: ["p1"] });
+    expect(await orchestrate(ref, TOKEN, deps)).toEqual(done);
+    expect(deps.sleep.mock.calls).toEqual([[EVALUATION_BUSY_WAIT_MS]]);
+    expect(deps.transcribePage).toHaveBeenCalledTimes(1);
+  });
+
+  it("a busy start every time gives up like an evaluation, with nothing read", async () => {
+    const deps = fakes(async () => done);
+    deps.startTranscription.mockResolvedValue({ status: "busy" });
+    expect(await orchestrate(ref, TOKEN, deps)).toEqual({ status: "busy" });
+    expect(deps.sleep).toHaveBeenCalledTimes(EVALUATION_BUSY_MAX_WAITS);
+    expect(deps.transcribePage).not.toHaveBeenCalled();
+    expect(deps.evaluate).not.toHaveBeenCalled();
+  });
+
+  it.each(["transcribePage", "endTranscription"] as const)("releases its own claim when %s fails", async (step) => {
+    const deps = claimed(fakes(async () => done));
+    deps[step].mockRejectedValue(new Error("step failed"));
+    await expect(orchestrate(ref, TOKEN, deps)).rejects.toThrow("step failed");
+    expect(deps.release.mock.calls).toEqual([[ref, TOKEN]]);
+    expect(deps.evaluate).not.toHaveBeenCalled();
+  });
+});
+
 describe("the bounds of a step (plan of E6 §2, §9)", () => {
   it("one step, every attempt at its timeout, fits in a Vercel function", () => {
     expect(AI_CALL_TIMEOUT_MS).toBe(60_000);

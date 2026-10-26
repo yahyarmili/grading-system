@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, Camera, CircleCheck, PencilLine, RotateCw, ScanText, Send, Trash2, Undo2 } from "lucide-react";
 import { Alert } from "@/components/alert";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -93,6 +93,20 @@ export function ImagesSection({
   const fileRef = useRef<HTMLInputElement>(null);
   const retakeRef = useRef<HTMLInputElement>(null);
   const retakeTarget = useRef<string | null>(null);
+  // The local previews made here, by page id: freed once the page is retaken, deleted, or the section leaves.
+  const previews = useRef(new Map<string, string>());
+  const releasePreview = (id: string) => {
+    const url = previews.current.get(id);
+    if (url) URL.revokeObjectURL(url);
+    previews.current.delete(id);
+  };
+  useEffect(() => {
+    const made = previews.current;
+    return () => {
+      for (const url of made.values()) URL.revokeObjectURL(url);
+      made.clear();
+    };
+  }, []);
 
   const update = (id: string, change: Partial<Page>) => setPages((all) => all.map((p) => (p.id === id ? { ...p, ...change } : p)));
   const dropChanges = (id: string) =>
@@ -136,12 +150,18 @@ export function ImagesSection({
       const { draftId: id, pageId, position } = (await response.json()) as { draftId: string; pageId: string; position: number };
       // The draft exists from the first page on.
       setDraftId(id);
-      const page: Page = { id: pageId, status: "pending", text: null, hasWriting: null, preview: URL.createObjectURL(next.jpeg) };
+      releasePreview(pageId);
+      const preview = URL.createObjectURL(next.jpeg);
+      previews.current.set(pageId, preview);
+      const page: Page = { id: pageId, status: "pending", text: null, hasWriting: null, preview };
       setPages((all) => {
         const rest = all.filter((p) => p.id !== pageId && p.id !== next.replacesPageId);
         return [...rest.slice(0, position - 1), page, ...rest.slice(position - 1)];
       });
-      if (next.replacesPageId) dropChanges(next.replacesPageId);
+      if (next.replacesPageId) {
+        dropChanges(next.replacesPageId);
+        releasePreview(next.replacesPageId);
+      }
       await read(pageId);
     } catch {
       setPendingUpload(next);
@@ -190,6 +210,7 @@ export function ImagesSection({
     if (state.status === "done") {
       setPages((all) => all.filter((p) => p.id !== id));
       dropChanges(id);
+      releasePreview(id);
     } else setEditError(state.message);
   }
 

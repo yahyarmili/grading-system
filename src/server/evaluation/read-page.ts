@@ -1,4 +1,5 @@
 import "server-only";
+import { READ_INTERACTIVE_ATTEMPTS } from "@/config/decisions";
 import { AI_CALL_TIMEOUT_MS, AI_RETRY_DELAY_MS, AI_RETRY_MAX_WAIT_MS, READ_REQUEST_MAX_MS } from "@/config/provisional";
 import type { EvaluationError } from "@/lib/evaluation";
 import { EvaluatorError, getReader, type Reader, type Usage } from "@/server/ai";
@@ -19,7 +20,7 @@ const RETRIED = new Set<EvaluationError>(["timeout", "rate_limited", "unavailabl
 export type ReadingLimits = { attempts: number; maxMs: number; sleep?: (ms: number) => Promise<void> };
 
 /** The student's read: one attempt and one retry, both within READ_REQUEST_MAX_MS, without a wait: they wait for it. */
-export const INTERACTIVE_READING: ReadingLimits = { attempts: 2, maxMs: READ_REQUEST_MAX_MS };
+export const INTERACTIVE_READING: ReadingLimits = { attempts: READ_INTERACTIVE_ATTEMPTS, maxMs: READ_REQUEST_MAX_MS };
 
 export type ReadingDeps = { reader?: Reader; guard?: AiGuard };
 
@@ -45,7 +46,8 @@ export function readPageWith(subjectId: string, deps: ReadingDeps = {}, limits: 
     let reading: PageReadResult["reading"] = null;
     let wait = 0;
 
-    while (errors.length < limits.attempts && !reading && !deadline.aborted) {
+    // At least one attempt, whatever the limits: a run counts one at least (reading_runs_attempts).
+    do {
       if (errors.length > 0 && limits.sleep && wait > 0) await limits.sleep(wait);
       try {
         const response = await reader.read(request, {
@@ -64,7 +66,7 @@ export function readPageWith(subjectId: string, deps: ReadingDeps = {}, limits: 
         wait = error.kind === "rate_limited" ? (error.retryAfterMs ?? AI_RETRY_DELAY_MS) : AI_RETRY_DELAY_MS;
       }
       if (!reading && (!RETRIED.has(errors.at(-1)!) || wait > AI_RETRY_MAX_WAIT_MS)) break;
-    }
+    } while (errors.length < limits.attempts && !reading && !deadline.aborted);
     return {
       reading,
       run: {

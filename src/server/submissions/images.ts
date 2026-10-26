@@ -7,7 +7,7 @@ import { wordsOf } from "@/lib/transcription";
 import type { Actor } from "@/server/access/actor";
 import { AccessDeniedError } from "@/server/access/errors";
 import { recordSecurityEvent } from "@/server/data/auth/security-events";
-import { addDraftPage, deleteDraftPage, readDraftPage, reorderDraftPages } from "@/server/data/submissions/drafts";
+import { addDraftPage, assertDraftWriter, deleteDraftPage, readDraftPage, reorderDraftPages } from "@/server/data/submissions/drafts";
 import { confirmImages, type ConfirmedChange } from "@/server/data/submissions/submissions";
 import { readPageWith, type ReadingDeps } from "@/server/evaluation/read-page";
 import { PageImageError, preparePage } from "./page-image";
@@ -57,16 +57,17 @@ export async function uploadDraftPage(
     replacesPageId: headers.replacesPageId || undefined,
   });
   if (!z.uuid().safeParse(assignmentId).success || !fields.success) return notFound;
-  if (body.length > PAGE_UPLOAD_MAX_BYTES) return { status: 413, body: { reason: "tooLarge" } };
-
-  let page;
   try {
-    page = await preparePage(body, { formats: ["jpeg"], maxInputPixels: PAGE_INPUT_MAX_PIXELS });
-  } catch (error) {
-    if (error instanceof PageImageError) return { status: 422, body: { reason: "notJpeg" } };
-    throw error;
-  }
-  try {
+    // The role first: a body is measured and decoded only for a role that may write a draft.
+    assertDraftWriter(actor);
+    if (body.length > PAGE_UPLOAD_MAX_BYTES) return { status: 413, body: { reason: "tooLarge" } };
+    let page;
+    try {
+      page = await preparePage(body, { formats: ["jpeg"], maxInputPixels: PAGE_INPUT_MAX_PIXELS });
+    } catch (error) {
+      if (error instanceof PageImageError) return { status: 422, body: { reason: "notJpeg" } };
+      throw error;
+    }
     const result = await addDraftPage(actor, { assignmentId, ...fields.data, page });
     if (!result) return notFound;
     if (result.ok) return { status: 200, body: { draftId: result.draftId, pageId: result.pageId, position: result.position } };

@@ -1,5 +1,6 @@
 import { PAGE_JPEG_QUALITY } from "@/config/provisional";
 import { fitWithin } from "./page-bounds";
+import { PHOTO_SIZE_HEAD_BYTES, photoSizeOfHead } from "./photo-size";
 
 // In the browser (spec 0011): a photo turned upright and shrunk within the
 // vision bounds, encoded as a JPEG on white, before it is uploaded. The
@@ -16,9 +17,14 @@ export class PhotoOpenError extends Error {
 export async function shrinkPhoto(file: Blob): Promise<Blob> {
   let bitmap: ImageBitmap;
   try {
-    const probe = await createImageBitmap(file, { imageOrientation: "from-image" });
-    const size = fitWithin(probe.width, probe.height);
-    probe.close();
+    // The size from the header when it says it, so the photo is decoded once, already resized.
+    let upright = photoSizeOfHead(new Uint8Array(await file.slice(0, PHOTO_SIZE_HEAD_BYTES).arrayBuffer()));
+    if (!upright) {
+      const probe = await createImageBitmap(file, { imageOrientation: "from-image" });
+      upright = { width: probe.width, height: probe.height };
+      probe.close();
+    }
+    const size = fitWithin(upright.width, upright.height);
     bitmap = await createImageBitmap(file, {
       imageOrientation: "from-image",
       resizeWidth: size.width,

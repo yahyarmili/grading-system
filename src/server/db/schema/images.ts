@@ -54,7 +54,11 @@ export const submissionDrafts = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("submission_drafts_assignment_student_unique").on(t.assignmentId, t.studentId)],
+  (t) => [
+    unique("submission_drafts_assignment_student_unique").on(t.assignmentId, t.studentId),
+    // The sweep's scan at each trigger: the drafts left for DRAFT_TTL_MS.
+    index("submission_drafts_updated_at_idx").on(t.updatedAt),
+  ],
 );
 
 /**

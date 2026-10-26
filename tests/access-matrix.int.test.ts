@@ -46,7 +46,7 @@ import {
 } from "@/server/data/evaluation/teacher";
 import { getPublishedRubrics } from "@/server/data/rubric/rubric";
 import { getPublishedResult } from "@/server/data/results/student";
-import { addDraftPage, deleteDraftPage, getOwnDraft, readDraftPage, reorderDraftPages } from "@/server/data/submissions/drafts";
+import { addDraftPage, assertDraftWriter, deleteDraftPage, getOwnDraft, readDraftPage, reorderDraftPages } from "@/server/data/submissions/drafts";
 import { getPageImage } from "@/server/data/submissions/pages";
 import { getOwnSubmission } from "@/server/data/submissions/student";
 import { confirmImages, replaceText, submitText } from "@/server/data/submissions/submissions";
@@ -361,6 +361,14 @@ const REAL: Partial<Record<Resource, RealResource>> = {
       { run: (actor, { draftId, pageId, secondPageId }) => reorderDraftPages(actor, draftId, [secondPageId, pageId]) },
       { run: (actor, { secondPageId }) => deleteDraftPage(actor, secondPageId) },
       { run: async (actor, { assignmentId }) => addDraftPage(actor, { assignmentId, uploadRequestId: randomUUID(), page: await blankPage() }) },
+      // The role check alone, before an upload is decoded: any student passes it (their own draft is made later), every other role is refused.
+      {
+        run: async (actor) => {
+          assertDraftWriter(actor);
+          return true;
+        },
+        creates: true,
+      },
     ],
   },
   // E9: the student writes their transcription once, at confirmation, and

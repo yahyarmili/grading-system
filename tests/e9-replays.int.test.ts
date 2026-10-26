@@ -21,6 +21,7 @@ import { db } from "@/server/db/client";
 import {
   assignments,
   classMemberships,
+  noticeAcknowledgements,
   readingRuns,
   submissionDrafts,
   submissionPages,
@@ -294,6 +295,8 @@ describe("SUB-03 and the TRX-01 contract: pages read, checked, confirmed (AC-1, 
       [{ ...word, studentWord: "two\nwords" }],
       [{ ...word, wordIndex: 2, engineWord: "page.", studentWord: "beyond" }],
       [{ ...word, studentWord: "First" }, { ...word, studentWord: "Second" }],
+      // The engine's own word again: no change, so the teacher never sees one highlighted.
+      [{ ...word, studentWord: " One " }],
       // The fifth page has no writing: nothing to change on it.
       [{ pageId: pages[4].pageId, wordIndex: 0, engineWord: "x", studentWord: "y" }],
     ];
@@ -593,7 +596,85 @@ describe("the matrix for images: security cases (AC-12)", { timeout: 120_000 }, 
     await acknowledgeNotice(outsider, STUDENT_NOTICE.version);
     expect(await uploadDraftPage(outsider, assignmentId, { uploadRequestId: randomUUID() }, await photo())).toEqual({ status: 404, body: null });
     expect(await uploadDraftPage(teacher, assignmentId, { uploadRequestId: randomUUID() }, await photo())).toEqual({ status: 404, body: null });
+    // The role is checked before the body is measured or decoded: a 404, never the body's own refusal.
+    expect(await uploadDraftPage(teacher, assignmentId, { uploadRequestId: randomUUID() }, new Uint8Array(PAGE_UPLOAD_MAX_BYTES + 1))).toEqual({ status: 404, body: null });
+    expect(await uploadDraftPage(teacher, assignmentId, { uploadRequestId: randomUUID() }, new TextEncoder().encode("not a photo"))).toEqual({ status: 404, body: null });
     expect(await db.select({ id: submissionDrafts.id }).from(submissionDrafts).where(eq(submissionDrafts.studentId, outsider.userId))).toEqual([]);
+  });
+
+  it("NFR-DON-04: the owner teacher sees a version's page only once the teacher notice in force is read, as the copy", async () => {
+    const { teacher, student, assignmentId } = await setup();
+    const reader = new SimulatorReader();
+    const [page] = await readPages(student, assignmentId, reader, ["A page."]);
+    await confirm(student, assignmentId, page.draftId);
+    expect(await getPageImage(teacher, page.pageId)).toBeInstanceOf(Buffer);
+    await db.delete(noticeAcknowledgements).where(eq(noticeAcknowledgements.userId, teacher.userId));
+    expect(await getPageImage(teacher, page.pageId)).toBeNull();
+    await expect(getCopy(teacher, assignmentId, student.userId)).rejects.toThrow("The teacher notice was not read");
+    // The student's own read does not depend on the teacher's notice.
+    expect(await getPageImage(student, page.pageId)).toBeInstanceOf(Buffer);
+    await readTeacherNotice(teacher.userId);
+    expect(await getPageImage(teacher, page.pageId)).toBeInstanceOf(Buffer);
+  });
+});
+
+/** The PostgreSQL error code, through the query builder's wrapping. */
+const pgCode = (error: unknown): string | undefined => {
+  const e = error as { code?: string; cause?: { code?: string } };
+  return e.code ?? e.cause?.code;
+};
+
+/** The database refuses the write by a 0022 trigger (restrict_violation). */
+const refusedByTrigger = async (write: Promise<unknown>) => {
+  const error = await write.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(pgCode(error)).toBe("23001");
+};
+
+describe("the triggers of 0022: what the teacher grades never changes (spec 0011)", { timeout: 120_000 }, () => {
+  it("an attached page, its reading run, its checked transcription and its changes refuse any change; a draft page stays free", async () => {
+    const { student, assignmentId } = await setup();
+    const reader = new SimulatorReader();
+    const [page] = await readPages(student, assignmentId, reader, ["Seen once here."]);
+    const change = { pageId: page.pageId, wordIndex: 1, engineWord: "once", studentWord: "twice" };
+    expect(await confirm(student, assignmentId, page.draftId, { changes: [change] })).toMatchObject({ status: "done" });
+    const submission = await submissionOf(assignmentId, student.userId);
+    const [version] = await versionsOf(submission.id);
+    const [attached] = await pagesOf(version.id);
+    const byId = eq(submissionPages.id, attached.id);
+
+    // The attached page: its bytes, position, version and reading never change; it is never deleted nor sent back to a draft.
+    await refusedByTrigger(db.update(submissionPages).set({ position: 2 }).where(byId));
+    await refusedByTrigger(db.update(submissionPages).set({ image: Buffer.from("other bytes") }).where(byId));
+    await refusedByTrigger(db.update(submissionPages).set({ readingText: "Another reading." }).where(byId));
+    await refusedByTrigger(db.update(submissionPages).set({ versionId: randomUUID() }).where(byId));
+    await refusedByTrigger(db.delete(submissionPages).where(byId));
+    const draft = await upload(student, assignmentId, { shade: 40 });
+    await refusedByTrigger(db.update(submissionPages).set({ draftId: draft.draftId, versionId: null }).where(byId));
+
+    // A draft page is attached once, unchanged: never with another position on the way.
+    await refusedByTrigger(db.update(submissionPages).set({ draftId: null, versionId: version.id, position: 9 }).where(eq(submissionPages.id, draft.pageId)));
+    // While in its draft it changes freely (a reorder), and is deleted freely.
+    await db.update(submissionPages).set({ position: 3 }).where(eq(submissionPages.id, draft.pageId));
+    await db.delete(submissionPages).where(eq(submissionPages.id, draft.pageId));
+
+    // The reading run is kept for good; only its page may go, to null.
+    const byRun = eq(readingRuns.id, attached.readingRunId!);
+    await refusedByTrigger(db.update(readingRuns).set({ attempts: 3 }).where(byRun));
+    await refusedByTrigger(db.delete(readingRuns).where(byRun));
+    await refusedByTrigger(db.update(readingRuns).set({ pageId: null, attempts: 3 }).where(byRun));
+    await db.update(readingRuns).set({ pageId: null }).where(byRun);
+
+    // The checked transcription and the student's changes: written once, at the confirmation.
+    const byVersion = eq(submissionTranscriptions.versionId, version.id);
+    expect((await transcriptionOf(version.id)).text).toBe("Seen twice here.");
+    await refusedByTrigger(db.update(submissionTranscriptions).set({ text: "Seen thrice here." }).where(byVersion));
+    await refusedByTrigger(db.delete(submissionTranscriptions).where(byVersion));
+    await refusedByTrigger(db.update(transcriptionChanges).set({ studentWord: "thrice" }).where(eq(transcriptionChanges.versionId, version.id)));
+    await refusedByTrigger(db.delete(transcriptionChanges).where(eq(transcriptionChanges.versionId, version.id)));
+    expect((await transcriptionOf(version.id)).text).toBe("Seen twice here.");
   });
 });
 

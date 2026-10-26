@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Alert } from "@/components/alert";
@@ -62,10 +63,13 @@ export function ReplaceSection({
   // New pages that replaced the submission: they close the form too.
   const [pagesReplacedAt, setPagesReplacedAt] = useState<string | null>(null);
   const open = openedAt !== null && !(state.status === "done" && state !== openedAt);
+  // Opened by its button: the cursor goes to the new text (SUB-05). Opened on the photos at load, nothing moves.
+  const focusText = useRef(false);
   const setOpen = (value: boolean) => {
     if (value) {
       setText("");
       setPagesReplacedAt(null);
+      focusText.current = true;
     }
     setOpenedAt(value ? state : null);
   };
@@ -83,6 +87,13 @@ export function ReplaceSection({
     if (pagesReplacedAt) resultRef.current?.focus();
   }, [pagesReplacedAt]);
 
+  useEffect(() => {
+    if (!open || !focusText.current) return;
+    focusText.current = false;
+    // Absent when the form opens on the photos tab (a draft with pages).
+    textRef.current?.focus();
+  }, [open]);
+
   const result = pagesReplacedAt ? (
     <Alert tone="info" title="Submission replaced" live>
       Your new pages were submitted on {formatDateTime(pagesReplacedAt)}.
@@ -97,8 +108,11 @@ export function ReplaceSection({
     </Alert>
   ) : null;
 
+  const router = useRouter();
   const close = () => {
     setOpen(false);
+    // Pages uploaded meanwhile stay in the draft: the form opens on them next time, from a fresh page.
+    router.refresh();
     // Back to the button that opened the form.
     requestAnimationFrame(() => openRef.current?.focus());
   };
@@ -165,7 +179,8 @@ export function ReplaceSection({
               </div>
             </form>
           </TabsContent>
-          <TabsContent value="images" className="flex flex-col gap-4">
+          {/* Kept mounted while hidden: the pages uploaded and the words fixed stay on screen across tabs. */}
+          <TabsContent value="images" forceMount className="flex flex-col gap-4 data-[state=inactive]:hidden">
             {noticeRead ? (
               <ImagesSection
                 assignmentId={assignmentId}

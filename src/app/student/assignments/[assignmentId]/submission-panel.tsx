@@ -177,7 +177,8 @@ export function SubmissionPanel({
           </form>
         </section>
       </TabsContent>
-      <TabsContent value="images">
+      {/* Kept mounted while hidden: the pages uploaded and the words fixed stay on screen across tabs. */}
+      <TabsContent value="images" forceMount className="data-[state=inactive]:hidden">
         <ImagesSection
           assignmentId={assignmentId}
           contentVersion={contentVersion}

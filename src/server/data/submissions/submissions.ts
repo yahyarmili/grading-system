@@ -261,6 +261,8 @@ export async function confirmImages(actor: Actor, input: ConfirmImagesInput): Pr
       const words = wordsOf(page.text!);
       // AC-8: an existing word of a read page; no word inserted.
       if (change.wordIndex >= words.length) return { ok: false, reason: "bad_change" } as const;
+      // A change to the same word changes nothing: refused, so the teacher never sees it highlighted.
+      if (change.studentWord === change.engineWord) return { ok: false, reason: "bad_change" } as const;
       if (words[change.wordIndex] !== change.engineWord) return { ok: false, reason: "stale_change" } as const;
       page.changes.push({ wordIndex: change.wordIndex, engineWord: change.engineWord, studentWord: change.studentWord });
     }

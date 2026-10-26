@@ -80,6 +80,12 @@ test("E9 journey: three pages photographed, read, reordered, one word corrected,
   await first.getByRole("button", { name: "Keep my word" }).click();
   await expect(first.locator("del")).toHaveText("page.");
   await expect(first.locator("ins")).toContainText("pages.");
+  // A look at the text tab and back keeps the pages, their order and the word fixed (review 2026-10-26).
+  await student.getByRole("tab", { name: "Type my text" }).click();
+  await expect(student.getByRole("list", { name: "Your pages" })).toBeHidden();
+  await student.getByRole("tab", { name: "Photograph my pages" }).click();
+  await expect(pages).toHaveCount(3);
+  await expect(first.locator("ins")).toContainText("pages.");
   await student.screenshot({ path: "test-results/e9-1-pages-checked-phone.png", fullPage: true });
 
   // 5. AC-1: sent; a dated confirmation; To review with no one acting.

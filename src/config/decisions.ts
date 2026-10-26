@@ -65,6 +65,12 @@ export const AI_INFERENCE_GEO = "us";
 export const SUBMISSION_PAGES_MAX = 5;
 
 /**
+ * [D, 2026-10-25, spec 0011] Attempts of a page read asked by the student:
+ * one attempt and one retry, both within READ_REQUEST_MAX_MS.
+ */
+export const READ_INTERACTIVE_ATTEMPTS = 2;
+
+/**
  * [D, 2026-10-25, spec 0011] Largest photo the student may choose, before the
  * browser shrinks it: 20 MB. Larger is refused in the browser (SUB-03 CA2).
  */

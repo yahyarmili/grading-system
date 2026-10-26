@@ -59,8 +59,12 @@ const mayAddPages = (userId: string) =>
     sql`exists (select 1 from ${submissions} where ${submissions.assignmentId} = ${assignments.id} and ${submissions.studentId} = ${userId} and ${replacementOpen(userId)})`,
   );
 
-/** The student's draft for this assignment, found or created, then locked; its updated_at bumped. */
-async function lockOwnDraft(tx: Tx, assignmentId: string, userId: string): Promise<string> {
+/**
+ * The student's draft for this assignment, found or created, then locked; its
+ * updated_at bumped. Null when a confirmation or the sweep deleted it between
+ * the insert (which locks nothing when the row exists) and the lock.
+ */
+async function lockOwnDraft(tx: Tx, assignmentId: string, userId: string): Promise<string | null> {
   await tx
     .insert(submissionDrafts)
     .values({ assignmentId, studentId: userId })
@@ -70,8 +74,18 @@ async function lockOwnDraft(tx: Tx, assignmentId: string, userId: string): Promi
     .from(submissionDrafts)
     .where(and(eq(submissionDrafts.assignmentId, assignmentId), eq(submissionDrafts.studentId, userId)))
     .for("update");
+  if (!draft) return null;
   await tx.update(submissionDrafts).set({ updatedAt: sql`now()` }).where(eq(submissionDrafts.id, draft.id));
   return draft.id;
+}
+
+/**
+ * The role check of addDraftPage alone, before the upload decodes its body
+ * (the costly part): a role without the right throws AccessDeniedError here,
+ * so no body is decoded for it. addDraftPage checks it again, with the rest.
+ */
+export function assertDraftWriter(actor: Actor): void {
+  authorize(actor, "draft", "write");
 }
 
 /**
@@ -92,6 +106,7 @@ export async function addDraftPage(actor: Actor, input: NewDraftPage): Promise<A
     if (!assignment.noticeRead) return { ok: false, reason: "notice_not_read" } as const;
 
     const draftId = await lockOwnDraft(tx, input.assignmentId, userId);
+    if (!draftId) return null;
     const [same] = await tx
       .select({ id: submissionPages.id, position: submissionPages.position })
       .from(submissionPages)
@@ -165,6 +180,9 @@ export type ReadDraftPageResult =
  * outlive a deleted page or draft: deleting a draft resets neither count of
  * the day. Two pages read at the same moment may each pass the last free
  * read: the overshoot is bounded by the pages in flight.
+ * The day starts in SQL, on the database clock, on purpose: the reading runs
+ * are dated by that clock (src/server/db/AGENTS.md, two clocks), and a start
+ * computed on the container clock would drift from them near midnight.
  */
 async function readCapReached(tx: Tx, draftId: string, userId: string): Promise<"draft_cap" | "daily_cap" | null> {
   const dayStart = sql`date_trunc('day', now() at time zone ${DEADLINE_TIME_ZONE}) at time zone ${DEADLINE_TIME_ZONE}`;
@@ -191,6 +209,12 @@ const pageReadLock = (pageId: string) => sql`hashtextextended(${`page-read:${pag
  * retry), then records the run and, under the draft's lock, the result: only
  * when the page still has its draft and is pending or failed. The JPEG never
  * leaves through the result.
+ * The transaction stays open during the AI call (up to READ_REQUEST_MAX_MS):
+ * it holds a pooled connection and the advisory lock, not the page row. Kept
+ * on purpose, for the demo's load: the lock is what makes a double tap one
+ * billed call. Splitting it (mark the page "reading", call outside, write in a
+ * second transaction) would turn that lock into a status, with its own
+ * release on a crash.
  */
 export async function readDraftPage(
   actor: Actor,

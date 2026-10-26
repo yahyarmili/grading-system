@@ -41,9 +41,10 @@ test("a student submits a pasted text once, kept as written, then sees it being 
     `SELECT n.version FROM notice_acknowledgements n JOIN users u ON u.id = n.user_id WHERE u.email = $1`,
     [email],
   );
-  expect(recorded).toEqual([{ version: 4 }]); // STUDENT_NOTICE.version (src/lib/texts.ts)
+  expect(recorded).toEqual([{ version: 5 }]); // STUDENT_NOTICE.version (src/lib/texts.ts)
 
-  await expect(student.getByText("Do not write your name in your text.")).toBeVisible();
+  // In the text tab: the photos tab, kept mounted while hidden, carries the same instruction.
+  await expect(student.getByRole("tabpanel", { name: "Type my text" }).getByText("Do not write your name in your text.")).toBeVisible();
   await expect(student.getByText("At most 4,000 characters. A longer text is refused, never cut.")).toBeVisible();
 
   const box = student.getByRole("textbox", { name: /^Your text/ });
@@ -160,7 +161,7 @@ test("SUB-05: a student replaces their text twice, then can no longer", async ({
     await section.getByRole("button", { name: "Replace my submission" }).click();
     const box = section.getByRole("textbox", { name: /^Your new text/ });
     await expect(box).toBeFocused();
-    await expect(section.getByText("Do not write your name in your text.")).toBeVisible();
+    await expect(section.getByRole("tabpanel", { name: "Type a new text" }).getByText("Do not write your name in your text.")).toBeVisible();
     if (text === "Second text.") await student.screenshot({ path: "test-results/sub05-2-replace-form-phone.png", fullPage: true });
     await box.fill(text);
     await section.getByRole("button", { name: "Submit the new text" }).click();
