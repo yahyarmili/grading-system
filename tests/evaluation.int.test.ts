@@ -445,14 +445,18 @@ describe("concurrency", () => {
       const row = await submissionRow(w.submissionId);
       const runs = await runsOf(w.submissionId);
       expect(row.currentVersion).toBe(2);
-      expect(["to_review", "stale"]).toContain(outcome.status);
-      if (outcome.status === "to_review") {
+      expect(runs).toHaveLength(1);
+      // The version evaluated tells the order; the outcome alone does not (it says what the record found).
+      if (runs[0].versionNumber === 2) {
         // The replacement came first: version 2 was evaluated.
-        expect(runs.map((r) => r.versionNumber)).toEqual([2]);
+        expect(outcome.status).toBe("to_review");
         expect(row.status).toBe("to_review");
       } else {
-        // The claim came first: version 1's evaluation is kept, not current; version 2 waits.
-        expect(runs.map((r) => r.versionNumber)).toEqual([1]);
+        // The claim came first. Replaced during the call, the result is stale; recorded before the
+        // replacement, it was to_review, then the replacement took it back (transition 11, SUB-05 R2).
+        // Either way version 1's evaluation is kept, not current, and version 2 waits.
+        expect(runs[0].versionNumber).toBe(1);
+        expect(["stale", "to_review"]).toContain(outcome.status);
         expect(row).toMatchObject({ status: "received", currentProposalId: null });
       }
     }
