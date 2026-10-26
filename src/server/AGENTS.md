@@ -35,6 +35,9 @@ Everything that runs on the server: access control, the data layer, submissions,
 | `data/submissions/transitions.ts` | The only writer of `submissions` (`insertReceived`, `applyTransition`) |
 | `auth/`, `data/auth/` | Better Auth behind Server Actions |
 | `email/` | Email interface, capture in tests, Gmail SMTP in dev |
+| `submissions/images.ts`, `data/submissions/drafts.ts` | Image channel: draft pages (upload, read, reorder, delete), confirmation into a submission; every draft write locks the draft row first |
+| `submissions/page-image.ts` | The only importer of `sharp` (ESLint, `serverExternalPackages`): decodes, rotates, shrinks and encodes a page again without metadata |
+| `data/submissions/pages.ts` | `getPageImage` for the one image route `/api/pages/[pageId]` (404 for anyone not allowed) |
 
 ## Conventions
 
@@ -42,7 +45,7 @@ Everything that runs on the server: access control, the data layer, submissions,
 - Each data function takes the `Actor` first, calls `authorize()`, filters with `ownedBy`, returns a minimal DTO.
 - A resource of someone else: `null`, as if absent; a role without the right: `AccessDeniedError`; the page answers 404 in both cases.
 - A new resource first gets its matrix line; its functions join `REAL` (`tests/access-matrix.int.test.ts`), where the "other" columns give "absent", except `creates`. Every new table, action, route or data export joins `inventory.ts` (`tests/access-inventory.test.ts`).
-- Submissions: `tests/submission-writes.test.ts` keeps one writer. Any change to the student notice text bumps `STUDENT_NOTICE.version` (hash in `tests/student-notice.test.ts`). Student notice v4, approved [D, 2026-10-19]: texts sent to Anthropic, United States, kept 30 days, 2 years if flagged.
+- Submissions: `tests/submission-writes.test.ts` keeps one writer. Any change to the student notice text bumps `STUDENT_NOTICE.version` (hash in `tests/student-notice.test.ts`). Student notice v4, approved [D, 2026-10-19]: texts sent to Anthropic, United States, kept 30 days, 2 years if flagged. Student notice v5, approved [D, 2026-10-25]: adds the photos of pages; read before the next submission of any mode and before the first page upload (409 `noticeNotRead`).
 - Classes: link and code never stored, derived from `invite_nonce` and `BETTER_AUTH_SECRET` (changing it changes every code); expiry `CLASS_INVITE_TTL`; every entry goes through `tryInvite`.
 - Auth: Better Auth without its HTTP handler (Server Actions → `auth/` → `data/auth/`); `getActor()`, `requireRole()`, `src/proxy.ts`. One time links stored as a hash, consumed by POST. Sign out reloads the whole page. First admin: `npm run admin:create -- --email … --first-name … --last-name …`.
 - Email: captured in tests; Gmail SMTP in dev when `SMTP_USER` and `SMTP_PASSWORD` exist (real emails leave); `EMAIL_TRANSPORT=capture` forces capture.
@@ -53,6 +56,10 @@ Everything that runs on the server: access control, the data layer, submissions,
 
 ## Related specs
 
-- [0003 accounts, roles and access](../../docs/specs/0003-accounts-roles-access/index.md) · [0004 classes](../../docs/specs/0004-classes-invitation/index.md) · [0005 assignments](../../docs/specs/0005-assignments-student-space/index.md) · [0006 text submission](../../docs/specs/0006-text-submission/index.md)
+- [0003 accounts, roles and access](../../docs/specs/0003-accounts-roles-access/index.md) · [0004 classes](../../docs/specs/0004-classes-invitation/index.md) · [0005 assignments](../../docs/specs/0005-assignments-student-space/index.md) · [0006 text submission](../../docs/specs/0006-text-submission/index.md) · [0011 image channel](../../docs/specs/0011-image-channel/index.md)
+
+## Agent skills
+
+- Declined: Agent Skills and MCP servers for `sharp` (2026-10-25)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

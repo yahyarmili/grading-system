@@ -10,6 +10,8 @@ The `Evaluator` interface, its fault injecting simulator (the default everywhere
 |---|---|
 | `anthropic.ts` | The only importer of `@anthropic-ai/sdk` (0.135.0 exact, `tests/ai-send-point.test.ts`); one client per call, `guardedFetch` |
 | `errors.ts` | Anthropic error classification |
+| `reading.ts` | The `Reader` request (`types.ts`): prompt `transcription-1`, the page as a base64 JPEG block before fixed instructions, never a URL; output `{ has_writing, text }` |
+| `simulator.ts` | Simulator evaluator and reader (keyed on the stored JPEG), with the same faults plus `no_writing` |
 | `output.ts`, `quotes.ts` | Output validator and quote matching |
 | `anthropic.test.ts` | One test per guarantee, each with its counter test |
 
@@ -34,6 +36,6 @@ The `Evaluator` interface, its fault injecting simulator (the default everywhere
 
 ## Related specs
 
-- [0007 AI evaluation](../../../docs/specs/0007-ai-evaluation/index.md)
+- [0007 AI evaluation](../../../docs/specs/0007-ai-evaluation/index.md) · [0011 image channel](../../../docs/specs/0011-image-channel/index.md)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

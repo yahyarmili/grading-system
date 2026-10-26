@@ -13,6 +13,8 @@ Turns a received submission into an immutable AI proposal: alerts, claim, bounde
 | `workflow.ts`, `steps.ts`, `trigger.ts`, `orchestrate.ts` | Workflows run, single step `maxRetries = 0`, `sleep` 20 × 15 s for a slot |
 | `budget.ts` | Guard before each attempt: monthly cap on `anthropic` runs (even with the simulator), breaker per provider, one `ai_alert` email to admins per period |
 | `sweep.ts` | Sweep at each trigger; cron route `/api/cron/evaluation-sweep` (`CRON_SECRET`, `vercel.json`) |
+| `transcribe.ts`, `read-page.ts` | Pipeline read of pages the student sent unchecked: `startTranscription` (claim to `transcribing`, same slots), one step per page, `endTranscription` hands over to evaluation; `readPageWith` is shared with the student's interactive read |
+| `reading-trial.ts`, `scripts/ai-read.ts` | The handwriting trial behind `ai:read` (photos out of git); results recorded in `conception/annexe-essais-lecture.md` |
 | `relaunch.ts` | `relaunchConditions()`: languages with a published rubric, `costCapReached()` |
 | `prices.ts`, `report.ts`, `trial.ts` | Cost estimate (prices read 2026-10-19), report computation, trial launcher |
 | `../data/evaluation/measures.ts`, `scripts/evaluation-report.ts` | `readEvaluationMeasures` and the `ai:report` command, without identity or content |
@@ -25,6 +27,7 @@ Turns a received submission into an immutable AI proposal: alerts, claim, bounde
 docker compose exec -T web npm run ai:evaluate -- --submission|--assignment <id> [--simulate <fault>]
 docker compose exec -T web npm run ai:trial -- [--provider anthropic] [--limit <n>]
 docker compose exec -T web npm run ai:report -- [--assignment <id>] [--since <date>]
+docker compose exec -T web npm run ai:read -- [--provider anthropic] [--runs <n>] [--limit <n>]
 ```
 
 The commands use the simulator unless `--provider anthropic` (they ignore `AI_PROVIDER`); a daily stop is counted on the journal (`countAiRequestsToday`, `AI_DAILY_REQUEST_LIMIT`); `SCRIPTS` in `inventory.ts`; data sets in `scripts/fixtures/ai/` (10 + 7, plus 3 `sensitive`). Real sends follow `conception/procedures.md` ("Activer l'envoi réel à l'IA", "Activer l'IA sur la preview").
@@ -40,6 +43,7 @@ The commands use the simulator unless `--provider anthropic` (they ignore `AI_PR
 - `budget` error → `not_assessable`/`ai_unavailable` (run `failed`, `unavailable: true`); `truncated` and Retry-After above 30 s are not retried; `refused` is never retried, its usage summed. `AI_CALL_TIMEOUT_MS` = 60 000; `EVALUATION_STEP_MAX_MS` = 280 s (counts 2 alerts, below 300 s).
 - Never left in `evaluating`: fallback `releaseEvaluation`, sweep `releaseStuckSubmissions` beyond `EVALUATION_STUCK_AFTER_MS` [P]; `takeStaleReceived` dated by `markRestarted`.
 - Retry and relaunch: rights `unpublishedEvaluation:write`, `listRelaunchable` on `submission:read`; each takes the seen version (`SeenVersion`, else `changed`); a single use request (`0015`, `submissions.evaluation_request`, set by `recordEvaluationRequest`, required by claim 6 or 7, cleared by any transition); the version goes to `ctx.onStart`, transition 6 or 7 happens in the step (`EvaluationRef.origin` = `auto`, `retry`, `relaunch`); never a copy where `teacher_started_at` is set. Relaunchable causes: `rubric_unavailable` and `ai_unavailable`, never `no_content`. After a provider `budget` error, relaunch is offered only once a run of the same provider has succeeded since [P]. A request without a slot is abandoned (`abandonStep` → `abandonEvaluationRequest`, `retry_abandoned` without actor). E9: Retry also takes a `transcription_failed` copy (transition 4 through `claimForTranscription`, the request allowed on that status since `0023`); relaunch never does.
+- Reads (`reading_runs`) count in the cost cap, the breaker and the daily limit (`readAiGuardCounts`); interactive reads also stop at `DRAFT_READS_MAX` and `STUDENT_DAILY_READS_MAX` [P]. A stuck `transcribing` copy is released to `transcription_failed`; a closed guard during a pipeline read also ends there, never `ai_unavailable`. The sweep also deletes drafts untouched for `DRAFT_TTL_MS` (`deleteStaleDrafts`).
 - Step dependencies are created after the claim (`AiConfigurationError` → `evaluation_failed` + `ai_configuration_failed`). Calls without usage count at one call's cap. The alert is recorded after sending, bounded by `AI_ALERT_SEND_MAX_MS`. Alert `ai_provider_unreachable`: `AI_UNREACHABLE_FAILURES` [P] = 3 over `AI_UNREACHABLE_WINDOW_MS` [P] = 1 h, no call stopped.
 - `workflow*` is importable only in `src/server/evaluation/**` and `next.config.ts` (ESLint); the error is identified by its class only. No prompt caching [D, 2026-10-20], to revisit if AI cost becomes the limit.
 
@@ -51,6 +55,6 @@ The commands use the simulator unless `--provider anthropic` (they ignore `AI_PR
 
 ## Related specs
 
-- [0007 AI evaluation](../../../docs/specs/0007-ai-evaluation/index.md) · [0008 batch processing](../../../docs/specs/0008-batch-processing/index.md)
+- [0007 AI evaluation](../../../docs/specs/0007-ai-evaluation/index.md) · [0008 batch processing](../../../docs/specs/0008-batch-processing/index.md) · [0011 image channel](../../../docs/specs/0011-image-channel/index.md)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

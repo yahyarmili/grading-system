@@ -23,7 +23,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 | 10 | Batch processing & relaunch (E6) | Slice 1: text cycle | existing |
 | 11 | Teacher review (E7) | Slice 1: text cycle | existing |
 | 12 | Validation, publication & student result (E8) | Slice 1: text cycle | existing |
-| 13 | Image channel (E9) | Slice 2: image | in-progress |
+| 13 | Image channel (E9) | Slice 2: image | done |
 | 14 | Hardening & quality measurement (E10) | Slice 3: hardening | planned |
 | 15 | Demonstration (E11) | Slice 4: demo | planned |
 | 16 | Final review | Slice 4: demo | planned |
@@ -70,7 +70,7 @@ Validate, publish, withdraw, manual evaluation, student result through a closed 
 
 ## Slice 2: Image channel
 
-### 13. Image channel (E9) · in-progress
+### 13. Image channel (E9) · done
 Students hand in photos of a handwritten copy; the AI reads them faithfully (spelling kept, `[illisible]` never guessed); the student checks and corrects the transcription once before sending (Q4); the teacher sees the confirmed transcription with changed words highlighted, image on demand. Opens with the E9.0 handwriting trial (fictitious photos, `claude-haiku-5-5`).
 **Done when:** SUB-03 criteria and the TRX-01 contract pass; every image branch replayed (SUB-04, SUB-05, PRC-01, PRC-02, EVL-02 CA3, EVL-04 CA1, REV-01, REV-02, REV-06); a mixed text and image batch runs with no technical help; the matrix holds for images; the fidelity trial is recorded as is.
 Spec [0011](../specs/0011-image-channel/index.md)
