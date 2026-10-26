@@ -1,6 +1,6 @@
 # Procédures sans écran (NFR-EXP-03)
 
-> Opérations faites hors de l'application. NFR-EXP-03 en demande six écrites ; en démonstration, trois sont rejouées ([besoins-non-fonctionnels.md](besoins-non-fonctionnels.md) §2.8) : créer le premier administrateur, activer le français, activer l'envoi réel à l'IA. **[P]**, écrit en E5.2 et E5.3 (2026-10-16). Les quatre autres procédures restent à écrire. « Activer l'envoi réel à l'IA » : réécrite pour Anthropic en E5.15 (2026-10-19).
+> Opérations faites hors de l'application. NFR-EXP-03 en demande six écrites ; en démonstration, trois sont rejouées ([besoins-non-fonctionnels.md](besoins-non-fonctionnels.md) §2.8) : créer le premier administrateur, activer le français, activer l'envoi réel à l'IA. **[P]**, écrit en E5.2 et E5.3 (2026-10-16). Les quatre autres procédures restent à écrire. « Activer l'envoi réel à l'IA » : réécrite pour Anthropic en E5.15 (2026-10-19). « Livrer une version en production » et « Renouveler la clé d'IA de production » : écrites en E9.5 (2026-10-26).
 
 ## Activer le français (EVL-01 R4, Q6)
 
@@ -48,7 +48,7 @@
 2. Données fictives seulement : jeux de `scripts/fixtures/ai/`, comptes et devoirs de démonstration.
 3. Clé créée dans l'espace `grading_system`, pas dans Default : une clé non limitée à un espace exige un en-tête `anthropic-workspace-id`, que l'adaptateur ne transmet pas (400). Noter son expiration, choisie à la création et non modifiable.
 4. La clé est dans `.env.local` sous `GRADING_ANTHROPIC_API_KEY`, jamais `ANTHROPIC_API_KEY` (Claude Code la prendrait à la place de l'abonnement) ; aucune variable `ANTHROPIC_*` ni `NODE_DEBUG` dans l'environnement, sinon l'adaptateur refuse de démarrer. Puis `docker compose up -d`.
-5. `AI_PROVIDER` n'est pas défini dans Vercel : la preview reste sur le simulateur, sauf pendant une démonstration (« Activer l'IA sur la preview », ci-dessous).
+5. `AI_PROVIDER` n'est jamais défini dans l'environnement Preview de Vercel : la preview reste sur le simulateur. Dans l'environnement Production, il vaut toujours `anthropic` [D, 2026-10-26] (« Livrer une version en production », ci-dessous).
 
 **Contrôles dans la Console, avant l'essai.**
 - **Crédit et fin du cycle** : solde restant, date d'expiration (crédit promotionnel relevé le 2026-10-19 : 100 $, expire le 2026-11-12 UTC) ; après cette date, relever le renouvellement.
@@ -82,6 +82,8 @@
 **Historique, OpenRouter (jusqu'au 2026-10-19).** Envoi des évaluations à OpenRouter (modèle `xingchen-agi/xing4.0-29b-a4b:free`, relayé à Phala, endpoint ZDR), avec `OPENROUTER_API_KEY` et une garde à 50 requêtes par jour UTC ; rejoué en partie le 2026-10-17. Adaptateur retiré en E5.13. Texte complet : ce fichier au commit `85b60c4`.
 
 ## Activer l'IA sur la preview (démonstration, E6.5)
+
+**Remplacée pour les démonstrations [D, 2026-10-26].** Les démonstrations se font sur la production (E9.5, « Livrer une version en production ») ; la preview reste toujours sur le simulateur. Texte gardé pour l'historique et le rejeu d'E6.5.
 
 **Quand.** Pendant une démonstration seulement : la preview est publique [D], toute personne inscrite comme élève y déclencherait des envois. Entre deux démonstrations, la preview reste sur le simulateur et aucune clé n'existe.
 
@@ -125,3 +127,70 @@ Aucune variable `ANTHROPIC_*` ni `NODE_DEBUG` dans Vercel : l'adaptateur refuser
 - une seule requête et une seule exécution dans l'heure : aucun doublon ;
 - Console, page Logs (relevée par l'utilisateur) : une requête « OK », `claude-haiku-5-5`, palier Standard, 3 189 / 1 689 tokens, identiques aux nôtres ; latence 9,81 s contre 12,6 s mesurées par l'adaptateur (même écart d'environ 3 s qu'en E5.15, cause non vérifiée) ;
 - retour arrière : les deux variables d'IA retirées de Preview par l'utilisateur le 2026-10-20 (capture de la page Vercel).
+
+## Livrer une version en production (E9.5, spec 0012)
+
+**Quand.** À la fin d'une étape dont le cycle est fermé, à la demande de l'utilisateur. `main` est la production [D, 2026-10-26] : elle ne bouge que par avance rapide depuis `preview`, jamais par un commit fait sur elle.
+
+**Exécutant.** L'agent lance les commandes ; l'utilisateur demande le push, contrôle Vercel et choisit les mots de passe. Personne ne lit `.env.local` ni les valeurs posées dans Vercel : l'adresse de la base de production passe par `npm run prod`, jamais par l'écran.
+
+| Branche | Environnement Vercel | Base | IA | Bandeau de démonstration |
+|---|---|---|---|---|
+| `preview` (travail) | Preview | projet Neon dev | simulateur | non |
+| `main` (production) | Production | projet Neon de production | `anthropic`, toujours | oui |
+| poste, Docker | aucun | dev (et la base de test pour les tests) | simulateur, sauf `--provider anthropic` | non |
+
+**Barrière, toute requise.**
+1. Le cycle de l'étape est fermé : `/check verify`, `/test`, `/check review`, `/document`.
+2. `npm test` et la suite E2E sont verts (demander avant de les lancer : la base de test est partagée).
+3. La preview poussée a été vue en ligne : un parcours rapide.
+4. Le SQL des nouvelles migrations est relu : aucun `DROP`, `RENAME` ni `SET NOT NULL` dans la même livraison que le code qui cesse d'utiliser la colonne (élargir, puis contracter à la livraison suivante). La version précédente doit tourner sur le nouveau schéma : c'est ce qui rend le retour arrière sûr.
+
+**Étapes.**
+1. `git merge-base --is-ancestor main preview` doit réussir ; sinon, s'arrêter et demander.
+2. Migrer dev, puis la production :
+   `docker compose exec -T web npm run db:migrate`
+   `docker compose exec -T web npm run prod -- db:migrate`
+3. `git checkout main`, puis `git merge --ff-only preview`, puis `git checkout preview`. Un refus veut dire que `main` a bougé seule : s'arrêter et demander, ne jamais forcer.
+4. Pousser `main` et `preview`, seulement à la demande de l'utilisateur.
+5. Contrôler la production :
+   - Vercel, Deployments : le déploiement de `main` est « Ready » en Production ;
+   - le bandeau « Demo, fictitious data only. Do not submit real student work. » s'affiche, déconnecté puis connecté ;
+   - un parcours fonctionne ;
+   - si l'étape a touché la chaîne d'IA : une remise de texte fictif, puis d'image fictive (`scripts/fixtures/ai/`), arrive à « To review » ; lire le résultat avec `docker compose exec -T web npm run prod -- ai:status` (une exécution `anthropic`, `proposed`, sans doublon), et l'usage avec `npm run prod -- ai:report`.
+
+**Mise en place, une seule fois (faite le 2026-10-26, tâches 6 et 7).**
+- Projet Neon de production, à part : région `us-east-2`, même version de Postgres que le dev. Ses quotas sont les siens (§3 de `stack-technologique.md`).
+- Vercel, environnement **Production** seulement : `DATABASE_URL` (chaîne groupée), `BETTER_AUTH_SECRET` et `CRON_SECRET` (nouveaux, tirés avec `openssl rand -base64 32`), `BETTER_AUTH_URL` (`https://grading-system-omega-amber.vercel.app`, l'adresse stable, jamais celle d'un déploiement), `SMTP_USER` et `SMTP_PASSWORD` (le Gmail de la preview), `AI_PROVIDER` (`anthropic`), `GRADING_ANTHROPIC_API_KEY`. Les secrets en type Secret, les autres en Config. Jamais `ANTHROPIC_*`, `NODE_DEBUG`, `WORKFLOW_TARGET_WORLD`, `WORKFLOW_LOCAL_*`, `EMAIL_TRANSPORT` ni `MAIL_CAPTURE_DIR`.
+- Clé d'IA : voir « Renouveler la clé d'IA de production ».
+- Vercel : « Automatically expose System Environment Variables » coché ; Settings, Environments, Production : Branch Tracking sur `main`, « Auto-assign Custom Production Domains » activé.
+- `.env.local` : `PRODUCTION_DATABASE_URL` (chaîne **directe**) et `PRODUCTION_APP_URL`, puis `docker compose up -d`.
+- Base migrée (`npm run prod -- db:migrate`), puis premier administrateur : `docker compose exec -T web npm run prod -- admin:create --email … --first-name … --last-name …`. Le lien part par email. Tant que `main` n'a aucun déploiement, il répond `404 DEPLOYMENT_NOT_FOUND` : après le premier déploiement, l'administrateur choisit son mot de passe par « Forgot password ». Un second `admin:create` est refusé.
+
+**Retour arrière, dans les limites de Hobby.**
+- Vercel, Instant Rollback : revient au déploiement de production précédent seulement, pas deux en arrière. Pendant ce temps, un push sur `main` construit, mais ne passe en ligne qu'une fois un déploiement promu de nouveau.
+- Pas de raccourci pour une correction urgente : `preview` peut porter du travail inachevé, et un `cherry-pick` sur `main` casse l'avance rapide. La correction attend la barrière, ou la production reste en arrière jusque là.
+- Au pire : retirer `AI_PROVIDER` de Production et redéployer (le simulateur reprend), ou révoquer la clé (les remises passent « AI unavailable », l'évaluation manuelle reste possible).
+
+**Rejeu.** Pas encore : la première livraison est la tâche 9 de la spec 0012.
+
+## Renouveler la clé d'IA de production (E9.5, spec 0012)
+
+**Quand.** Avant l'expiration de la clé, et à chaque cycle de crédit. Anthropic écrit au créateur 7 jours avant l'expiration d'une clé d'au moins 14 jours. Une clé expirée répond 401 (`configuration`, sans relance ; trois remises en échec ouvrent le disjoncteur).
+
+**Exécutant.** L'utilisateur, dans la Console d'Anthropic et dans Vercel.
+
+**Conditions de la clé.**
+- liée au compte de service de production (Linked account), distinct de celui de la preview ; ce compte est membre de l'espace `grading_system` ;
+- créée **dans** l'espace `grading_system`, limitée à lui : une clé hors de l'espace échapperait à sa limite de 10 $ par mois, et une clé non limitée exigerait l'en-tête `anthropic-workspace-id`, que l'adaptateur ne transmet pas (400) ;
+- expiration : 30 jours, ou une durée qui finit avec le cycle de crédit ; jamais « Never ». Elle ne se change pas après la création.
+
+**Étapes.**
+1. Console : contrôles de « Activer l'envoi réel à l'IA » (crédit et fin du cycle, limite de l'espace et dépense du mois).
+2. Console, API keys, Create key : nom, Linked account, espace `grading_system`, expiration. Copier la clé directement dans Vercel ; la noter nulle part ailleurs.
+3. Vercel, Production : remplacer la valeur de `GRADING_ANTHROPIC_API_KEY` (type Secret), puis redéployer le dernier déploiement de production (Deployments, Redeploy) : une variable ne vaut qu'au déploiement suivant. `main` ne bouge pas.
+4. Contrôler : une remise de texte fictif arrive à « To review » ; `npm run prod -- ai:status` montre l'exécution `anthropic`, `proposed`.
+5. Console : supprimer l'ancienne clé (Delete).
+6. Consigner ci-dessous la date et la nouvelle expiration.
+
+**Rejeu.** Clé créée le 2026-10-26 (tâche 6), expiration à relever par l'utilisateur.
