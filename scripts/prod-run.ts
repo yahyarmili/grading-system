@@ -5,7 +5,7 @@
 // PRODUCTION_APP_URL from .env.local:
 //   docker compose exec -T web npm run prod -- db:migrate
 //   docker compose exec -T web npm run prod -- admin:create --email … --first-name … --last-name …
-//   docker compose exec -T web npm run prod -- ai:read
+//   docker compose exec -T web npm run prod -- ai:status [--since <date>]
 //   docker compose exec -T web npm run prod -- ai:report
 // The rules live in prod-guard.ts.
 

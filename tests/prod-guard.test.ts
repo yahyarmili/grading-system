@@ -23,8 +23,8 @@ function refusal(argv: string[], values: Parameters<typeof planProdRun>[1]): str
 
 describe("planProdRun", () => {
   it("allows exactly the four scripts", () => {
-    expect(PROD_SCRIPTS).toEqual(["db:migrate", "admin:create", "ai:read", "ai:report"]);
-    for (const script of ["db:migrate", "ai:read", "ai:report"]) {
+    expect(PROD_SCRIPTS).toEqual(["db:migrate", "admin:create", "ai:report", "ai:status"]);
+    for (const script of ["db:migrate", "ai:report", "ai:status"]) {
       expect(planProdRun([script], env).ok).toBe(true);
     }
     expect(planProdRun(["admin:create"], { ...env, ...smtp }).ok).toBe(true);
@@ -43,17 +43,19 @@ describe("planProdRun", () => {
   it("refuses a script that is not allowed, or none", () => {
     expect(refusal(["db:generate"], env)).toContain("must be one of");
     expect(refusal(["ai:trial", "--provider", "anthropic"], env)).toContain("must be one of");
+    // The handwriting trial calls the AI: trials stay on dev (AC-7).
+    expect(refusal(["ai:read"], env)).toContain("must be one of");
     expect(refusal([], env)).toContain("must be one of");
   });
 
   it("refuses when a production variable is missing, naming it only", () => {
-    expect(refusal(["ai:read"], { ...env, PRODUCTION_DATABASE_URL: undefined })).toContain("PRODUCTION_DATABASE_URL is not set");
-    expect(refusal(["ai:read"], { ...env, PRODUCTION_APP_URL: "" })).toContain("PRODUCTION_APP_URL is not set");
+    expect(refusal(["ai:status"], { ...env, PRODUCTION_DATABASE_URL: undefined })).toContain("PRODUCTION_DATABASE_URL is not set");
+    expect(refusal(["ai:status"], { ...env, PRODUCTION_APP_URL: "" })).toContain("PRODUCTION_APP_URL is not set");
   });
 
   it("refuses a production URL that is not a Postgres URL", () => {
-    expect(refusal(["ai:read"], { ...env, PRODUCTION_DATABASE_URL: "not a url" })).toContain("not a Postgres URL");
-    expect(refusal(["ai:read"], { ...env, PRODUCTION_DATABASE_URL: "https://ep-prod-123.example.test/neondb" })).toContain(
+    expect(refusal(["ai:status"], { ...env, PRODUCTION_DATABASE_URL: "not a url" })).toContain("not a Postgres URL");
+    expect(refusal(["ai:status"], { ...env, PRODUCTION_DATABASE_URL: "https://ep-prod-123.example.test/neondb" })).toContain(
       "not a Postgres URL",
     );
   });
@@ -70,7 +72,7 @@ describe("planProdRun", () => {
 
   it("accepts another database on the same host", () => {
     const sameHostOtherDb = "postgresql://owner:dev-secret@ep-dev-456.us-east-2.aws.neon.tech/production";
-    expect(planProdRun(["ai:read"], { ...env, PRODUCTION_DATABASE_URL: sameHostOtherDb }).ok).toBe(true);
+    expect(planProdRun(["ai:status"], { ...env, PRODUCTION_DATABASE_URL: sameHostOtherDb }).ok).toBe(true);
   });
 
   it("refuses admin:create without both SMTP variables, so the link is never printed", () => {

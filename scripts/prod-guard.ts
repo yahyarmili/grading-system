@@ -2,8 +2,8 @@
 // applies them so they can be tested. Every message names a variable or a
 // script, never a value: the production address must never be printed.
 
-/** The only scripts allowed against production. */
-export const PROD_SCRIPTS = ["db:migrate", "admin:create", "ai:read", "ai:report"] as const;
+/** The only scripts allowed against production: never ai:read, the handwriting trial calls the AI (trials stay on dev). */
+export const PROD_SCRIPTS = ["db:migrate", "admin:create", "ai:report", "ai:status"] as const;
 
 export type ProdScript = (typeof PROD_SCRIPTS)[number];
 

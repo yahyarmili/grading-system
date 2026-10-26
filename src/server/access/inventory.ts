@@ -215,7 +215,7 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/auth/invitations.ts#createFirstAdmin": "local script only (Q2), never a screen",
   "src/server/data/auth/security-events.ts#recordSecurityEvent": "internal: writes the security log",
   "src/server/data/auth/security-events.ts#countAiRequestsToday":
-    "scripts only (ai:evaluate, ai:trial): counts today's ai_request_sent rows, reads none, for the daily guard of the commands (AI_DAILY_REQUEST_LIMIT)",
+    "scripts only (ai:evaluate, ai:trial, ai:read; ai:status prints it): counts today's ai_request_sent rows, reads none, for the daily guard of the commands (AI_DAILY_REQUEST_LIMIT)",
   "src/server/data/auth/throttle.ts#countAttempt": "internal: attempt counters",
   "src/server/data/auth/throttle.ts#isLocked": "internal: attempt counters",
   "src/server/data/auth/throttle.ts#recordFailure": "internal: attempt counters",
@@ -257,11 +257,13 @@ export const UNGUARDED_DATA_EXPORTS: Record<string, string> = {
   "src/server/data/evaluation/system.ts#releaseStuckEvaluations": "system processing (§5.5, transition 5, PRC-02 R1): submissions evaluating for too long end evaluation_failed, called only by src/server/evaluation/",
   "src/server/data/submissions/drafts.ts#deleteStaleDrafts": "system processing (E9, AC-18, the sweep): deletes the drafts with no write for DRAFT_TTL_MS, their pages with them, identifiers only; called only by src/server/evaluation/sweep.ts",
   "src/server/data/evaluation/system.ts#takeStaleReceived": "system processing (E6, the sweep): identifiers and active version of the submissions still received after the grace, every mode (E9), dated as taken (E6.6), called only by src/server/evaluation/",
-  "src/server/data/evaluation/system.ts#readAiGuardCounts": "system processing (E6, EXP-02): token sums of this month's Anthropic runs, the calls without usage (E6.6) and the count of access failures, counts only, called only by src/server/evaluation/",
+  "src/server/data/evaluation/system.ts#readAiGuardCounts": "system processing (E6, EXP-02): token sums of this month's Anthropic runs, the calls without usage (E6.6) and the count of access failures, counts only, called only by src/server/evaluation/ (budget.ts, and month-cost.ts#readMonthCostUsd, which costCapReached and ai:status share, spec 0012)",
   "src/server/data/evaluation/system.ts#countUnreachableFailures": "system processing (E7.6, EXP-02): distinct submissions failed on an unreachable provider within the window, a count only, called only by src/server/evaluation/",
   "src/server/data/evaluation/system.ts#abandonEvaluationRequest": "system processing (E7.6): drops a teacher's retry or relaunch whose run found no place, its request only, and logs retry_abandoned without actor; called only by src/server/evaluation/ (the workflow's abandonStep)",
   "src/server/data/evaluation/measures.ts#readEvaluationMeasures":
     "scripts only (ai:report, E6.4, EXP-01): runs and copies by assignment, outcomes, attempts, durations, token sums and states; no name, email, text or proposal",
+  "src/server/data/evaluation/measures.ts#readAiStatus":
+    "scripts only (ai:status, spec 0012, AC-11): the evaluation and reading runs and the ai_request_sent lines of a window, identifiers, outcomes and counts; no name, email, text, image, proposal or actor_user_id",
   "src/server/data/evaluation/system.ts#claimAiAlert": "system processing (E6, EXP-02): hands the administrators' addresses to the alert's sending and records the cost cap, breaker, configuration or unreachable alert once sent, once per period, called only by src/server/evaluation/",
 };
 
@@ -280,6 +282,8 @@ export const SCRIPTS: Record<string, string> = {
     "npm run ai:trial: connection trial and trial sets (E5.7, E5.14) on fictitious texts; stores nothing but the security log; the simulator unless --provider anthropic",
   "scripts/ai-read.ts":
     "npm run ai:read: the handwriting trial (E9.0, spec 0011) on fictitious photos through the product's Reader; stores nothing but the security log; the simulator unless --provider anthropic",
+  "scripts/ai-status.ts":
+    "npm run ai:status: what the AI did on the database in use (spec 0012, AC-11): the runs and request lines of a window, this month's cost against the cap, today's requests; reads only, calls no AI, no identity or content",
   "scripts/prod-run.ts":
     "npm run prod: runs one script of PROD_SCRIPTS against the production database (spec 0012, AC-7), its address passed through the environment only; adds no access of its own",
   "scripts/prod-guard.ts": "the rules of npm run prod (allow list, production variables, guard against the dev and test databases); no database access",

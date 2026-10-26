@@ -3,17 +3,15 @@ import {
   AI_ALERT_SEND_MAX_MS,
   AI_BREAKER_FAILURES,
   AI_BREAKER_WINDOW_MS,
-  AI_CALL_PROMPT_TOKENS_CEILING,
-  AI_MAX_OUTPUT_TOKENS,
   AI_MONTHLY_COST_CAP_USD,
   AI_UNREACHABLE_FAILURES,
   AI_UNREACHABLE_WINDOW_MS,
 } from "@/config/provisional";
 import type { AiProvider } from "@/lib/evaluation";
-import { claimAiAlert, countUnreachableFailures, readAiGuardCounts, type AiAlert, type AiGuardCounts } from "@/server/data/evaluation/system";
+import { claimAiAlert, countUnreachableFailures, readAiGuardCounts, type AiAlert } from "@/server/data/evaluation/system";
 import { getEmailSender } from "@/server/email";
 import { aiAlertMessage } from "@/server/email/templates";
-import { estimateRunsCostUsd } from "@/server/evaluation/prices";
+import { monthCostUsd, readMonthCostUsd } from "@/server/evaluation/month-cost";
 
 // The guard of the AI (E6, plan §5, EXP-02), asked before every attempt of
 // an evaluation: the monthly cost cap, then the circuit breaker. Each closes
@@ -34,19 +32,7 @@ const SETTINGS: AiGuardSettings = {
 };
 
 /**
- * This month's estimated cost (prices.ts), by excess: the tokens of
- * Anthropic's runs, and each call whose usage no run holds at the ceiling of
- * one call (E6.6: timeouts, the trial's calls, a result never recorded).
- */
-function monthCostUsd(counts: AiGuardCounts): number {
-  return (
-    estimateRunsCostUsd(counts.promptTokens, counts.completionTokens) +
-    counts.uncountedCalls * estimateRunsCostUsd(AI_CALL_PROMPT_TOKENS_CEILING, AI_MAX_OUTPUT_TOKENS)
-  );
-}
-
-/**
- * The guard. The cost is this month's Anthropic calls (monthCostUsd),
+ * The guard. The cost is this month's Anthropic calls (monthCostUsd, month-cost.ts),
  * whatever the provider in use: the simulator is stopped too, so the cap is
  * tested without money. The calls under way (EVALUATION_CONCURRENCY, plus one
  * per command running) may pass the cap by about a cent. Reached, each
@@ -78,7 +64,7 @@ export function createAiGuard(settings: AiGuardSettings = SETTINGS): AiGuard {
  * E6.3): offered once the cap is lifted (the next UTC month, or a higher cap).
  */
 export async function costCapReached(settings: AiGuardSettings = SETTINGS): Promise<boolean> {
-  return monthCostUsd(await readAiGuardCounts("anthropic", settings.breakerWindowMs)) >= settings.capUsd;
+  return (await readMonthCostUsd(settings.breakerWindowMs)) >= settings.capUsd;
 }
 
 /** E6.6: the AI could not be set up (evaluate.ts); the administrators are told once per window. */
